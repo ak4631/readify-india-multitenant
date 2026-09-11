@@ -78,6 +78,7 @@ export function PartnerTable({ partners }: { partners: PartnerRow[] }) {
                   variant="outline"
                   size="sm"
                   disabled={pending}
+                  aria-busy={pending}
                   onClick={() => toggle(partner)}
                 >
                   {partner.status === "ACTIVE" ? "Deactivate" : "Activate"}

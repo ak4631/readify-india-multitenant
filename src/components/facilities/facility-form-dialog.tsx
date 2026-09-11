@@ -24,8 +24,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import type { Facility } from "@/generated/prisma/client";
-import { createFacility, updateFacility } from "@/server/actions/facilities.actions";
-import { facilitySchema, type FacilityInput } from "@/lib/validations/facility.schema";
+import {
+  createFacility,
+  updateFacility,
+} from "@/server/actions/facilities.actions";
+import {
+  facilitySchema,
+  type FacilityInput,
+} from "@/lib/validations/facility.schema";
 
 export function FacilityFormDialog({
   facility,
@@ -61,7 +67,9 @@ export function FacilityFormDialog({
       form.reset();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -72,7 +80,9 @@ export function FacilityFormDialog({
       <DialogTrigger render={trigger} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{facility ? "Edit Facility" : "Add Facility"}</DialogTitle>
+          <DialogTitle>
+            {facility ? "Edit Facility" : "Add Facility"}
+          </DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -103,7 +113,11 @@ export function FacilityFormDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Saving..." : "Save"}
               </Button>
             </DialogFooter>

@@ -167,7 +167,7 @@ export function PartnerUserDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={pending}>
+              <Button type="submit" disabled={pending} aria-busy={pending}>
                 {pending ? "Creating..." : "Create account"}
               </Button>
             </DialogFooter>

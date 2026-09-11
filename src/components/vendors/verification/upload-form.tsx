@@ -89,7 +89,7 @@ export function UploadForm({
         <Label>File</Label>
         <Input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" required />
       </div>
-      <Button type="submit" disabled={isSubmitting}>
+      <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
         {isSubmitting ? "Uploading..." : "Upload"}
       </Button>
     </form>

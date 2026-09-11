@@ -122,7 +122,7 @@ export function PartnerFormDialog({
               />
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={pending}>
+              <Button type="submit" disabled={pending} aria-busy={pending}>
                 {pending ? "Saving..." : "Save partner"}
               </Button>
             </DialogFooter>

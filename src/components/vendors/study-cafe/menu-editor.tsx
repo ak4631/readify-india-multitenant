@@ -78,7 +78,11 @@ export function MenuEditor({
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
           />
-          <Button onClick={handleAddCategory} disabled={isPending || !newCategoryName.trim()}>
+          <Button
+            onClick={handleAddCategory}
+            disabled={isPending || !newCategoryName.trim()}
+            aria-busy={isPending}
+          >
             + Add Category
           </Button>
         </div>
@@ -103,6 +107,7 @@ export function MenuEditor({
                     variant="ghost"
                     size="sm"
                     disabled={isPending}
+                    aria-busy={isPending}
                     onClick={() => handleDeleteCategory(category.id)}
                   >
                     Delete
@@ -112,10 +117,15 @@ export function MenuEditor({
             </CardHeader>
             <CardContent className="space-y-2">
               {category.items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
+                >
                   <div>
                     <span className="font-medium">{item.name}</span>{" "}
-                    <span className="text-muted-foreground">₹{Number(item.price).toLocaleString()}</span>
+                    <span className="text-muted-foreground">
+                      ₹{Number(item.price).toLocaleString()}
+                    </span>
                     {!item.isAvailable && (
                       <Badge variant="secondary" className="ml-2">
                         Unavailable
@@ -138,6 +148,7 @@ export function MenuEditor({
                         variant="ghost"
                         size="sm"
                         disabled={isPending}
+                        aria-busy={isPending}
                         onClick={() => handleDeleteItem(item.id)}
                       >
                         Delete
@@ -153,7 +164,9 @@ export function MenuEditor({
           </Card>
         ))}
         {categories.length === 0 && (
-          <p className="text-muted-foreground text-sm">No menu categories yet.</p>
+          <p className="text-muted-foreground text-sm">
+            No menu categories yet.
+          </p>
         )}
       </div>
     </div>

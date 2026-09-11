@@ -25,8 +25,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { Trainer } from "@/generated/prisma/client";
-import { trainerSchema, type TrainerInput } from "@/lib/validations/trainer.schema";
-import { createTrainer, updateTrainer } from "@/server/actions/trainers.actions";
+import {
+  trainerSchema,
+  type TrainerInput,
+} from "@/lib/validations/trainer.schema";
+import {
+  createTrainer,
+  updateTrainer,
+} from "@/server/actions/trainers.actions";
 
 export function TrainerFormDialog({
   vendorId,
@@ -64,7 +70,9 @@ export function TrainerFormDialog({
       form.reset();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -117,7 +125,11 @@ export function TrainerFormDialog({
                       min={0}
                       value={field.value ?? ""}
                       onChange={(e) =>
-                        field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)
+                        field.onChange(
+                          e.target.value === ""
+                            ? undefined
+                            : e.target.valueAsNumber,
+                        )
                       }
                     />
                   </FormControl>
@@ -126,7 +138,11 @@ export function TrainerFormDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Saving..." : "Save"}
               </Button>
             </DialogFooter>

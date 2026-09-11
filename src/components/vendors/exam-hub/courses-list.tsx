@@ -71,7 +71,9 @@ export function CoursesList({
                   {Number(course.price).toLocaleString()}
                 </p>
               </div>
-              <Badge variant={course.status === "ACTIVE" ? "default" : "secondary"}>
+              <Badge
+                variant={course.status === "ACTIVE" ? "default" : "secondary"}
+              >
                 {course.status}
               </Badge>
             </CardHeader>
@@ -84,7 +86,8 @@ export function CoursesList({
                 ))}
               </div>
               <p className="text-muted-foreground text-xs">
-                {course.lectures.length} lecture{course.lectures.length === 1 ? "" : "s"} scheduled
+                {course.lectures.length} lecture
+                {course.lectures.length === 1 ? "" : "s"} scheduled
               </p>
               <div className="flex gap-2">
                 {canEdit && (
@@ -114,6 +117,7 @@ export function CoursesList({
                     variant="outline"
                     size="sm"
                     disabled={isPending}
+                    aria-busy={isPending}
                     onClick={() => handleArchive(course.id)}
                   >
                     Archive

@@ -68,9 +68,18 @@ export function VendorMediaGallery({
   return (
     <div className="space-y-4">
       {canEdit && (
-        <form ref={formRef} action={handleUpload} className="flex items-end gap-3">
+        <form
+          ref={formRef}
+          action={handleUpload}
+          className="flex items-end gap-3"
+        >
           <input type="hidden" name="vendorId" value={vendorId} />
-          <Input type="file" name="file" accept="image/jpeg,image/png,image/webp" required />
+          <Input
+            type="file"
+            name="file"
+            accept="image/jpeg,image/png,image/webp"
+            required
+          />
           <Button type="submit" disabled={isUploading}>
             {isUploading ? "Uploading..." : "Upload"}
           </Button>
@@ -90,7 +99,13 @@ export function VendorMediaGallery({
                 <Badge>Cover</Badge>
               ) : (
                 canEdit && (
-                  <Button variant="link" size="sm" onClick={() => handleSetPrimary(item.id)} disabled={isPending}>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => handleSetPrimary(item.id)}
+                    disabled={isPending}
+                    aria-busy={isPending}
+                  >
                     Set as cover
                   </Button>
                 )
@@ -100,6 +115,7 @@ export function VendorMediaGallery({
                   variant="ghost"
                   size="sm"
                   disabled={isPending}
+                  aria-busy={isPending}
                   onClick={() => handleDelete(item.id)}
                 >
                   Delete
@@ -109,7 +125,9 @@ export function VendorMediaGallery({
           </div>
         ))}
         {media.length === 0 && (
-          <p className="text-muted-foreground col-span-full text-sm">No photos uploaded yet.</p>
+          <p className="text-muted-foreground col-span-full text-sm">
+            No photos uploaded yet.
+          </p>
         )}
       </div>
     </div>

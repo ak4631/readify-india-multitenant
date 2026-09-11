@@ -259,7 +259,11 @@ export function StepBasicInfo({
             />
 
             <div className="flex justify-end border-t border-border pt-5">
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Saving..." : "Next: Address"}
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Button>

@@ -32,7 +32,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { Course, Subject } from "@/generated/prisma/client";
-import { courseSchema, type CourseInput } from "@/lib/validations/academics.schema";
+import {
+  courseSchema,
+  type CourseInput,
+} from "@/lib/validations/academics.schema";
 import { createCourse, updateCourse } from "@/server/actions/courses.actions";
 
 export function CourseFormDialog({
@@ -77,7 +80,9 @@ export function CourseFormDialog({
       form.reset();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -174,7 +179,9 @@ export function CourseFormDialog({
                         value={field.value ?? ""}
                         onChange={(e) =>
                           field.onChange(
-                            e.target.value === "" ? undefined : e.target.valueAsNumber,
+                            e.target.value === ""
+                              ? undefined
+                              : e.target.valueAsNumber,
                           )
                         }
                       />
@@ -230,7 +237,11 @@ export function CourseFormDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Saving..." : "Save"}
               </Button>
             </DialogFooter>

@@ -52,7 +52,10 @@ export function VendorFacilitiesEditor({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {allFacilities.map((facility) => (
-          <Label key={facility.id} className="flex items-center gap-2 font-normal">
+          <Label
+            key={facility.id}
+            className="flex items-center gap-2 font-normal"
+          >
             <Checkbox
               checked={selected.has(facility.id)}
               onCheckedChange={() => toggle(facility.id)}
@@ -62,11 +65,13 @@ export function VendorFacilitiesEditor({
           </Label>
         ))}
         {allFacilities.length === 0 && (
-          <p className="text-muted-foreground text-sm">No active facilities defined yet.</p>
+          <p className="text-muted-foreground text-sm">
+            No active facilities defined yet.
+          </p>
         )}
       </div>
       {canEdit && (
-        <Button onClick={handleSave} disabled={isPending}>
+        <Button onClick={handleSave} disabled={isPending} aria-busy={isPending}>
           {isPending ? "Saving..." : "Save Facilities"}
         </Button>
       )}

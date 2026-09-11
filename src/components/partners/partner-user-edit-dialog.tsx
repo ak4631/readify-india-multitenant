@@ -95,7 +95,7 @@ export function PartnerUserEditDialog({ user }: { user: User }) {
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={pending}>
+              <Button type="submit" disabled={pending} aria-busy={pending}>
                 {pending ? "Saving..." : "Save changes"}
               </Button>
             </DialogFooter>

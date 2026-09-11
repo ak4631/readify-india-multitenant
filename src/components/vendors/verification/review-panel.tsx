@@ -24,7 +24,10 @@ export function ReviewPanel({ verificationId }: { verificationId: string }) {
   function approve() {
     startTransition(async () => {
       try {
-        await reviewVerificationDocument({ verificationId, decision: "VERIFIED" });
+        await reviewVerificationDocument({
+          verificationId,
+          decision: "VERIFIED",
+        });
         toast.success("Document approved");
         router.refresh();
       } catch (error) {
@@ -53,13 +56,23 @@ export function ReviewPanel({ verificationId }: { verificationId: string }) {
 
   return (
     <>
-      <Button size="sm" disabled={isPending} onClick={approve}>
+      <Button
+        size="sm"
+        disabled={isPending}
+        aria-busy={isPending}
+        onClick={approve}
+      >
         Approve
       </Button>
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogTrigger
           render={
-            <Button size="sm" variant="destructive" disabled={isPending}>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isPending}
+              aria-busy={isPending}
+            >
               Reject
             </Button>
           }
@@ -74,7 +87,12 @@ export function ReviewPanel({ verificationId }: { verificationId: string }) {
             onChange={(event) => setReason(event.target.value)}
           />
           <DialogFooter>
-            <Button variant="destructive" disabled={isPending || !reason} onClick={reject}>
+            <Button
+              variant="destructive"
+              disabled={isPending || !reason}
+              aria-busy={isPending}
+              onClick={reject}
+            >
               Confirm Reject
             </Button>
           </DialogFooter>

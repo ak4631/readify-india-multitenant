@@ -38,7 +38,9 @@ import {
 } from "@/server/actions/trainers.actions";
 
 type TrainerWithRelations = Trainer & {
-  specializations: (TrainerSpecializationMap & { specialization: TrainerSpecialization })[];
+  specializations: (TrainerSpecializationMap & {
+    specialization: TrainerSpecialization;
+  })[];
   pricing: TrainerPricing[];
   availability: TrainerAvailability[];
 };
@@ -129,7 +131,10 @@ export function TrainerDetailDialog({
   }
 
   function addSlot() {
-    setSlots((prev) => [...prev, { dayOfWeek: "MONDAY", startTime: "06:00", endTime: "10:00" }]);
+    setSlots((prev) => [
+      ...prev,
+      { dayOfWeek: "MONDAY", startTime: "06:00", endTime: "10:00" },
+    ]);
   }
 
   function removeSlot(index: number) {
@@ -137,7 +142,9 @@ export function TrainerDetailDialog({
   }
 
   function updateSlot(index: number, patch: Partial<(typeof slots)[number]>) {
-    setSlots((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+    setSlots((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, ...patch } : s)),
+    );
   }
 
   function saveAvailability() {
@@ -169,7 +176,10 @@ export function TrainerDetailDialog({
           <TabsContent value="specializations" className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               {allSpecializations.map((spec) => (
-                <Label key={spec.id} className="flex items-center gap-2 font-normal">
+                <Label
+                  key={spec.id}
+                  className="flex items-center gap-2 font-normal"
+                >
                   <Checkbox
                     checked={selectedSpecs.has(spec.id)}
                     onCheckedChange={() => toggleSpec(spec.id)}
@@ -178,7 +188,12 @@ export function TrainerDetailDialog({
                 </Label>
               ))}
             </div>
-            <Button size="sm" onClick={saveSpecs} disabled={isPending}>
+            <Button
+              size="sm"
+              onClick={saveSpecs}
+              disabled={isPending}
+              aria-busy={isPending}
+            >
               Save Specializations
             </Button>
           </TabsContent>
@@ -186,7 +201,10 @@ export function TrainerDetailDialog({
           <TabsContent value="pricing" className="space-y-4">
             <div className="space-y-2">
               {trainer.pricing.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
+                >
                   <span>
                     ₹{Number(p.price).toLocaleString()} / {p.durationValue}{" "}
                     {p.durationUnit.toLowerCase()}
@@ -195,6 +213,7 @@ export function TrainerDetailDialog({
                     variant="ghost"
                     size="sm"
                     disabled={isPending}
+                    aria-busy={isPending}
                     onClick={() => handleDeletePricing(p.id)}
                   >
                     Remove
@@ -202,7 +221,9 @@ export function TrainerDetailDialog({
                 </div>
               ))}
               {trainer.pricing.length === 0 && (
-                <p className="text-muted-foreground text-sm">No pricing set yet.</p>
+                <p className="text-muted-foreground text-sm">
+                  No pricing set yet.
+                </p>
               )}
             </div>
             <div className="flex items-end gap-2">
@@ -212,7 +233,9 @@ export function TrainerDetailDialog({
                   type="number"
                   className="w-28"
                   value={priceForm.price}
-                  onChange={(e) => setPriceForm((f) => ({ ...f, price: e.target.value }))}
+                  onChange={(e) =>
+                    setPriceForm((f) => ({ ...f, price: e.target.value }))
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -221,7 +244,12 @@ export function TrainerDetailDialog({
                   type="number"
                   className="w-20"
                   value={priceForm.durationValue}
-                  onChange={(e) => setPriceForm((f) => ({ ...f, durationValue: e.target.value }))}
+                  onChange={(e) =>
+                    setPriceForm((f) => ({
+                      ...f,
+                      durationValue: e.target.value,
+                    }))
+                  }
                 />
               </div>
               <div className="space-y-1">
@@ -246,7 +274,12 @@ export function TrainerDetailDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <Button size="sm" onClick={handleAddPricing} disabled={isPending || !priceForm.price}>
+              <Button
+                size="sm"
+                onClick={handleAddPricing}
+                disabled={isPending || !priceForm.price}
+                aria-busy={isPending}
+              >
                 Add
               </Button>
             </div>
@@ -258,7 +291,11 @@ export function TrainerDetailDialog({
                 <div key={index} className="flex items-center gap-2">
                   <Select
                     value={slot.dayOfWeek}
-                    onValueChange={(v) => updateSlot(index, { dayOfWeek: v as typeof slot.dayOfWeek })}
+                    onValueChange={(v) =>
+                      updateSlot(index, {
+                        dayOfWeek: v as typeof slot.dayOfWeek,
+                      })
+                    }
                   >
                     <SelectTrigger className="w-32">
                       <SelectValue />
@@ -275,29 +312,44 @@ export function TrainerDetailDialog({
                     type="time"
                     className="w-28"
                     value={slot.startTime}
-                    onChange={(e) => updateSlot(index, { startTime: e.target.value })}
+                    onChange={(e) =>
+                      updateSlot(index, { startTime: e.target.value })
+                    }
                   />
                   <span className="text-muted-foreground text-sm">to</span>
                   <Input
                     type="time"
                     className="w-28"
                     value={slot.endTime}
-                    onChange={(e) => updateSlot(index, { endTime: e.target.value })}
+                    onChange={(e) =>
+                      updateSlot(index, { endTime: e.target.value })
+                    }
                   />
-                  <Button variant="ghost" size="sm" onClick={() => removeSlot(index)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeSlot(index)}
+                  >
                     Remove
                   </Button>
                 </div>
               ))}
               {slots.length === 0 && (
-                <p className="text-muted-foreground text-sm">No availability set yet.</p>
+                <p className="text-muted-foreground text-sm">
+                  No availability set yet.
+                </p>
               )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={addSlot}>
                 + Add Slot
               </Button>
-              <Button size="sm" onClick={saveAvailability} disabled={isPending}>
+              <Button
+                size="sm"
+                onClick={saveAvailability}
+                disabled={isPending}
+                aria-busy={isPending}
+              >
                 Save Availability
               </Button>
             </div>

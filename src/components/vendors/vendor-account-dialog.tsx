@@ -127,7 +127,11 @@ export function VendorAccountDialog({ vendorId }: { vendorId: string }) {
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Creating..." : "Create partner login"}
               </Button>
             </DialogFooter>

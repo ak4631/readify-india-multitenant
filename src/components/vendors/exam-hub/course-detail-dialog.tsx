@@ -23,9 +23,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Course, CourseTeacher, Lecture, Teacher } from "@/generated/prisma/client";
+import type {
+  Course,
+  CourseTeacher,
+  Lecture,
+  Teacher,
+} from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { cancelLecture, createLecture, setCourseTeachers } from "@/server/actions/courses.actions";
+import {
+  cancelLecture,
+  createLecture,
+  setCourseTeachers,
+} from "@/server/actions/courses.actions";
 
 type CourseWithRelations = Course & {
   teachers: (CourseTeacher & { teacher: Teacher })[];
@@ -90,7 +99,14 @@ export function CourseDetailDialog({
           teacherId: lectureForm.teacherId || undefined,
         });
         toast.success("Lecture scheduled");
-        setLectureForm({ title: "", teacherId: "", mode: course.mode, startTime: "", endTime: "", meetingUrl: "" });
+        setLectureForm({
+          title: "",
+          teacherId: "",
+          mode: course.mode,
+          startTime: "",
+          endTime: "",
+          meetingUrl: "",
+        });
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");
@@ -126,7 +142,10 @@ export function CourseDetailDialog({
           <TabsContent value="teachers" className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               {allTeachers.map((teacher) => (
-                <Label key={teacher.id} className="flex items-center gap-2 font-normal">
+                <Label
+                  key={teacher.id}
+                  className="flex items-center gap-2 font-normal"
+                >
                   <Checkbox
                     checked={selectedTeachers.has(teacher.id)}
                     onCheckedChange={() => toggleTeacher(teacher.id)}
@@ -141,7 +160,12 @@ export function CourseDetailDialog({
               )}
             </div>
             {canEdit && (
-              <Button size="sm" onClick={saveTeachers} disabled={isPending}>
+              <Button
+                size="sm"
+                onClick={saveTeachers}
+                disabled={isPending}
+                aria-busy={isPending}
+              >
                 Save Teachers
               </Button>
             )}
@@ -157,11 +181,18 @@ export function CourseDetailDialog({
                   <div>
                     <p className="font-medium">{lecture.title}</p>
                     <p className="text-muted-foreground">
-                      {new Date(lecture.startTime).toLocaleString()} · {lecture.mode}
+                      {new Date(lecture.startTime).toLocaleString()} ·{" "}
+                      {lecture.mode}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={lecture.status === "CANCELLED" ? "destructive" : "default"}>
+                    <Badge
+                      variant={
+                        lecture.status === "CANCELLED"
+                          ? "destructive"
+                          : "default"
+                      }
+                    >
                       {lecture.status}
                     </Badge>
                     {canEdit && lecture.status !== "CANCELLED" && (
@@ -169,6 +200,7 @@ export function CourseDetailDialog({
                         variant="ghost"
                         size="sm"
                         disabled={isPending}
+                        aria-busy={isPending}
                         onClick={() => handleCancelLecture(lecture.id)}
                       >
                         Cancel
@@ -178,7 +210,9 @@ export function CourseDetailDialog({
                 </div>
               ))}
               {course.lectures.length === 0 && (
-                <p className="text-muted-foreground text-sm">No lectures scheduled yet.</p>
+                <p className="text-muted-foreground text-sm">
+                  No lectures scheduled yet.
+                </p>
               )}
             </div>
             {canEdit && (
@@ -186,7 +220,9 @@ export function CourseDetailDialog({
                 <Input
                   placeholder="Lecture title"
                   value={lectureForm.title}
-                  onChange={(e) => setLectureForm((f) => ({ ...f, title: e.target.value }))}
+                  onChange={(e) =>
+                    setLectureForm((f) => ({ ...f, title: e.target.value }))
+                  }
                 />
                 <div className="flex gap-2">
                   <div className="flex-1 space-y-1">
@@ -194,7 +230,12 @@ export function CourseDetailDialog({
                     <Input
                       type="datetime-local"
                       value={lectureForm.startTime}
-                      onChange={(e) => setLectureForm((f) => ({ ...f, startTime: e.target.value }))}
+                      onChange={(e) =>
+                        setLectureForm((f) => ({
+                          ...f,
+                          startTime: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="flex-1 space-y-1">
@@ -202,14 +243,21 @@ export function CourseDetailDialog({
                     <Input
                       type="datetime-local"
                       value={lectureForm.endTime}
-                      onChange={(e) => setLectureForm((f) => ({ ...f, endTime: e.target.value }))}
+                      onChange={(e) =>
+                        setLectureForm((f) => ({
+                          ...f,
+                          endTime: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Select
                     value={lectureForm.teacherId}
-                    onValueChange={(v) => setLectureForm((f) => ({ ...f, teacherId: v ?? "" }))}
+                    onValueChange={(v) =>
+                      setLectureForm((f) => ({ ...f, teacherId: v ?? "" }))
+                    }
                   >
                     <SelectTrigger className="flex-1">
                       <SelectValue placeholder="Teacher (optional)" />
@@ -225,7 +273,10 @@ export function CourseDetailDialog({
                   <Select
                     value={lectureForm.mode}
                     onValueChange={(v) =>
-                      setLectureForm((f) => ({ ...f, mode: v as typeof f.mode }))
+                      setLectureForm((f) => ({
+                        ...f,
+                        mode: v as typeof f.mode,
+                      }))
                     }
                   >
                     <SelectTrigger className="w-32">
@@ -242,13 +293,24 @@ export function CourseDetailDialog({
                   <Input
                     placeholder="Meeting URL (admin-only, never shown publicly)"
                     value={lectureForm.meetingUrl}
-                    onChange={(e) => setLectureForm((f) => ({ ...f, meetingUrl: e.target.value }))}
+                    onChange={(e) =>
+                      setLectureForm((f) => ({
+                        ...f,
+                        meetingUrl: e.target.value,
+                      }))
+                    }
                   />
                 )}
                 <Button
                   size="sm"
                   onClick={handleAddLecture}
-                  disabled={isPending || !lectureForm.title || !lectureForm.startTime || !lectureForm.endTime}
+                  disabled={
+                    isPending ||
+                    !lectureForm.title ||
+                    !lectureForm.startTime ||
+                    !lectureForm.endTime
+                  }
+                  aria-busy={isPending}
                 >
                   Schedule Lecture
                 </Button>

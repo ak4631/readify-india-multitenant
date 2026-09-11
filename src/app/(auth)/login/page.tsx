@@ -139,7 +139,12 @@ function LoginForm() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Signing in..." : "Sign in"}
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Button>

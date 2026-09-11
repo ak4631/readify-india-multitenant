@@ -29,7 +29,10 @@ import {
   createVendorCategory,
   updateVendorCategory,
 } from "@/server/actions/vendor-categories.actions";
-import { vendorCategorySchema, type VendorCategoryInput } from "@/lib/validations/vendor-category.schema";
+import {
+  vendorCategorySchema,
+  type VendorCategoryInput,
+} from "@/lib/validations/vendor-category.schema";
 
 export function CategoryFormDialog({
   category,
@@ -65,7 +68,9 @@ export function CategoryFormDialog({
       form.reset();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -76,7 +81,9 @@ export function CategoryFormDialog({
       <DialogTrigger render={trigger} />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{category ? "Edit Category" : "Add Category"}</DialogTitle>
+          <DialogTitle>
+            {category ? "Edit Category" : "Add Category"}
+          </DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -107,7 +114,11 @@ export function CategoryFormDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Saving..." : "Save"}
               </Button>
             </DialogFooter>

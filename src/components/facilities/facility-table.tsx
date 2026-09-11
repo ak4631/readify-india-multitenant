@@ -80,6 +80,7 @@ export function FacilityTable({ facilities }: { facilities: FacilityRow[] }) {
                   variant="outline"
                   size="sm"
                   disabled={isPending}
+                  aria-busy={isPending}
                   onClick={() => handleDeactivate(facility)}
                 >
                   Deactivate

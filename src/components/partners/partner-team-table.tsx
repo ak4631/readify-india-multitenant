@@ -69,6 +69,7 @@ export function PartnerTeamTable({ users }: { users: TeamUser[] }) {
                     size="sm"
                     variant="outline"
                     disabled={pending}
+                    aria-busy={pending}
                     onClick={() => toggle(user)}
                   >
                     {user.status === "ACTIVE" ? "Deactivate" : "Activate"}

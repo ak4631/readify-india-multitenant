@@ -55,7 +55,9 @@ export function UserTable({ users }: { users: UserRow[] }) {
           <TableRow key={user.id}>
             <TableCell className="font-medium">{user.name}</TableCell>
             <TableCell>{user.email}</TableCell>
-            <TableCell>{user.roles.map((r) => r.role.name).join(", ") || "—"}</TableCell>
+            <TableCell>
+              {user.roles.map((r) => r.role.name).join(", ") || "—"}
+            </TableCell>
             <TableCell>
               <UserStatusBadge status={user.status} />
             </TableCell>
@@ -65,6 +67,7 @@ export function UserTable({ users }: { users: UserRow[] }) {
                   variant="outline"
                   size="sm"
                   disabled={isPending}
+                  aria-busy={isPending}
                   onClick={() => handleToggle(user)}
                 >
                   Suspend
@@ -75,6 +78,7 @@ export function UserTable({ users }: { users: UserRow[] }) {
                   variant="outline"
                   size="sm"
                   disabled={isPending}
+                  aria-busy={isPending}
                   onClick={() => handleToggle(user)}
                 >
                   Activate

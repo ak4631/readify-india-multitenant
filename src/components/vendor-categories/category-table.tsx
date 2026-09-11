@@ -80,6 +80,7 @@ export function CategoryTable({ categories }: { categories: CategoryRow[] }) {
                   variant="outline"
                   size="sm"
                   disabled={isPending}
+                  aria-busy={isPending}
                   onClick={() => handleDeactivate(category)}
                 >
                   Deactivate

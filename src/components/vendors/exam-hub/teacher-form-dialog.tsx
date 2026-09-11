@@ -25,8 +25,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { Teacher } from "@/generated/prisma/client";
-import { teacherSchema, type TeacherInput } from "@/lib/validations/academics.schema";
-import { createTeacher, updateTeacher } from "@/server/actions/teachers.actions";
+import {
+  teacherSchema,
+  type TeacherInput,
+} from "@/lib/validations/academics.schema";
+import {
+  createTeacher,
+  updateTeacher,
+} from "@/server/actions/teachers.actions";
 
 export function TeacherFormDialog({
   vendorId,
@@ -64,7 +70,9 @@ export function TeacherFormDialog({
       form.reset();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -117,7 +125,11 @@ export function TeacherFormDialog({
                       min={0}
                       value={field.value ?? ""}
                       onChange={(e) =>
-                        field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)
+                        field.onChange(
+                          e.target.value === ""
+                            ? undefined
+                            : e.target.valueAsNumber,
+                        )
                       }
                     />
                   </FormControl>
@@ -126,7 +138,11 @@ export function TeacherFormDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Saving..." : "Save"}
               </Button>
             </DialogFooter>

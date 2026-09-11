@@ -90,6 +90,7 @@ export function ReviewTable({
                   variant="outline"
                   size="sm"
                   disabled={isPending}
+                  aria-busy={isPending}
                   onClick={() =>
                     run(() => hideReview(review.id), "Review hidden")
                   }
@@ -102,6 +103,7 @@ export function ReviewTable({
                   variant="outline"
                   size="sm"
                   disabled={isPending}
+                  aria-busy={isPending}
                   onClick={() =>
                     run(() => deleteReview(review.id), "Review deleted")
                   }
@@ -114,6 +116,7 @@ export function ReviewTable({
                   variant="outline"
                   size="sm"
                   disabled={isPending}
+                  aria-busy={isPending}
                   onClick={() =>
                     run(() => restoreReview(review.id), "Review restored")
                   }

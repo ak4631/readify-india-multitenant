@@ -19,7 +19,9 @@ import { usePermission } from "@/hooks/use-permission";
 import { deactivateTrainer } from "@/server/actions/trainers.actions";
 
 type TrainerRow = Trainer & {
-  specializations: (TrainerSpecializationMap & { specialization: TrainerSpecialization })[];
+  specializations: (TrainerSpecializationMap & {
+    specialization: TrainerSpecialization;
+  })[];
   pricing: TrainerPricing[];
   availability: TrainerAvailability[];
 };
@@ -52,7 +54,10 @@ export function TrainersList({
   return (
     <div className="space-y-4">
       {canEdit && (
-        <TrainerFormDialog vendorId={vendorId} trigger={<Button>+ Add Trainer</Button>} />
+        <TrainerFormDialog
+          vendorId={vendorId}
+          trigger={<Button>+ Add Trainer</Button>}
+        />
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         {trainers.map((trainer) => (
@@ -66,12 +71,16 @@ export function TrainersList({
                   </p>
                 )}
               </div>
-              <Badge variant={trainer.status === "ACTIVE" ? "default" : "secondary"}>
+              <Badge
+                variant={trainer.status === "ACTIVE" ? "default" : "secondary"}
+              >
                 {trainer.status}
               </Badge>
             </CardHeader>
             <CardContent className="space-y-3">
-              {trainer.bio && <p className="text-sm text-muted-foreground">{trainer.bio}</p>}
+              {trainer.bio && (
+                <p className="text-sm text-muted-foreground">{trainer.bio}</p>
+              )}
               <div className="flex flex-wrap gap-1">
                 {trainer.specializations.map((s) => (
                   <Badge key={s.specializationId} variant="outline">
@@ -104,6 +113,7 @@ export function TrainersList({
                       variant="outline"
                       size="sm"
                       disabled={isPending}
+                      aria-busy={isPending}
                       onClick={() => handleDeactivate(trainer.id)}
                     >
                       Deactivate
@@ -115,7 +125,9 @@ export function TrainersList({
           </Card>
         ))}
         {trainers.length === 0 && (
-          <p className="text-muted-foreground text-sm">No trainers added yet.</p>
+          <p className="text-muted-foreground text-sm">
+            No trainers added yet.
+          </p>
         )}
       </div>
     </div>

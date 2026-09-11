@@ -11,7 +11,13 @@ import type { MembershipPlan } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import { archiveMembershipPlan } from "@/server/actions/membership-plans.actions";
 
-export function PlanList({ vendorId, plans }: { vendorId: string; plans: MembershipPlan[] }) {
+export function PlanList({
+  vendorId,
+  plans,
+}: {
+  vendorId: string;
+  plans: MembershipPlan[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const canEdit = usePermission("vendor.update");
@@ -31,7 +37,10 @@ export function PlanList({ vendorId, plans }: { vendorId: string; plans: Members
   return (
     <div className="space-y-4">
       {canEdit && (
-        <PlanFormDialog vendorId={vendorId} trigger={<Button>+ Add Plan</Button>} />
+        <PlanFormDialog
+          vendorId={vendorId}
+          trigger={<Button>+ Add Plan</Button>}
+        />
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         {plans.map((plan) => (
@@ -44,7 +53,9 @@ export function PlanList({ vendorId, plans }: { vendorId: string; plans: Members
                   {plan.durationUnit.toLowerCase()}
                 </p>
               </div>
-              <Badge variant={plan.status === "ACTIVE" ? "default" : "secondary"}>
+              <Badge
+                variant={plan.status === "ACTIVE" ? "default" : "secondary"}
+              >
                 {plan.status}
               </Badge>
             </CardHeader>
@@ -65,6 +76,7 @@ export function PlanList({ vendorId, plans }: { vendorId: string; plans: Members
                       variant="outline"
                       size="sm"
                       disabled={isPending}
+                      aria-busy={isPending}
                       onClick={() => handleArchive(plan.id)}
                     >
                       Archive

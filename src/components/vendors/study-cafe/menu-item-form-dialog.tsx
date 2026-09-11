@@ -27,7 +27,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { MenuItem } from "@/generated/prisma/client";
-import { menuItemSchema, type MenuItemInput } from "@/lib/validations/menu.schema";
+import {
+  menuItemSchema,
+  type MenuItemInput,
+} from "@/lib/validations/menu.schema";
 import { createMenuItem, updateMenuItem } from "@/server/actions/menu.actions";
 
 export function MenuItemFormDialog({
@@ -69,7 +72,9 @@ export function MenuItemFormDialog({
       form.reset();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -135,14 +140,21 @@ export function MenuItemFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <Label className="flex items-center gap-2 font-normal">
-                    <Checkbox checked={field.value} onCheckedChange={(c) => field.onChange(c === true)} />
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={(c) => field.onChange(c === true)}
+                    />
                     Available
                   </Label>
                 </FormItem>
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
                 {isSubmitting ? "Saving..." : "Save"}
               </Button>
             </DialogFooter>

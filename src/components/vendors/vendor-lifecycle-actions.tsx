@@ -57,6 +57,7 @@ export function VendorLifecycleActions({
         <Button
           size="sm"
           disabled={isPending}
+          aria-busy={isPending}
           onClick={() => run(() => approveVendor(vendorId), "Listing approved")}
         >
           Approve
@@ -66,7 +67,12 @@ export function VendorLifecycleActions({
         <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
           <DialogTrigger
             render={
-              <Button size="sm" variant="destructive" disabled={isPending}>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={isPending}
+                aria-busy={isPending}
+              >
                 Reject
               </Button>
             }
@@ -84,6 +90,7 @@ export function VendorLifecycleActions({
               <Button
                 variant="destructive"
                 disabled={isPending || !reason}
+                aria-busy={isPending}
                 onClick={() =>
                   run(async () => {
                     await rejectVendor(vendorId, reason);
@@ -102,6 +109,7 @@ export function VendorLifecycleActions({
         <Button
           size="sm"
           disabled={isPending}
+          aria-busy={isPending}
           onClick={() =>
             run(() => publishVendor(vendorId), "Listing published")
           }
@@ -114,6 +122,7 @@ export function VendorLifecycleActions({
           size="sm"
           variant="destructive"
           disabled={isPending}
+          aria-busy={isPending}
           onClick={() =>
             run(() => suspendVendor(vendorId), "Listing suspended")
           }

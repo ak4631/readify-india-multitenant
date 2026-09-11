@@ -11,7 +11,13 @@ import type { Teacher } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import { deactivateTeacher } from "@/server/actions/teachers.actions";
 
-export function TeachersList({ vendorId, teachers }: { vendorId: string; teachers: Teacher[] }) {
+export function TeachersList({
+  vendorId,
+  teachers,
+}: {
+  vendorId: string;
+  teachers: Teacher[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const canEdit = usePermission("vendor.update");
@@ -31,14 +37,19 @@ export function TeachersList({ vendorId, teachers }: { vendorId: string; teacher
   return (
     <div className="space-y-4">
       {canEdit && (
-        <TeacherFormDialog vendorId={vendorId} trigger={<Button>+ Add Teacher</Button>} />
+        <TeacherFormDialog
+          vendorId={vendorId}
+          trigger={<Button>+ Add Teacher</Button>}
+        />
       )}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {teachers.map((teacher) => (
           <Card key={teacher.id}>
             <CardHeader className="flex flex-row items-start justify-between">
               <CardTitle>{teacher.name}</CardTitle>
-              <Badge variant={teacher.status === "ACTIVE" ? "default" : "secondary"}>
+              <Badge
+                variant={teacher.status === "ACTIVE" ? "default" : "secondary"}
+              >
                 {teacher.status}
               </Badge>
             </CardHeader>
@@ -48,7 +59,9 @@ export function TeachersList({ vendorId, teachers }: { vendorId: string; teacher
                   {teacher.experienceYears} yrs experience
                 </p>
               )}
-              {teacher.bio && <p className="text-sm text-muted-foreground">{teacher.bio}</p>}
+              {teacher.bio && (
+                <p className="text-sm text-muted-foreground">{teacher.bio}</p>
+              )}
               {canEdit && (
                 <div className="flex gap-2">
                   <TeacherFormDialog
@@ -65,6 +78,7 @@ export function TeachersList({ vendorId, teachers }: { vendorId: string; teacher
                       variant="outline"
                       size="sm"
                       disabled={isPending}
+                      aria-busy={isPending}
                       onClick={() => handleDeactivate(teacher.id)}
                     >
                       Deactivate
@@ -76,7 +90,9 @@ export function TeachersList({ vendorId, teachers }: { vendorId: string; teacher
           </Card>
         ))}
         {teachers.length === 0 && (
-          <p className="text-muted-foreground text-sm">No teachers added yet.</p>
+          <p className="text-muted-foreground text-sm">
+            No teachers added yet.
+          </p>
         )}
       </div>
     </div>

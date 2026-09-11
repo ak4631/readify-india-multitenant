@@ -38,11 +38,15 @@ export function SeatConfiguration({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {total} total seat{total === 1 ? "" : "s"} across {seatTypes.length} type
+          {total} total seat{total === 1 ? "" : "s"} across {seatTypes.length}{" "}
+          type
           {seatTypes.length === 1 ? "" : "s"}
         </p>
         {canEdit && (
-          <SeatTypeFormDialog vendorId={vendorId} trigger={<Button>+ Add Seat Type</Button>} />
+          <SeatTypeFormDialog
+            vendorId={vendorId}
+            trigger={<Button>+ Add Seat Type</Button>}
+          />
         )}
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -51,7 +55,9 @@ export function SeatConfiguration({
             <CardContent className="flex items-center justify-between">
               <div>
                 <p className="font-semibold">{seatType.name}</p>
-                <p className="text-sm text-muted-foreground">{seatType.totalCount} seats</p>
+                <p className="text-sm text-muted-foreground">
+                  {seatType.totalCount} seats
+                </p>
               </div>
               {canEdit && (
                 <div className="flex gap-1">
@@ -68,6 +74,7 @@ export function SeatConfiguration({
                     variant="ghost"
                     size="sm"
                     disabled={isPending}
+                    aria-busy={isPending}
                     onClick={() => handleDelete(seatType.id)}
                   >
                     Delete

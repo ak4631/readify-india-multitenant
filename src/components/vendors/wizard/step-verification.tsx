@@ -55,6 +55,7 @@ export function StepVerification({
           <Button
             onClick={handleSubmitForReview}
             disabled={isPending || verifications.length === 0}
+            aria-busy={isPending}
           >
             {isPending ? "Submitting..." : "Submit for Review"}
           </Button>

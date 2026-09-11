@@ -40,7 +40,9 @@ export function VendorScheduleEditor({
   );
 
   function updateDay(index: number, patch: Partial<(typeof days)[number]>) {
-    setDays((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+    setDays((prev) =>
+      prev.map((d, i) => (i === index ? { ...d, ...patch } : d)),
+    );
   }
 
   function handleSave() {
@@ -82,7 +84,9 @@ export function VendorScheduleEditor({
               <Checkbox
                 checked={day.isClosed}
                 disabled={!canEdit}
-                onCheckedChange={(checked) => updateDay(index, { isClosed: checked === true })}
+                onCheckedChange={(checked) =>
+                  updateDay(index, { isClosed: checked === true })
+                }
               />
               Closed
             </Label>
@@ -90,7 +94,7 @@ export function VendorScheduleEditor({
         ))}
       </div>
       {canEdit && (
-        <Button onClick={handleSave} disabled={isPending}>
+        <Button onClick={handleSave} disabled={isPending} aria-busy={isPending}>
           {isPending ? "Saving..." : "Save Timings"}
         </Button>
       )}

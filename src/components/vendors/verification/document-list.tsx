@@ -74,6 +74,7 @@ export function DocumentList({
                 variant="outline"
                 size="sm"
                 disabled={isPending}
+                aria-busy={isPending}
                 onClick={() => handleView(doc.id)}
               >
                 View
