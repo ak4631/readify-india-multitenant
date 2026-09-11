@@ -1,26 +1,168 @@
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: design.md · designed-as-app */
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "../../tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-code);
+  --font-heading: var(--font-display);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface-raised);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-accent-ink);
+  --secondary: var(--color-accent-soft);
+  --secondary-foreground: var(--color-accent-strong);
+  --muted: var(--color-paper-2);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-accent-soft);
+  --accent-foreground: var(--color-accent-strong);
+  --destructive: var(--color-danger);
+  --border: var(--color-rule);
+  --input: var(--color-rule-strong);
+  --ring: var(--color-focus);
+  --chart-1: var(--color-accent);
+  --chart-2: var(--color-info);
+  --chart-3: var(--color-warning);
+  --chart-4: var(--color-chart-4);
+  --chart-5: var(--color-chart-5);
+  --radius: var(--radius-control);
+  --sidebar: var(--color-sidebar);
+  --sidebar-foreground: var(--color-accent-ink);
+  --sidebar-primary: var(--color-accent);
+  --sidebar-primary-foreground: var(--color-accent-ink);
+  --sidebar-accent: var(--color-sidebar-accent);
+  --sidebar-accent-foreground: var(--color-accent-ink);
+  --sidebar-border: var(--color-sidebar-rule);
+  --sidebar-ring: var(--color-focus);
+}
+
+.dark {
+  --background: var(--color-dark-paper);
+  --foreground: var(--color-accent-ink);
+  --card: var(--color-dark-surface);
+  --card-foreground: var(--color-accent-ink);
+  --popover: var(--color-dark-surface);
+  --popover-foreground: var(--color-accent-ink);
+  --primary: var(--color-accent-soft);
+  --primary-foreground: var(--color-accent-strong);
+  --secondary: var(--color-sidebar-accent);
+  --secondary-foreground: var(--color-accent-ink);
+  --muted: var(--color-dark-surface);
+  --muted-foreground: var(--color-dark-muted);
+  --accent: var(--color-sidebar-accent);
+  --accent-foreground: var(--color-accent-ink);
+  --destructive: var(--color-danger);
+  --border: var(--color-sidebar-rule);
+  --input: var(--color-sidebar-rule);
+  --ring: var(--color-focus);
+  --chart-1: var(--color-accent-soft);
+  --chart-2: var(--color-info);
+  --chart-3: var(--color-warning);
+  --chart-4: var(--color-chart-4);
+  --chart-5: var(--color-chart-5);
+  --sidebar: var(--color-dark-surface);
+  --sidebar-foreground: var(--color-accent-ink);
+  --sidebar-primary: var(--color-accent);
+  --sidebar-primary-foreground: var(--color-accent-ink);
+  --sidebar-accent: var(--color-sidebar-accent);
+  --sidebar-accent-foreground: var(--color-accent-ink);
+  --sidebar-border: var(--color-sidebar-rule);
+  --sidebar-ring: var(--color-focus);
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: clip;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: var(--color-paper);
+    font-family: var(--font-body);
+  }
+
+  html {
+    @apply font-sans;
+    color-scheme: light;
+    font-family: var(--font-body);
+    letter-spacing: 0;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--color-accent), white 68%);
+    color: var(--color-ink);
+  }
+
+  a,
+  button,
+  input,
+  select,
+  textarea {
+    transition-duration: var(--dur-short);
+    transition-timing-function: var(--ease-out);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      scroll-behavior: auto !important;
+      transition-duration: 1ms !important;
+    }
+  }
 }

@@ -1,0 +1,14 @@
+{
+  "date": "2026-09-11",
+  "framework": "Next.js 16 app router",
+  "font_stack": "Valley Sans via Google Fonts stylesheet in src/app/layout.tsx",
+  "palette": "shadcn Tailwind v4 CSS variables in src/app/globals.css",
+  "motion": "tw-animate-css installed, no heavy motion library",
+  "spacing": "Tailwind v4 spacing with shared shadcn components",
+  "preserve": [
+    "Next.js app router",
+    "Valley Sans font stack",
+    "shadcn component ownership",
+    "admin information architecture"
+  ]
+}

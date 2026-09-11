@@ -1,0 +1,834 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["admin"]
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+
+  @@schema("admin")
+}
+
+enum PartnerStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("admin")
+}
+
+enum VendorMemberRole {
+  OWNER
+  MANAGER
+
+  @@schema("admin")
+}
+
+enum VendorStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+  SUSPENDED
+
+  @@schema("admin")
+}
+
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+
+  @@schema("admin")
+}
+
+enum DocumentType {
+  BUSINESS_REGISTRATION
+  GST_CERTIFICATE
+  PAN
+  OWNER_ID
+  ADDRESS_PROOF
+  TRAINER_CERTIFICATION
+  EDUCATIONAL_DOCUMENT
+  OTHER
+
+  @@schema("admin")
+}
+
+enum FacilityStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("admin")
+}
+
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("admin")
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+
+  @@schema("admin")
+}
+
+enum DurationUnit {
+  DAYS
+  MONTHS
+  YEARS
+  SESSIONS
+
+  @@schema("admin")
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+
+  @@schema("admin")
+}
+
+enum SlotStatus {
+  ACTIVE
+  CLOSED
+
+  @@schema("admin")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  EXPIRED
+
+  @@schema("admin")
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+
+  @@schema("admin")
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+  DELETED
+  FLAGGED
+
+  @@schema("admin")
+}
+
+enum TrainerStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("admin")
+}
+
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("admin")
+}
+
+enum CourseMode {
+  OFFLINE
+  ONLINE
+  HYBRID
+
+  @@schema("admin")
+}
+
+enum CourseStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+
+  @@schema("admin")
+}
+
+enum LectureStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+
+  @@schema("admin")
+}
+
+// ---------------------------------------------------------------------------
+// Auth / RBAC
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  phone        String?    @unique
+  passwordHash String     @map("password_hash")
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?  @map("last_login_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  partnerId    String?    @map("partner_id")
+
+  roles              UserRole[]
+  createdVendors     Vendor[]             @relation("VendorCreatedBy")
+  approvedVendors    Vendor[]             @relation("VendorApprovedBy")
+  verifiedDocuments  VendorVerification[] @relation("DocVerifiedBy")
+  auditLogs          AuditLog[]
+  bookings           Booking[]
+  reviews            Review[]
+  vendorMemberships  VendorMember[]
+  partner            Partner?             @relation("PartnerUsers", fields: [partnerId], references: [id], onDelete: SetNull)
+  createdPartners    Partner[]            @relation("PartnerCreatedBy")
+  listingAssignments ListingAssignment[]
+
+  @@index([partnerId])
+  @@map("users")
+  @@schema("admin")
+}
+
+model Partner {
+  id          String        @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  status      PartnerStatus @default(ACTIVE)
+  createdById String        @map("created_by")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  createdBy User     @relation("PartnerCreatedBy", fields: [createdById], references: [id])
+  users     User[]   @relation("PartnerUsers")
+  vendors   Vendor[]
+
+  @@index([status])
+  @@map("partners")
+  @@schema("admin")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+  @@schema("admin")
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+  @@schema("admin")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+  @@schema("admin")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+  @@schema("admin")
+}
+
+// ---------------------------------------------------------------------------
+// Vendor core
+// ---------------------------------------------------------------------------
+
+model VendorCategory {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  slug        String         @unique
+  description String?
+  icon        String?
+  status      CategoryStatus @default(ACTIVE)
+  sortOrder   Int            @default(0) @map("sort_order")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  vendors Vendor[]
+
+  @@map("vendor_categories")
+  @@schema("admin")
+}
+
+model Vendor {
+  id                 String             @id @default(cuid())
+  name               String
+  slug               String             @unique
+  categoryId         String             @map("category_id")
+  partnerId          String             @map("partner_id")
+  description        String?
+  phone              String
+  email              String?
+  website            String?
+  status             VendorStatus       @default(DRAFT)
+  verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
+  rejectionReason    String?            @map("rejection_reason")
+  averageRating      Decimal?           @map("average_rating") @db.Decimal(2, 1)
+  reviewCount        Int                @default(0) @map("review_count")
+  createdById        String             @map("created_by")
+  approvedById       String?            @map("approved_by")
+  publishedAt        DateTime?          @map("published_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  category         VendorCategory       @relation(fields: [categoryId], references: [id])
+  partner          Partner              @relation(fields: [partnerId], references: [id])
+  createdBy        User                 @relation("VendorCreatedBy", fields: [createdById], references: [id])
+  approvedBy       User?                @relation("VendorApprovedBy", fields: [approvedById], references: [id])
+  address          VendorAddress?
+  verifications    VendorVerification[]
+  facilities       VendorFacility[]
+  plans            MembershipPlan[]
+  schedules        VendorSchedule[]
+  bookingSlots     BookingSlot[]
+  media            VendorMedia[]
+  reviews          Review[]
+  bookings         Booking[]
+  studyCafeDetails StudyCafeDetails?
+  examHubDetails   ExamHubDetails?
+  trainers         Trainer[]
+  teachers         Teacher[]
+  courses          Course[]
+  menuCategories   MenuCategory[]
+  seatTypes        LibrarySeatType[]
+  members          VendorMember[]
+  assignments      ListingAssignment[]
+
+  @@index([partnerId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([verificationStatus])
+  @@index([createdAt])
+  @@map("vendors")
+  @@schema("admin")
+}
+
+model ListingAssignment {
+  vendorId  String   @map("vendor_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([vendorId, userId])
+  @@index([userId])
+  @@map("listing_assignments")
+  @@schema("admin")
+}
+
+model VendorMember {
+  vendorId  String           @map("vendor_id")
+  userId    String           @map("user_id")
+  role      VendorMemberRole @default(OWNER)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([vendorId, userId])
+  @@index([userId])
+  @@map("vendor_members")
+  @@schema("admin")
+}
+
+model VendorAddress {
+  id           String   @id @default(cuid())
+  vendorId     String   @unique @map("vendor_id")
+  addressLine1 String   @map("address_line_1")
+  addressLine2 String?  @map("address_line_2")
+  city         String
+  state        String
+  country      String   @default("India")
+  pincode      String
+  latitude     Decimal? @db.Decimal(9, 6)
+  longitude    Decimal? @db.Decimal(9, 6)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([city])
+  @@index([state])
+  @@index([pincode])
+  @@map("vendor_addresses")
+  @@schema("admin")
+}
+
+model VendorVerification {
+  id              String             @id @default(cuid())
+  vendorId        String             @map("vendor_id")
+  documentType    DocumentType       @map("document_type")
+  documentNumber  String?            @map("document_number")
+  documentUrl     String             @map("document_url")
+  status          VerificationStatus @default(PENDING)
+  verifiedById    String?            @map("verified_by")
+  verifiedAt      DateTime?          @map("verified_at")
+  rejectionReason String?            @map("rejection_reason")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  vendor     Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  verifiedBy User?  @relation("DocVerifiedBy", fields: [verifiedById], references: [id])
+
+  @@index([vendorId])
+  @@index([status])
+  @@map("vendor_verifications")
+  @@schema("admin")
+}
+
+model Facility {
+  id       String         @id @default(cuid())
+  name     String         @unique
+  category String?
+  icon     String?
+  status   FacilityStatus @default(ACTIVE)
+
+  vendorFacilities VendorFacility[]
+
+  @@map("facilities")
+  @@schema("admin")
+}
+
+model VendorFacility {
+  vendorId   String @map("vendor_id")
+  facilityId String @map("facility_id")
+
+  vendor   Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@id([vendorId, facilityId])
+  @@map("vendor_facilities")
+  @@schema("admin")
+}
+
+model MembershipPlan {
+  id            String       @id @default(cuid())
+  vendorId      String       @map("vendor_id")
+  name          String
+  description   String?
+  price         Decimal      @db.Decimal(10, 2)
+  currency      String       @default("INR")
+  durationValue Int          @map("duration_value")
+  durationUnit  DurationUnit @map("duration_unit")
+  status        PlanStatus   @default(ACTIVE)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  vendor   Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([vendorId])
+  @@map("membership_plans")
+  @@schema("admin")
+}
+
+model VendorSchedule {
+  id        String    @id @default(cuid())
+  vendorId  String    @map("vendor_id")
+  dayOfWeek DayOfWeek @map("day_of_week")
+  openTime  DateTime  @map("open_time") @db.Time()
+  closeTime DateTime  @map("close_time") @db.Time()
+  isClosed  Boolean   @default(false) @map("is_closed")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, dayOfWeek])
+  @@map("vendor_schedules")
+  @@schema("admin")
+}
+
+model BookingSlot {
+  id                String     @id @default(cuid())
+  vendorId          String     @map("vendor_id")
+  slotDate          DateTime   @map("slot_date") @db.Date
+  startTime         DateTime   @map("start_time") @db.Time()
+  endTime           DateTime   @map("end_time") @db.Time()
+  capacity          Int
+  availableCapacity Int        @map("available_capacity")
+  status            SlotStatus @default(ACTIVE)
+
+  vendor   Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@unique([vendorId, slotDate, startTime, endTime])
+  @@index([vendorId, slotDate])
+  @@map("booking_slots")
+  @@schema("admin")
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  userId      String        @map("user_id")
+  vendorId    String        @map("vendor_id")
+  planId      String?       @map("plan_id")
+  slotId      String?       @map("slot_id")
+  bookingDate DateTime      @map("booking_date")
+  amount      Decimal       @db.Decimal(10, 2)
+  status      BookingStatus @default(PENDING)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  user   User            @relation(fields: [userId], references: [id])
+  vendor Vendor          @relation(fields: [vendorId], references: [id])
+  plan   MembershipPlan? @relation(fields: [planId], references: [id])
+  slot   BookingSlot?    @relation(fields: [slotId], references: [id])
+  review Review?
+
+  @@index([userId])
+  @@index([vendorId])
+  @@index([status])
+  @@map("bookings")
+  @@schema("admin")
+}
+
+model VendorMedia {
+  id         String    @id @default(cuid())
+  vendorId   String    @map("vendor_id")
+  mediaUrl   String    @map("media_url")
+  externalId String?   @map("external_id")
+  mediaType  MediaType @default(IMAGE) @map("media_type")
+  isPrimary  Boolean   @default(false) @map("is_primary")
+  sortOrder  Int       @default(0) @map("sort_order")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@map("vendor_media")
+  @@schema("admin")
+}
+
+model Review {
+  id         String       @id @default(cuid())
+  vendorId   String       @map("vendor_id")
+  userId     String       @map("user_id")
+  bookingId  String?      @unique @map("booking_id")
+  rating     Int
+  reviewText String?      @map("review_text")
+  status     ReviewStatus @default(PUBLISHED)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  vendor  Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([vendorId])
+  @@index([status])
+  @@map("reviews")
+  @@schema("admin")
+}
+
+// ---------------------------------------------------------------------------
+// Library
+// ---------------------------------------------------------------------------
+
+model LibrarySeatType {
+  id         String @id @default(cuid())
+  vendorId   String @map("vendor_id")
+  name       String
+  totalCount Int    @map("total_count")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, name])
+  @@index([vendorId])
+  @@map("library_seat_types")
+  @@schema("admin")
+}
+
+// ---------------------------------------------------------------------------
+// Gym
+// ---------------------------------------------------------------------------
+
+model Trainer {
+  id              String        @id @default(cuid())
+  vendorId        String        @map("vendor_id")
+  name            String
+  bio             String?
+  experienceYears Int?          @map("experience_years")
+  profilePhotoUrl String?       @map("profile_photo_url")
+  status          TrainerStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  vendor          Vendor                     @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  specializations TrainerSpecializationMap[]
+  pricing         TrainerPricing[]
+  availability    TrainerAvailability[]
+
+  @@index([vendorId])
+  @@map("trainers")
+  @@schema("admin")
+}
+
+model TrainerSpecialization {
+  id   String @id @default(cuid())
+  name String @unique
+
+  trainers TrainerSpecializationMap[]
+
+  @@map("trainer_specializations")
+  @@schema("admin")
+}
+
+model TrainerSpecializationMap {
+  trainerId        String @map("trainer_id")
+  specializationId String @map("specialization_id")
+
+  trainer        Trainer               @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  specialization TrainerSpecialization @relation(fields: [specializationId], references: [id], onDelete: Cascade)
+
+  @@id([trainerId, specializationId])
+  @@map("trainer_specialization_map")
+  @@schema("admin")
+}
+
+model TrainerPricing {
+  id            String       @id @default(cuid())
+  trainerId     String       @map("trainer_id")
+  price         Decimal      @db.Decimal(10, 2)
+  durationValue Int          @map("duration_value")
+  durationUnit  DurationUnit @map("duration_unit")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  trainer Trainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@map("trainer_pricing")
+  @@schema("admin")
+}
+
+model TrainerAvailability {
+  id        String    @id @default(cuid())
+  trainerId String    @map("trainer_id")
+  dayOfWeek DayOfWeek @map("day_of_week")
+  startTime DateTime  @map("start_time") @db.Time()
+  endTime   DateTime  @map("end_time") @db.Time()
+
+  trainer Trainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId])
+  @@map("trainer_availability")
+  @@schema("admin")
+}
+
+// ---------------------------------------------------------------------------
+// Study Cafe
+// ---------------------------------------------------------------------------
+
+model StudyCafeDetails {
+  id              String @id @default(cuid())
+  vendorId        String @unique @map("vendor_id")
+  seatingCapacity Int?   @map("seating_capacity")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@map("study_cafe_details")
+  @@schema("admin")
+}
+
+model MenuCategory {
+  id        String @id @default(cuid())
+  vendorId  String @map("vendor_id")
+  name      String
+  sortOrder Int    @default(0) @map("sort_order")
+
+  vendor Vendor     @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  items  MenuItem[]
+
+  @@map("menu_categories")
+  @@schema("admin")
+}
+
+model MenuItem {
+  id          String  @id @default(cuid())
+  categoryId  String  @map("category_id")
+  name        String
+  description String?
+  price       Decimal @db.Decimal(10, 2)
+  imageUrl    String? @map("image_url")
+  isAvailable Boolean @default(true) @map("is_available")
+
+  category MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("menu_items")
+  @@schema("admin")
+}
+
+// ---------------------------------------------------------------------------
+// Exam Hub
+// ---------------------------------------------------------------------------
+
+model ExamHubDetails {
+  id          String  @id @default(cuid())
+  vendorId    String  @unique @map("vendor_id")
+  description String?
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@map("exam_hub_details")
+  @@schema("admin")
+}
+
+model Teacher {
+  id              String        @id @default(cuid())
+  vendorId        String        @map("vendor_id")
+  name            String
+  bio             String?
+  experienceYears Int?          @map("experience_years")
+  profilePhotoUrl String?       @map("profile_photo_url")
+  status          TeacherStatus @default(ACTIVE)
+
+  vendor   Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  courses  CourseTeacher[]
+  lectures Lecture[]
+
+  @@index([vendorId])
+  @@map("teachers")
+  @@schema("admin")
+}
+
+model Subject {
+  id   String @id @default(cuid())
+  name String @unique
+
+  courses Course[]
+
+  @@map("subjects")
+  @@schema("admin")
+}
+
+model Course {
+  id            String        @id @default(cuid())
+  vendorId      String        @map("vendor_id")
+  subjectId     String?       @map("subject_id")
+  name          String
+  description   String?
+  price         Decimal       @db.Decimal(10, 2)
+  durationValue Int?          @map("duration_value")
+  durationUnit  DurationUnit? @map("duration_unit")
+  mode          CourseMode    @default(OFFLINE)
+  status        CourseStatus  @default(ACTIVE)
+
+  vendor   Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  subject  Subject?        @relation(fields: [subjectId], references: [id])
+  teachers CourseTeacher[]
+  lectures Lecture[]
+
+  @@map("courses")
+  @@schema("admin")
+}
+
+model CourseTeacher {
+  courseId  String @map("course_id")
+  teacherId String @map("teacher_id")
+
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, teacherId])
+  @@map("course_teachers")
+  @@schema("admin")
+}
+
+model Lecture {
+  id           String        @id @default(cuid())
+  courseId     String        @map("course_id")
+  teacherId    String?       @map("teacher_id")
+  title        String
+  description  String?
+  mode         CourseMode
+  startTime    DateTime      @map("start_time")
+  endTime      DateTime      @map("end_time")
+  meetingUrl   String?       @map("meeting_url")
+  recordingUrl String?       @map("recording_url")
+  status       LectureStatus @default(SCHEDULED)
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacher Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@index([courseId])
+  @@map("lectures")
+  @@schema("admin")
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+  @@schema("admin")
+}

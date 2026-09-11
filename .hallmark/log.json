@@ -1,0 +1,19 @@
+[
+  {
+    "date": "2026-09-11",
+    "scope": "app",
+    "macrostructure": "Workbench",
+    "theme": "custom royal operations",
+    "theme_axes": "blue-white paper / sans display / royal-blue accent",
+    "enrichment": "none",
+    "brief": "Partner hierarchy, multi-listing workflow, and royal blue Valley Sans redesign"
+  },
+  {
+    "date": "2026-09-11",
+    "scope": "app",
+    "macrostructure": "Workbench",
+    "theme": "custom operations",
+    "enrichment": "none",
+    "brief": "Modernize Readify India admin UI"
+  }
+]
