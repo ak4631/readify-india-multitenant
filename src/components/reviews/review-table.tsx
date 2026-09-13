@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Review, User, Vendor } from "@/generated/prisma/client";
+import type { Review, Vendor } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
   deleteReview,
@@ -21,7 +21,7 @@ import {
   restoreReview,
 } from "@/server/actions/reviews.actions";
 
-type ReviewRow = Review & { user: User; vendor?: Vendor };
+type ReviewRow = Review & { vendor?: Vendor };
 
 const STATUS_VARIANTS: Record<
   Review["status"],
@@ -74,7 +74,7 @@ export function ReviewTable({
         {reviews.map((review) => (
           <TableRow key={review.id}>
             {showVendor && <TableCell>{review.vendor?.name}</TableCell>}
-            <TableCell>{review.user.name}</TableCell>
+            <TableCell>{review.userName ?? "Guest"}</TableCell>
             <TableCell>{"⭐".repeat(review.rating)}</TableCell>
             <TableCell className="max-w-xs truncate">
               {review.reviewText ?? "—"}

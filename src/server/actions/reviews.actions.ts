@@ -31,7 +31,7 @@ export async function listReviews(filters: { vendorId?: string } = {}) {
       vendor: actor?.partnerId ? { partnerId: actor.partnerId } : undefined,
     },
     orderBy: { createdAt: "desc" },
-    include: { vendor: true, user: true },
+    include: { vendor: true },
   });
 }
 

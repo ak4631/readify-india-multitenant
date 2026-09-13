@@ -204,8 +204,6 @@ model User {
   approvedVendors    Vendor[]             @relation("VendorApprovedBy")
   verifiedDocuments  VendorVerification[] @relation("DocVerifiedBy")
   auditLogs          AuditLog[]
-  bookings           Booking[]
-  reviews            Review[]
   vendorMemberships  VendorMember[]
   partner            Partner?             @relation("PartnerUsers", fields: [partnerId], references: [id], onDelete: SetNull)
   createdPartners    Partner[]            @relation("PartnerCreatedBy")
@@ -512,6 +510,14 @@ model BookingSlot {
   @@schema("admin")
 }
 
+// userId holds a Supabase Auth uid (customer identity lives in the RN app's
+// Supabase project, not admin.users, which is staff/partner-only) -- no FK,
+// since there's no admin.users row for a customer. booking_code/vendor_name/
+// date_label/time_slot/time_label are denormalized display fields the RN app
+// collects at booking time; seat_type/seat_label mirror the chosen plan's id
+// and name for display symmetry with plan_id/plan (see
+// public.create_customer_booking, which is the only writer -- it derives
+// amount and seat_label from the plan server-side, never trusting the client).
 model Booking {
   id          String        @id @default(cuid())
   userId      String        @map("user_id")
@@ -521,10 +527,16 @@ model Booking {
   bookingDate DateTime      @map("booking_date")
   amount      Decimal       @db.Decimal(10, 2)
   status      BookingStatus @default(PENDING)
+  bookingCode String?       @unique @map("booking_code")
+  vendorName  String?       @map("vendor_name")
+  dateLabel   String?       @map("date_label")
+  timeSlot    String?       @map("time_slot")
+  timeLabel   String?       @map("time_label")
+  seatType    String?       @map("seat_type")
+  seatLabel   String?       @map("seat_label")
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
-  user   User            @relation(fields: [userId], references: [id])
   vendor Vendor          @relation(fields: [vendorId], references: [id])
   plan   MembershipPlan? @relation(fields: [planId], references: [id])
   slot   BookingSlot?    @relation(fields: [slotId], references: [id])
@@ -554,10 +566,15 @@ model VendorMedia {
   @@schema("admin")
 }
 
+// userId holds a Supabase Auth uid (same reasoning as Booking.userId -- no
+// admin.users row exists for a customer). userName is denormalized at write
+// time from the customer's public.profiles row; see
+// public.create_customer_review, the only writer.
 model Review {
   id         String       @id @default(cuid())
   vendorId   String       @map("vendor_id")
   userId     String       @map("user_id")
+  userName   String?      @map("user_name")
   bookingId  String?      @unique @map("booking_id")
   rating     Int
   reviewText String?      @map("review_text")
@@ -566,9 +583,9 @@ model Review {
   updatedAt  DateTime     @updatedAt @map("updated_at")
 
   vendor  Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  user    User     @relation(fields: [userId], references: [id])
   booking Booking? @relation(fields: [bookingId], references: [id])
 
+  @@unique([vendorId, userId])
   @@index([vendorId])
   @@index([status])
   @@map("reviews")

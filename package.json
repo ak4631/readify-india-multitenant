@@ -15,7 +15,8 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:seed": "prisma db seed",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prisma:apply": "node scripts/apply-migration.js"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
