@@ -20,6 +20,8 @@ import {
   vendorAddressSchema,
   type VendorAddressInput,
 } from "@/lib/validations/vendor.schema";
+import { AddressMapPicker } from "./address-map-picker";
+import type { GeocodeResult } from "@/lib/geocoding";
 
 export function StepAddress({ vendorId }: { vendorId: string }) {
   const router = useRouter();
@@ -33,8 +35,21 @@ export function StepAddress({ vendorId }: { vendorId: string }) {
       city: "",
       state: "",
       pincode: "",
+      latitude: undefined,
+      longitude: undefined,
     },
   });
+
+  function handleMapChange(lat: number, lng: number) {
+    form.setValue("latitude", lat, { shouldValidate: true });
+    form.setValue("longitude", lng, { shouldValidate: true });
+  }
+
+  function handleAddressSelect(result: GeocodeResult) {
+    if (result.city && !form.getValues("city")) form.setValue("city", result.city);
+    if (result.state && !form.getValues("state")) form.setValue("state", result.state);
+    if (result.pincode && !form.getValues("pincode")) form.setValue("pincode", result.pincode);
+  }
 
   async function onSubmit(values: VendorAddressInput) {
     setIsSubmitting(true);
@@ -62,6 +77,22 @@ export function StepAddress({ vendorId }: { vendorId: string }) {
             </p>
           </div>
           <div className="space-y-5">
+            <div>
+              <FormLabel>Pin location on map</FormLabel>
+              <div className="mt-2">
+                <AddressMapPicker
+                  latitude={form.watch("latitude")}
+                  longitude={form.watch("longitude")}
+                  onChange={handleMapChange}
+                  onAddressSelect={handleAddressSelect}
+                />
+              </div>
+              {form.formState.errors.latitude && (
+                <p className="mt-2 text-sm text-destructive">
+                  {form.formState.errors.latitude.message}
+                </p>
+              )}
+            </div>
             <FormField
               control={form.control}
               name="addressLine1"

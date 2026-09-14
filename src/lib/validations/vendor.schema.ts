@@ -34,15 +34,20 @@ export const vendorBasicInfoSchema = z.object({
 
 export type VendorBasicInfoInput = z.infer<typeof vendorBasicInfoSchema>;
 
-export const vendorAddressSchema = z.object({
-  addressLine1: z.string().min(2, "Address is required"),
-  addressLine2: z.string().optional(),
-  city: z.string().min(2, "City is required"),
-  state: z.string().min(2, "State is required"),
-  pincode: z.string().min(4, "Pincode is required"),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-});
+export const vendorAddressSchema = z
+  .object({
+    addressLine1: z.string().min(2, "Address is required"),
+    addressLine2: z.string().optional(),
+    city: z.string().min(2, "City is required"),
+    state: z.string().min(2, "State is required"),
+    pincode: z.string().min(4, "Pincode is required"),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+  })
+  .refine((data) => (data.latitude == null) === (data.longitude == null), {
+    message: "Pin the location on the map to set both latitude and longitude",
+    path: ["latitude"],
+  });
 
 export type VendorAddressInput = z.infer<typeof vendorAddressSchema>;
 

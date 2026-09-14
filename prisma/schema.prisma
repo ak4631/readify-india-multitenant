@@ -404,6 +404,7 @@ model VendorAddress {
   @@index([city])
   @@index([state])
   @@index([pincode])
+  @@index([latitude, longitude])
   @@map("vendor_addresses")
   @@schema("admin")
 }

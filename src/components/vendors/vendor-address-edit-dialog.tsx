@@ -29,6 +29,8 @@ import {
   type VendorAddressInput,
 } from "@/lib/validations/vendor.schema";
 import { updateVendorAddress } from "@/server/actions/vendors.actions";
+import { AddressMapPicker } from "./wizard/address-map-picker";
+import type { GeocodeResult } from "@/lib/geocoding";
 
 export function VendorAddressEditDialog({
   vendorId,
@@ -49,8 +51,21 @@ export function VendorAddressEditDialog({
       city: address?.city ?? "",
       state: address?.state ?? "",
       pincode: address?.pincode ?? "",
+      latitude: address?.latitude != null ? Number(address.latitude) : undefined,
+      longitude: address?.longitude != null ? Number(address.longitude) : undefined,
     },
   });
+
+  function handleMapChange(lat: number, lng: number) {
+    form.setValue("latitude", lat, { shouldValidate: true });
+    form.setValue("longitude", lng, { shouldValidate: true });
+  }
+
+  function handleAddressSelect(result: GeocodeResult) {
+    if (result.city && !form.getValues("city")) form.setValue("city", result.city);
+    if (result.state && !form.getValues("state")) form.setValue("state", result.state);
+    if (result.pincode && !form.getValues("pincode")) form.setValue("pincode", result.pincode);
+  }
 
   async function onSubmit(values: VendorAddressInput) {
     setIsSubmitting(true);
@@ -81,6 +96,22 @@ export function VendorAddressEditDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div>
+              <FormLabel>Pin location on map</FormLabel>
+              <div className="mt-2">
+                <AddressMapPicker
+                  latitude={form.watch("latitude")}
+                  longitude={form.watch("longitude")}
+                  onChange={handleMapChange}
+                  onAddressSelect={handleAddressSelect}
+                />
+              </div>
+              {form.formState.errors.latitude && (
+                <p className="mt-2 text-sm text-destructive">
+                  {form.formState.errors.latitude.message}
+                </p>
+              )}
+            </div>
             <FormField
               control={form.control}
               name="addressLine1"
