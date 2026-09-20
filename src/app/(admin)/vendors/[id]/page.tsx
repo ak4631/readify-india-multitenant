@@ -11,6 +11,7 @@ import { TrainersList } from "@/components/vendors/gym/trainers-list";
 import { SeatConfiguration } from "@/components/vendors/library/seat-configuration";
 import { VendorMediaGallery } from "@/components/vendors/media/vendor-media-gallery";
 import { PlanList } from "@/components/vendors/plans/plan-list";
+import { SubscriptionTable } from "@/components/subscriptions/subscription-table";
 import { VendorScheduleEditor } from "@/components/vendors/schedule/vendor-schedule-editor";
 import { MenuEditor } from "@/components/vendors/study-cafe/menu-editor";
 import { VendorAddressEditDialog } from "@/components/vendors/vendor-address-edit-dialog";
@@ -31,6 +32,7 @@ import { listLibrarySeatTypes } from "@/server/actions/library-seat-types.action
 import { listMembershipPlans } from "@/server/actions/membership-plans.actions";
 import { listMenu } from "@/server/actions/menu.actions";
 import { listReviews } from "@/server/actions/reviews.actions";
+import { listSubscriptions } from "@/server/actions/subscriptions.actions";
 import { listTeachers } from "@/server/actions/teachers.actions";
 import {
   listTrainerSpecializations,
@@ -61,6 +63,7 @@ export default async function VendorDetailPage({
 
   const categorySlug = vendor.category.slug;
   const canViewReviews = hasPermission(session, "review.read");
+  const canViewSubscriptions = hasPermission(session, "subscription.read");
 
   const [
     categories,
@@ -70,6 +73,7 @@ export default async function VendorDetailPage({
     schedules,
     media,
     reviews,
+    subscriptions,
   ] = await Promise.all([
     listVendorCategories(),
     listFacilities(),
@@ -81,6 +85,9 @@ export default async function VendorDetailPage({
       orderBy: { sortOrder: "asc" },
     }),
     canViewReviews ? listReviews({ vendorId: id }) : Promise.resolve([]),
+    canViewSubscriptions
+      ? listSubscriptions({ vendorId: id })
+      : Promise.resolve([]),
   ]);
 
   const categoryTabLabel = CATEGORY_TAB_LABEL[categorySlug];
@@ -121,6 +128,9 @@ export default async function VendorDetailPage({
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
           {canViewReviews && <TabsTrigger value="reviews">Reviews</TabsTrigger>}
+          {canViewSubscriptions && (
+            <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
+          )}
           <TabsTrigger value="verification">Verification</TabsTrigger>
           {categoryTabLabel && (
             <TabsTrigger value="category">{categoryTabLabel}</TabsTrigger>
@@ -224,6 +234,12 @@ export default async function VendorDetailPage({
         {canViewReviews && (
           <TabsContent value="reviews">
             <ReviewTable reviews={reviews} />
+          </TabsContent>
+        )}
+
+        {canViewSubscriptions && (
+          <TabsContent value="subscriptions">
+            <SubscriptionTable subscriptions={subscriptions} showCustomer />
           </TabsContent>
         )}
 

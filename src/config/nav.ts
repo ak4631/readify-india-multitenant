@@ -3,10 +3,12 @@ import {
   BarChart3,
   Building2,
   ClipboardCheck,
+  CreditCard,
   FolderTree,
   History,
   Star,
   Store,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -65,6 +67,19 @@ export const NAV_ITEMS: NavItem[] = [
     requiredPermission: "user.read",
     icon: Users,
     platformOnly: true,
+  },
+  {
+    label: "Customers",
+    href: "/customers",
+    requiredPermission: "customer.read",
+    icon: UserRound,
+    platformOnly: true,
+  },
+  {
+    label: "Subscriptions",
+    href: "/subscriptions",
+    requiredPermission: "subscription.read",
+    icon: CreditCard,
   },
   {
     label: "Audit Logs",

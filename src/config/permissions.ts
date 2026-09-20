@@ -61,6 +61,10 @@ export const PERMISSIONS = [
   { key: "review.hide", description: "Hide reviews" },
   { key: "review.delete", description: "Delete reviews" },
   { key: "review.restore", description: "Restore hidden/deleted reviews" },
+
+  { key: "customer.read", description: "View customer profiles" },
+  { key: "subscription.read", description: "View customer subscriptions" },
+  { key: "subscription.cancel", description: "Cancel a customer subscription" },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
@@ -95,6 +99,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[] | "*"> = {
     "verification.read",
     "facility.read",
     "dashboard.read",
+    "subscription.read",
   ],
   PARTNER_ADMIN: [
     "partner.read",
@@ -116,6 +121,8 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[] | "*"> = {
     "review.hide",
     "review.delete",
     "review.restore",
+    "subscription.read",
+    "subscription.cancel",
   ],
   PARTNER_EMPLOYEE: [
     "partner.read",
@@ -125,8 +132,16 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[] | "*"> = {
     "verification.upload",
     "verification.read",
     "facility.read",
+    "subscription.read",
   ],
-  SUPPORT: ["user.read", "user.suspend", "user.activate", "dashboard.read"],
+  SUPPORT: [
+    "user.read",
+    "user.suspend",
+    "user.activate",
+    "dashboard.read",
+    "customer.read",
+    "subscription.read",
+  ],
   CONTENT_MODERATOR: [
     "review.read",
     "review.hide",
@@ -148,4 +163,6 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionKey> = {
   "/facilities": "facility.read",
   "/reviews": "review.read",
   "/audit-logs": "auditLog.read",
+  "/customers": "customer.read",
+  "/subscriptions": "subscription.read",
 };

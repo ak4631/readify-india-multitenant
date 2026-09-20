@@ -65,6 +65,7 @@ export const AUDIT_ACTIONS = [
   "CREATE_LECTURE",
   "UPDATE_LECTURE",
   "CANCEL_LECTURE",
+  "CANCEL_SUBSCRIPTION",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -88,7 +89,8 @@ export type AuditEntityType =
   | "menu_item"
   | "teacher"
   | "course"
-  | "lecture";
+  | "lecture"
+  | "subscription";
 
 interface AuditLogEntry {
   userId: string | null;

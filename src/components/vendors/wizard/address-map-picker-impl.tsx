@@ -70,23 +70,40 @@ export function AddressMapPickerImpl({
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced ~500ms after the user stops typing (not per keystroke), and
+  // cleared on unmount so a stale timer can't fire setState after the
+  // picker is gone.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   function handleQueryChange(value: string) {
     setQuery(value);
+    setErrorMessage(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (value.trim().length < 3) {
       setResults([]);
+      setSearching(false);
       return;
     }
+    setSearching(true);
     debounceRef.current = setTimeout(async () => {
-      setSearching(true);
       try {
         setResults(await searchAddressAction(value));
+      } catch (error) {
+        setResults([]);
+        setErrorMessage(
+          error instanceof Error ? error.message : "Address search failed. Please try again.",
+        );
       } finally {
         setSearching(false);
       }
-    }, 300);
+    }, 500);
   }
 
   function handleSelectResult(result: GeocodeResult) {
@@ -97,20 +114,42 @@ export function AddressMapPickerImpl({
   }
 
   function handleUseCurrentLocation() {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setErrorMessage("Location is not supported in this browser.");
+      return;
+    }
+    setErrorMessage(null);
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        onChange(lat, lng);
-        const result = await reverseGeocodeAction(lat, lng);
-        if (result) {
-          onAddressSelect?.(result);
-          setQuery(result.label);
+        try {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          onChange(lat, lng);
+          const result = await reverseGeocodeAction(lat, lng);
+          if (result) {
+            onAddressSelect?.(result);
+            setQuery(result.label);
+          }
+        } catch (error) {
+          // The pin from onChange(lat, lng) above still landed -- only the
+          // reverse-lookup label failed, so this is non-blocking.
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Got your location, but could not look up the address for it.",
+          );
+        } finally {
+          setLocating(false);
         }
-        setLocating(false);
       },
-      () => setLocating(false),
+      (geoError) => {
+        setLocating(false);
+        setErrorMessage(
+          geoError.code === geoError.PERMISSION_DENIED
+            ? "Location permission denied. Search for the address or click on the map instead."
+            : "Could not get your current location. Please try again or use the map/search.",
+        );
+      },
       { enableHighAccuracy: true, timeout: 15000 },
     );
   }
@@ -156,6 +195,8 @@ export function AddressMapPickerImpl({
           )}
         </Button>
       </div>
+
+      {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
 
       <div className="h-64 w-full overflow-hidden rounded-lg border border-border">
         <MapContainer
