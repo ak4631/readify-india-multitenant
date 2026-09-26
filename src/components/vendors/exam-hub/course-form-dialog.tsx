@@ -61,7 +61,10 @@ export function CourseFormDialog({
       subjectId: course?.subjectId ?? undefined,
       price: course ? Number(course.price) : 0,
       durationValue: course?.durationValue ?? undefined,
-      durationUnit: course?.durationUnit ?? undefined,
+      durationUnit:
+        course?.durationUnit && course.durationUnit !== "HOURS"
+          ? course.durationUnit
+          : undefined,
       mode: course?.mode ?? "OFFLINE",
     },
   });

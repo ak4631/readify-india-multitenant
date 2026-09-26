@@ -8,6 +8,7 @@ import { ReviewTable } from "@/components/reviews/review-table";
 import { AcademicsPanel } from "@/components/vendors/exam-hub/academics-panel";
 import { VendorFacilitiesEditor } from "@/components/vendors/facilities/vendor-facilities-editor";
 import { TrainersList } from "@/components/vendors/gym/trainers-list";
+import { LibraryOccupancyPanel } from "@/components/vendors/library/occupancy-panel";
 import { SeatConfiguration } from "@/components/vendors/library/seat-configuration";
 import { VendorMediaGallery } from "@/components/vendors/media/vendor-media-gallery";
 import { PlanList } from "@/components/vendors/plans/plan-list";
@@ -28,6 +29,7 @@ import { getRequiredDocuments } from "@/config/verification-requirements";
 import { prisma } from "@/lib/prisma";
 import { listCourses, listSubjects } from "@/server/actions/courses.actions";
 import { listFacilities } from "@/server/actions/facilities.actions";
+import { getLibraryOccupancy } from "@/server/actions/library-occupancy.actions";
 import { listLibrarySeatTypes } from "@/server/actions/library-seat-types.actions";
 import { listMembershipPlans } from "@/server/actions/membership-plans.actions";
 import { listMenu } from "@/server/actions/menu.actions";
@@ -52,10 +54,13 @@ const CATEGORY_TAB_LABEL: Record<string, string> = {
 
 export default async function VendorDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; date?: string }>;
 }) {
   const { id } = await params;
+  const { tab, date } = await searchParams;
   const vendor = await getVendorById(id);
   const session = await getCurrentSession();
 
@@ -92,6 +97,16 @@ export default async function VendorDetailPage({
 
   const categoryTabLabel = CATEGORY_TAB_LABEL[categorySlug];
 
+  // Library occupancy is computed for a day in the vendor's own timezone.
+  let occupancy: Awaited<ReturnType<typeof getLibraryOccupancy>> | null = null;
+  if (categorySlug === "library") {
+    const selectedDate =
+      date && /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? date
+        : new Date().toLocaleDateString("en-CA", { timeZone: vendor.timeZone });
+    occupancy = await getLibraryOccupancy(id, selectedDate);
+  }
+
   return (
     <div className="space-y-8">
       <Link
@@ -120,12 +135,13 @@ export default async function VendorDetailPage({
         }
       />
 
-      <Tabs defaultValue="overview" className="gap-6">
+      <Tabs defaultValue={tab ?? "overview"} className="gap-6">
         <TabsList className="h-auto w-full flex-wrap justify-start rounded-xl bg-card p-1 shadow-sm">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="facilities">Facilities</TabsTrigger>
           <TabsTrigger value="plans">Plans</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
+          {occupancy && <TabsTrigger value="occupancy">Occupancy</TabsTrigger>}
           <TabsTrigger value="photos">Photos</TabsTrigger>
           {canViewReviews && <TabsTrigger value="reviews">Reviews</TabsTrigger>}
           {canViewSubscriptions && (
@@ -226,6 +242,12 @@ export default async function VendorDetailPage({
         <TabsContent value="schedule">
           <VendorScheduleEditor vendorId={vendor.id} schedules={schedules} />
         </TabsContent>
+
+        {occupancy && (
+          <TabsContent value="occupancy">
+            <LibraryOccupancyPanel data={occupancy} />
+          </TabsContent>
+        )}
 
         <TabsContent value="photos">
           <VendorMediaGallery vendorId={vendor.id} media={media} />

@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,8 +62,10 @@ export function PlanFormDialog({
       price: plan ? Number(plan.price) : 0,
       durationValue: plan?.durationValue ?? 1,
       durationUnit: plan?.durationUnit ?? "MONTHS",
+      dailyHours: plan?.dailyHours ?? null,
     },
   });
+  const durationUnit = useWatch({ control: form.control, name: "durationUnit" });
 
   async function onSubmit(values: MembershipPlanInput) {
     setIsSubmitting(true);
@@ -178,12 +180,43 @@ export function PlanFormDialog({
                       <SelectItem value="MONTHS">Months</SelectItem>
                       <SelectItem value="YEARS">Years</SelectItem>
                       <SelectItem value="SESSIONS">Sessions</SelectItem>
+                      <SelectItem value="HOURS">Hours (single visit)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {(durationUnit === "DAYS" ||
+              durationUnit === "MONTHS" ||
+              durationUnit === "YEARS") && (
+              <FormField
+                control={form.control}
+                name="dailyHours"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Hours per day (library seat)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={24}
+                        placeholder="Blank = full opening hours"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === ""
+                              ? null
+                              : e.target.valueAsNumber,
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <DialogFooter>
               <Button
                 type="submit"

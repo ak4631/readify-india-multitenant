@@ -51,6 +51,7 @@ export function PlanList({
                 <p className="text-muted-foreground text-sm">
                   ₹{Number(plan.price).toLocaleString()} / {plan.durationValue}{" "}
                   {plan.durationUnit.toLowerCase()}
+                  {plan.dailyHours ? ` · ${plan.dailyHours}h/day` : ""}
                 </p>
               </div>
               <Badge

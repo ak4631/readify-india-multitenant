@@ -95,6 +95,7 @@ enum DurationUnit {
   MONTHS
   YEARS
   SESSIONS
+  HOURS
 
   @@schema("admin")
 }
@@ -324,7 +325,8 @@ model Vendor {
   status             VendorStatus       @default(DRAFT)
   verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
   rejectionReason    String?            @map("rejection_reason")
-  averageRating      Decimal?           @map("average_rating") @db.Decimal(2, 1)
+  timeZone           String             @default("Asia/Kolkata") @map("time_zone")
+  averageRating     Decimal?           @map("average_rating") @db.Decimal(2, 1)
   reviewCount        Int                @default(0) @map("review_count")
   createdById        String             @map("created_by")
   approvedById       String?            @map("approved_by")
@@ -353,7 +355,8 @@ model Vendor {
   courses          Course[]
   menuCategories   MenuCategory[]
   seatTypes        LibrarySeatType[]
-  members          VendorMember[]
+  seats            LibrarySeat[]
+  members        VendorMember[]
   assignments      ListingAssignment[]
 
   @@index([partnerId])
@@ -474,6 +477,8 @@ model MembershipPlan {
   currency      String       @default("INR")
   durationValue Int          @map("duration_value")
   durationUnit  DurationUnit @map("duration_unit")
+  // Hours/day a DAYS/MONTHS/YEARS plan occupies its seat; null = whole opening window.
+  dailyHours    Int?         @map("daily_hours")
   status        PlanStatus   @default(ACTIVE)
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
@@ -535,6 +540,10 @@ model Booking {
   vendorId    String        @map("vendor_id")
   planId      String?       @map("plan_id")
   slotId      String?       @map("slot_id")
+  seatId        String?       @map("seat_id")
+  startAt       DateTime?     @map("start_at") @db.Timestamptz(3)
+  endAt         DateTime?     @map("end_at") @db.Timestamptz(3)
+  durationHours Decimal?      @map("duration_hours") @db.Decimal(5, 2)
   bookingDate DateTime      @map("booking_date")
   amount      Decimal       @db.Decimal(10, 2)
   status      BookingStatus @default(PENDING)
@@ -551,8 +560,10 @@ model Booking {
   vendor Vendor          @relation(fields: [vendorId], references: [id])
   plan   MembershipPlan? @relation(fields: [planId], references: [id])
   slot   BookingSlot?    @relation(fields: [slotId], references: [id])
+  seat   LibrarySeat?    @relation(fields: [seatId], references: [id])
   review Review?
 
+  @@index([seatId, startAt])
   @@index([userId])
   @@index([vendorId])
   @@index([status])
@@ -582,12 +593,17 @@ model Subscription {
   customerName String?            @map("customer_name")
   vendorName   String?            @map("vendor_name")
   planName     String?            @map("plan_name")
+  seatId        String?           @map("seat_id")
+  slotStartTime DateTime?         @map("slot_start_time") @db.Time()
+  slotHours     Int?              @map("slot_hours")
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
 
   vendor Vendor         @relation(fields: [vendorId], references: [id])
   plan   MembershipPlan @relation(fields: [planId], references: [id])
+  seat   LibrarySeat?   @relation(fields: [seatId], references: [id])
 
+  @@index([seatId])
   @@index([userId])
   @@index([vendorId])
   @@index([status])
@@ -648,11 +664,35 @@ model LibrarySeatType {
   name       String
   totalCount Int    @map("total_count")
 
-  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendor Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  seats  LibrarySeat[]
 
   @@unique([vendorId, name])
   @@index([vendorId])
   @@map("library_seat_types")
+  @@schema("admin")
+}
+
+// One row per physical seat. Materialised from LibrarySeatType.totalCount by
+// DB triggers (admin.sync_seats_for_type) -- don't create/delete these by hand.
+// Availability is derived from bookings/subscriptions holding this seat; see
+// migration 20260926100000_library_seat_hours_availability.
+model LibrarySeat {
+  id         String   @id @default(cuid())
+  vendorId   String   @map("vendor_id")
+  seatTypeId String?  @map("seat_type_id")
+  label      String
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  vendor        Vendor           @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  seatType      LibrarySeatType? @relation(fields: [seatTypeId], references: [id], onDelete: SetNull)
+  bookings      Booking[]
+  subscriptions Subscription[]
+
+  @@unique([vendorId, label])
+  @@index([vendorId])
+  @@map("library_seats")
   @@schema("admin")
 }
 
