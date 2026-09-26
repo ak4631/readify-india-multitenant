@@ -291,22 +291,137 @@ BEGIN
 END;
 $$;
 
--- 7. get_library_availability ----------------------------------------------
--- One row per active seat with its free windows for the day, e.g. a 24h
--- library: a seat with a 6h booking from 06:00 returns
---   free_hours 18, free_windows [{start:"00:00",end:"06:00",hours:6},{start:"12:00",...}]
--- Times are vendor-local "HH24:MI" strings so the client never does tz math.
-CREATE OR REPLACE FUNCTION "public"."get_library_availability"(p_vendor_id text, p_date date)
-RETURNS TABLE (
-  seat_id text,
-  seat_label text,
-  seat_type text,
-  open_time text,
-  close_time text,
-  total_hours numeric,
-  free_hours numeric,
-  free_windows jsonb
-)
+-- 7. Availability helpers -------------------------------------------------------
+
+-- True when a daily slot (start time + hours) fits inside the opening window
+-- of every open weekday in the week starting p_from (covers the whole schedule).
+CREATE OR REPLACE FUNCTION "admin"."slot_fits_schedule"(p_vendor_id text, p_from date, p_slot time, p_hours int, p_tz text)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  v_day date;
+  v_open timestamptz;
+  v_close timestamptz;
+  v_s timestamptz;
+  v_e timestamptz;
+  v_any boolean := false;
+BEGIN
+  FOR v_day IN SELECT (p_from + g)::date FROM generate_series(0, 6) g LOOP
+    SELECT ow.open_at, ow.close_at INTO v_open, v_close
+    FROM admin.vendor_open_window(p_vendor_id, v_day) ow;
+    CONTINUE WHEN v_open IS NULL;
+    v_any := true;
+    v_s := (v_day + p_slot) AT TIME ZONE p_tz;
+    IF v_s < v_open THEN v_s := v_s + interval '1 day'; END IF;
+    v_e := v_s + make_interval(hours => p_hours);
+    IF v_s < v_open OR v_e > v_close THEN RETURN false; END IF;
+  END LOOP;
+  RETURN v_any;
+END;
+$$;
+
+-- True when the seat has nothing booked in the daily slot on any day in
+-- [p_from, p_to). One busy-interval scan for the whole span (not per day).
+CREATE OR REPLACE FUNCTION "admin"."seat_free_for_span"(p_seat_id text, p_from date, p_to date, p_slot time, p_hours int, p_tz text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT NOT EXISTS (
+    SELECT 1
+    FROM admin.seat_busy_intervals(
+      p_seat_id,
+      ((p_from - 1)::timestamp AT TIME ZONE p_tz),
+      ((p_to + 2)::timestamp AT TIME ZONE p_tz)
+    ) bi
+    JOIN generate_series(p_from::timestamp, (p_to - 1)::timestamp, interval '1 day') AS d
+      ON bi."start_at" < (((d::date + p_slot) AT TIME ZONE p_tz) + make_interval(hours => p_hours))
+     AND bi."end_at"   >  ((d::date + p_slot) AT TIME ZONE p_tz)
+  )
+$$;
+
+-- Allocate a seat for a one-off window: "smart random". Among seats free for
+-- the whole window, prefer the seat whose containing free stretch is smallest
+-- (so fully-free seats stay available for 24h / long bookings); ties are
+-- random. The seat row is locked (SKIP LOCKED, so concurrent bookers get
+-- different seats) and overlap is re-checked after locking. NULL = none.
+CREATE OR REPLACE FUNCTION "admin"."pick_seat"(p_vendor_id text, p_start timestamptz, p_end timestamptz, p_open timestamptz, p_close timestamptz)
+RETURNS text
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  r record;
+  v_locked text;
+BEGIN
+  FOR r IN
+    SELECT s."id" AS sid,
+      (SELECT min(fw.win_end - fw.win_start)
+         FROM admin.seat_free_windows(s."id", p_open, p_close) fw
+        WHERE fw.win_start <= p_start AND fw.win_end >= p_end) AS tight
+    FROM admin.library_seats s
+    WHERE s."vendor_id" = p_vendor_id AND s."is_active"
+    ORDER BY tight ASC NULLS LAST, random()
+  LOOP
+    CONTINUE WHEN r.tight IS NULL;
+
+    SELECT s."id" INTO v_locked
+    FROM admin.library_seats s WHERE s."id" = r.sid
+    FOR UPDATE SKIP LOCKED;
+    CONTINUE WHEN v_locked IS NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM admin.seat_busy_intervals(r.sid, p_start, p_end)) THEN
+      RETURN r.sid;
+    END IF;
+  END LOOP;
+  RETURN NULL;
+END;
+$$;
+
+-- Same for a subscription: a seat free at the daily slot for every day of the
+-- span. Prefers seats that already have other occupancy, then random.
+CREATE OR REPLACE FUNCTION "admin"."pick_seat_for_span"(p_vendor_id text, p_from date, p_to date, p_slot time, p_hours int, p_tz text)
+RETURNS text
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  r record;
+  v_locked text;
+BEGIN
+  FOR r IN
+    SELECT s."id" AS sid,
+      (SELECT count(*) FROM admin.seat_busy_intervals(
+         s."id",
+         ((p_from - 1)::timestamp AT TIME ZONE p_tz),
+         ((p_to + 2)::timestamp AT TIME ZONE p_tz))) AS busy_n
+    FROM admin.library_seats s
+    WHERE s."vendor_id" = p_vendor_id AND s."is_active"
+    ORDER BY busy_n DESC, random()
+  LOOP
+    CONTINUE WHEN NOT admin.seat_free_for_span(r.sid, p_from, p_to, p_slot, p_hours, p_tz);
+
+    SELECT s."id" INTO v_locked
+    FROM admin.library_seats s WHERE s."id" = r.sid
+    FOR UPDATE SKIP LOCKED;
+    CONTINUE WHEN v_locked IS NULL;
+
+    IF admin.seat_free_for_span(r.sid, p_from, p_to, p_slot, p_hours, p_tz) THEN
+      RETURN r.sid;
+    END IF;
+  END LOOP;
+  RETURN NULL;
+END;
+$$;
+
+-- 8. Customer-facing availability: counts only, never seat identities --------
+-- One row per start time at which a p_hours-long visit fits, with how many
+-- seats are free for it, e.g. (24, '06:00', '12:00', 7). A vendor with seats
+-- but nothing bookable returns one row with NULL start and 0 seats; a vendor
+-- without seats returns no rows (legacy bucket flow). p_hours NULL = the
+-- whole opening window.
+CREATE OR REPLACE FUNCTION "public"."get_library_slot_options"(p_vendor_id text, p_date date, p_hours numeric DEFAULT NULL)
+RETURNS TABLE (total_seats int, start_time text, end_time text, seats_available int)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = admin, public
@@ -315,52 +430,172 @@ DECLARE
   v_tz text;
   v_open timestamptz;
   v_close timestamptz;
+  v_total int;
+  v_len interval;
+  v_found boolean := false;
   r record;
-  v_windows jsonb;
-  v_free numeric;
 BEGIN
-  SELECT v."time_zone" INTO v_tz FROM admin.vendors v WHERE v."id" = p_vendor_id AND v."status" = 'PUBLISHED';
+  SELECT v."time_zone" INTO v_tz
+  FROM admin.vendors v WHERE v."id" = p_vendor_id AND v."status" = 'PUBLISHED';
   IF v_tz IS NULL THEN RETURN; END IF;
 
-  SELECT ow.open_at, ow.close_at INTO v_open, v_close FROM admin.vendor_open_window(p_vendor_id, p_date) ow;
-  IF v_open IS NULL THEN RETURN; END IF;
+  SELECT count(*)::int INTO v_total
+  FROM admin.library_seats s WHERE s."vendor_id" = p_vendor_id AND s."is_active";
+  IF v_total = 0 THEN RETURN; END IF;
+
+  SELECT ow.open_at, ow.close_at INTO v_open, v_close
+  FROM admin.vendor_open_window(p_vendor_id, p_date) ow;
+  IF v_open IS NULL THEN
+    total_seats := v_total; start_time := NULL; end_time := NULL; seats_available := 0;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
+  v_len := make_interval(secs => (COALESCE(p_hours, extract(epoch FROM (v_close - v_open)) / 3600.0) * 3600)::double precision);
+  IF v_len <= interval '0' THEN RETURN; END IF;
 
   FOR r IN
-    SELECT s."id" AS sid, s."label" AS slabel, t."name" AS tname
-    FROM admin.library_seats s
-    LEFT JOIN admin.library_seat_types t ON t."id" = s."seat_type_id"
-    WHERE s."vendor_id" = p_vendor_id AND s."is_active"
-    ORDER BY s."created_at", s."label"
+    WITH w AS (
+      SELECT s."id" AS seat_id, fw.win_start, fw.win_end
+      FROM admin.library_seats s
+      CROSS JOIN LATERAL admin.seat_free_windows(s."id", v_open, v_close) fw
+      WHERE s."vendor_id" = p_vendor_id AND s."is_active"
+    ),
+    -- Candidate starts: every free-stretch start, plus evenly spaced slots from
+    -- opening time (00:00, 06:00, 12:00... for a 6h plan) so a fully-free seat
+    -- can always be offered mid-day even when no stretch begins there.
+    starts AS (
+      SELECT w.win_start AS st FROM w
+      UNION
+      SELECT v_open + (k * v_len)
+      FROM generate_series(0, floor(extract(epoch FROM (v_close - v_open)) / extract(epoch FROM v_len))::int - 1) k
+    )
+    SELECT starts.st AS st, count(DISTINCT w.seat_id)::int AS n
+    FROM starts
+    JOIN w ON w.win_start <= starts.st AND w.win_end >= starts.st + v_len
+    WHERE starts.st + v_len > now()
+    GROUP BY starts.st
+    ORDER BY starts.st
   LOOP
-    SELECT
-      COALESCE(jsonb_agg(jsonb_build_object(
-        'start', to_char(w.win_start AT TIME ZONE v_tz, 'HH24:MI'),
-        'end',   to_char(w.win_end AT TIME ZONE v_tz, 'HH24:MI'),
-        'hours', round(extract(epoch FROM (w.win_end - w.win_start)) / 3600.0, 2)
-      ) ORDER BY w.win_start), '[]'::jsonb),
-      COALESCE(sum(extract(epoch FROM (w.win_end - w.win_start)) / 3600.0), 0)
-    INTO v_windows, v_free
-    FROM admin.seat_free_windows(r.sid, v_open, v_close) w;
-
-    seat_id := r.sid;
-    seat_label := r.slabel;
-    seat_type := r.tname;
-    open_time := to_char(v_open AT TIME ZONE v_tz, 'HH24:MI');
-    close_time := to_char(v_close AT TIME ZONE v_tz, 'HH24:MI');
-    total_hours := round(extract(epoch FROM (v_close - v_open)) / 3600.0, 2);
-    free_hours := round(v_free, 2);
-    free_windows := v_windows;
+    v_found := true;
+    total_seats := v_total;
+    start_time := to_char(r.st AT TIME ZONE v_tz, 'HH24:MI');
+    end_time := to_char((r.st + v_len) AT TIME ZONE v_tz, 'HH24:MI');
+    seats_available := r.n;
     RETURN NEXT;
   END LOOP;
+
+  IF NOT v_found THEN
+    total_seats := v_total; start_time := NULL; end_time := NULL; seats_available := 0;
+    RETURN NEXT;
+  END IF;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION "public"."get_library_availability" TO authenticated;
+GRANT EXECUTE ON FUNCTION "public"."get_library_slot_options" TO authenticated;
 
--- 8. create_customer_booking: seat + time aware --------------------------------
--- Signature gains p_seat_id / p_start_time (vendor-local "HH24:MI", default =
--- the day's opening time). For vendors without library seats the legacy
--- bucket path below is unchanged.
+-- Same shape for a subscription plan: seats_available = seats free at that
+-- daily slot for EVERY day of the plan (e.g. "28 seats" for a month).
+CREATE OR REPLACE FUNCTION "public"."get_library_subscription_options"(p_vendor_id text, p_plan_id text)
+RETURNS TABLE (total_seats int, start_time text, end_time text, seats_available int)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = admin, public
+AS $$
+DECLARE
+  v_tz text;
+  v_unit text;
+  v_value int;
+  v_daily int;
+  v_total int;
+  v_from date := now()::date;
+  v_to date;
+  v_day date;
+  v_open timestamptz;
+  v_close timestamptz;
+  v_hours int;
+  v_n int;
+  v_found boolean := false;
+  r record;
+BEGIN
+  SELECT v."time_zone" INTO v_tz
+  FROM admin.vendors v WHERE v."id" = p_vendor_id AND v."status" = 'PUBLISHED';
+  IF v_tz IS NULL THEN RETURN; END IF;
+
+  SELECT count(*)::int INTO v_total
+  FROM admin.library_seats s WHERE s."vendor_id" = p_vendor_id AND s."is_active";
+  IF v_total = 0 THEN RETURN; END IF;
+
+  SELECT p."duration_unit"::text, p."duration_value", p."daily_hours" INTO v_unit, v_value, v_daily
+  FROM admin.membership_plans p
+  WHERE p."id" = p_plan_id AND p."vendor_id" = p_vendor_id AND p."status" = 'ACTIVE';
+  IF v_unit IS NULL OR v_unit NOT IN ('DAYS', 'MONTHS', 'YEARS') THEN RETURN; END IF;
+
+  v_to := (now()::timestamp + CASE v_unit
+    WHEN 'DAYS'   THEN make_interval(days => v_value)
+    WHEN 'MONTHS' THEN make_interval(months => v_value)
+    ELSE make_interval(years => v_value)
+  END)::date;
+
+  -- First open day in the coming week defines the opening window / default hours.
+  FOR v_day IN SELECT (v_from + g)::date FROM generate_series(0, 6) g LOOP
+    SELECT ow.open_at, ow.close_at INTO v_open, v_close
+    FROM admin.vendor_open_window(p_vendor_id, v_day) ow;
+    EXIT WHEN v_open IS NOT NULL;
+  END LOOP;
+
+  IF v_open IS NULL THEN
+    total_seats := v_total; start_time := NULL; end_time := NULL; seats_available := 0;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
+  v_hours := COALESCE(v_daily, ceil(extract(epoch FROM (v_close - v_open)) / 3600.0)::int);
+
+  FOR r IN
+    SELECT DISTINCT c.t AS slot_t
+    FROM (
+      SELECT ((v_open + (k * make_interval(hours => v_hours))) AT TIME ZONE v_tz)::time AS t
+      FROM generate_series(0, floor(extract(epoch FROM (v_close - v_open)) / (v_hours * 3600.0))::int - 1) k
+      UNION
+      SELECT (fw.win_start AT TIME ZONE v_tz)::time
+      FROM admin.library_seats s
+      CROSS JOIN LATERAL admin.seat_free_windows(s."id", v_open, v_close) fw
+      WHERE s."vendor_id" = p_vendor_id AND s."is_active"
+    ) c
+    ORDER BY slot_t
+  LOOP
+    CONTINUE WHEN NOT admin.slot_fits_schedule(p_vendor_id, v_from, r.slot_t, v_hours, v_tz);
+
+    SELECT count(*)::int INTO v_n
+    FROM admin.library_seats s
+    WHERE s."vendor_id" = p_vendor_id AND s."is_active"
+      AND admin.seat_free_for_span(s."id", v_from, v_to, r.slot_t, v_hours, v_tz);
+
+    IF v_n > 0 THEN
+      v_found := true;
+      total_seats := v_total;
+      start_time := to_char(r.slot_t, 'HH24:MI');
+      end_time := to_char(r.slot_t + make_interval(hours => v_hours), 'HH24:MI');
+      seats_available := v_n;
+      RETURN NEXT;
+    END IF;
+  END LOOP;
+
+  IF NOT v_found THEN
+    total_seats := v_total; start_time := NULL; end_time := NULL; seats_available := 0;
+    RETURN NEXT;
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION "public"."get_library_subscription_options" TO authenticated;
+
+-- 9. create_customer_booking: seat + time aware, seat auto-assigned ------------
+-- p_seat_id is optional: NULL (what the customer app sends) lets the system
+-- pick a seat (see admin.pick_seat). p_start_time is vendor-local "HH24:MI",
+-- default = the day's opening time. For vendors without library seats the
+-- legacy bucket path below is unchanged.
 DROP FUNCTION IF EXISTS "public"."create_customer_booking"(text, text, text, text, text, text, text);
 
 CREATE OR REPLACE FUNCTION "public"."create_customer_booking"(
@@ -400,6 +635,7 @@ DECLARE
   v_hours numeric;
   v_start timestamptz;
   v_end timestamptz;
+  v_seat_id text;
   v_seat_label text;
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -430,10 +666,6 @@ BEGIN
 
   IF v_has_seats THEN
     -- ---------------- seat + time path ----------------
-    IF p_seat_id IS NULL THEN
-      RAISE EXCEPTION 'Please choose a seat';
-    END IF;
-
     SELECT ow.open_at, ow.close_at INTO v_open, v_close
     FROM admin.vendor_open_window(p_vendor_id, v_slot_date) ow;
     IF v_open IS NULL THEN
@@ -466,17 +698,24 @@ BEGIN
       RAISE EXCEPTION 'The selected time has already passed';
     END IF;
 
-    -- Serialise all writers for this seat, then check for overlap.
-    SELECT s."label" INTO v_seat_label
-    FROM admin.library_seats s
-    WHERE s."id" = p_seat_id AND s."vendor_id" = p_vendor_id AND s."is_active"
-    FOR UPDATE;
-    IF v_seat_label IS NULL THEN
-      RAISE EXCEPTION 'Seat not available';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM admin.seat_busy_intervals(p_seat_id, v_start, v_end)) THEN
-      RAISE EXCEPTION 'This seat is already booked for the selected time. Please choose another seat or time.';
+    IF p_seat_id IS NULL THEN
+      v_seat_id := admin.pick_seat(p_vendor_id, v_start, v_end, v_open, v_close);
+      IF v_seat_id IS NULL THEN
+        RAISE EXCEPTION 'No seats are available for that slot. Please choose another time.';
+      END IF;
+    ELSE
+      -- Explicit seat (admin/tools): serialise writers, then check overlap.
+      SELECT s."label" INTO v_seat_label
+      FROM admin.library_seats s
+      WHERE s."id" = p_seat_id AND s."vendor_id" = p_vendor_id AND s."is_active"
+      FOR UPDATE;
+      IF v_seat_label IS NULL THEN
+        RAISE EXCEPTION 'Seat not available';
+      END IF;
+      IF EXISTS (SELECT 1 FROM admin.seat_busy_intervals(p_seat_id, v_start, v_end)) THEN
+        RAISE EXCEPTION 'This seat is already booked for the selected time. Please choose another seat or time.';
+      END IF;
+      v_seat_id := p_seat_id;
     END IF;
 
     INSERT INTO admin.bookings (
@@ -485,7 +724,7 @@ BEGIN
       "booking_code", "vendor_name", "date_label", "time_slot", "time_label", "seat_type", "seat_label",
       "updated_at"
     ) VALUES (
-      v_id, auth.uid()::text, p_vendor_id, p_plan_id, NULL, p_seat_id, v_start, v_end, v_hours,
+      v_id, auth.uid()::text, p_vendor_id, p_plan_id, NULL, v_seat_id, v_start, v_end, v_hours,
       p_booking_date::timestamp, v_plan_price + v_platform_fee, 'PENDING',
       p_booking_code, v_vendor_name, p_date_label, 'custom',
       to_char(v_start AT TIME ZONE v_tz, 'HH24:MI') || ' - ' || to_char(v_end AT TIME ZONE v_tz, 'HH24:MI'),
@@ -546,11 +785,11 @@ $$;
 
 GRANT EXECUTE ON FUNCTION "public"."create_customer_booking" TO authenticated;
 
--- 9. create_customer_subscription: seat + daily time slot ---------------------
--- The customer picks a seat and a daily start time (default: opening time);
--- the plan's daily_hours (or the whole opening window) sets the length. The
--- seat/time is reserved every day of the subscription; the whole span is
--- conflict-checked up front.
+-- 10. create_customer_subscription: daily time slot, seat auto-assigned --------
+-- The customer picks a daily start time (default: opening time); the plan's
+-- daily_hours (or the whole opening window) sets the length. A seat that is
+-- free at that slot for the WHOLE plan span is assigned (admin.pick_seat_for_
+-- span) and held every day of the subscription.
 DROP FUNCTION IF EXISTS "public"."create_customer_subscription"(text, text);
 
 CREATE OR REPLACE FUNCTION "public"."create_customer_subscription"(
@@ -578,12 +817,10 @@ DECLARE
   v_has_seats boolean;
   v_slot_start time;
   v_slot_hours int;
+  v_seat_id text;
   v_seat_label text;
   v_day date;
-  v_open timestamptz;
   v_close timestamptz;
-  v_slot_s timestamptz;
-  v_slot_e timestamptz;
   v_first_open timestamptz;
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -639,21 +876,12 @@ BEGIN
     INTO v_has_seats;
 
   IF v_has_seats THEN
-    IF p_seat_id IS NULL THEN
-      RAISE EXCEPTION 'Please choose a seat';
-    END IF;
-
-    -- Opening window of the first day sets the default start and length.
-    SELECT ow.open_at, ow.close_at INTO v_first_open, v_close
-    FROM admin.vendor_open_window(p_vendor_id, v_start::date) ow;
-    IF v_first_open IS NULL THEN
-      -- Closed today: fall back to the next open day within a week.
-      FOR v_day IN SELECT (v_start::date + g)::date FROM generate_series(1, 6) g LOOP
-        SELECT ow.open_at, ow.close_at INTO v_first_open, v_close
-        FROM admin.vendor_open_window(p_vendor_id, v_day) ow;
-        EXIT WHEN v_first_open IS NOT NULL;
-      END LOOP;
-    END IF;
+    -- Opening window of the first open day sets the default start and length.
+    FOR v_day IN SELECT (v_start::date + g)::date FROM generate_series(0, 6) g LOOP
+      SELECT ow.open_at, ow.close_at INTO v_first_open, v_close
+      FROM admin.vendor_open_window(p_vendor_id, v_day) ow;
+      EXIT WHEN v_first_open IS NOT NULL;
+    END LOOP;
     IF v_first_open IS NULL THEN
       RAISE EXCEPTION 'This library has no opening hours configured';
     END IF;
@@ -665,43 +893,27 @@ BEGIN
     END IF;
     v_slot_hours := COALESCE(v_daily_hours, ceil(extract(epoch FROM (v_close - v_first_open)) / 3600.0)::int);
 
-    -- The daily slot must fit inside the opening window of every open weekday
-    -- in the first week (covers every weekday of the schedule).
-    FOR v_day IN SELECT (v_start::date + g)::date FROM generate_series(0, 6) g LOOP
-      SELECT ow.open_at, ow.close_at INTO v_open, v_close
-      FROM admin.vendor_open_window(p_vendor_id, v_day) ow;
-      CONTINUE WHEN v_open IS NULL;
-
-      v_slot_s := (v_day + v_slot_start) AT TIME ZONE v_tz;
-      IF v_slot_s < v_open THEN v_slot_s := v_slot_s + interval '1 day'; END IF;
-      v_slot_e := v_slot_s + make_interval(hours => v_slot_hours);
-      IF v_slot_s < v_open OR v_slot_e > v_close THEN
-        RAISE EXCEPTION 'The selected daily time slot is outside the library''s opening hours';
-      END IF;
-    END LOOP;
-
-    -- Serialise writers for this seat, then check every day of the span.
-    SELECT s."label" INTO v_seat_label
-    FROM admin.library_seats s
-    WHERE s."id" = p_seat_id AND s."vendor_id" = p_vendor_id AND s."is_active"
-    FOR UPDATE;
-    IF v_seat_label IS NULL THEN
-      RAISE EXCEPTION 'Seat not available';
+    IF NOT admin.slot_fits_schedule(p_vendor_id, v_start::date, v_slot_start, v_slot_hours, v_tz) THEN
+      RAISE EXCEPTION 'The selected daily time slot is outside the library''s opening hours';
     END IF;
 
-    IF EXISTS (
-      SELECT 1
-      FROM generate_series(v_start::date::timestamp, (v_end::date - 1)::timestamp, interval '1 day') AS d
-      CROSS JOIN LATERAL (
-        SELECT ((d::date + v_slot_start) AT TIME ZONE v_tz) AS ws
-      ) w
-      JOIN LATERAL admin.seat_busy_intervals(
-        p_seat_id,
-        w.ws,
-        w.ws + make_interval(hours => v_slot_hours)
-      ) bi ON true
-    ) THEN
-      RAISE EXCEPTION 'This seat is not free at that time for the whole subscription. Please choose another seat or time.';
+    IF p_seat_id IS NULL THEN
+      v_seat_id := admin.pick_seat_for_span(p_vendor_id, v_start::date, v_end::date, v_slot_start, v_slot_hours, v_tz);
+      IF v_seat_id IS NULL THEN
+        RAISE EXCEPTION 'No seats are available at that daily time for the whole plan. Please choose another time.';
+      END IF;
+    ELSE
+      SELECT s."label" INTO v_seat_label
+      FROM admin.library_seats s
+      WHERE s."id" = p_seat_id AND s."vendor_id" = p_vendor_id AND s."is_active"
+      FOR UPDATE;
+      IF v_seat_label IS NULL THEN
+        RAISE EXCEPTION 'Seat not available';
+      END IF;
+      IF NOT admin.seat_free_for_span(p_seat_id, v_start::date, v_end::date, v_slot_start, v_slot_hours, v_tz) THEN
+        RAISE EXCEPTION 'This seat is not free at that time for the whole subscription. Please choose another seat or time.';
+      END IF;
+      v_seat_id := p_seat_id;
     END IF;
   END IF;
 
@@ -711,7 +923,7 @@ BEGIN
   ) VALUES (
     v_id, auth.uid()::text, p_vendor_id, p_plan_id, v_start, v_end, 'ACTIVE', v_plan_price,
     COALESCE(v_customer_name, 'Reader'), v_vendor_name, v_plan_name,
-    CASE WHEN v_has_seats THEN p_seat_id END,
+    CASE WHEN v_has_seats THEN v_seat_id END,
     CASE WHEN v_has_seats THEN v_slot_start END,
     CASE WHEN v_has_seats THEN v_slot_hours END,
     now()
@@ -723,7 +935,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION "public"."create_customer_subscription" TO authenticated;
 
--- 10. Expose seat + time on the customer's own lists --------------------------
+-- 11. Expose seat + time on the customer's own lists --------------------------
 -- New columns appended at the end (CREATE OR REPLACE VIEW requires that).
 CREATE OR REPLACE VIEW "public"."customer_bookings" AS
 SELECT
