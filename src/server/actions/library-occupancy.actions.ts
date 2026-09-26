@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { lookupCustomerProfiles } from "@/lib/profiles";
 import { requireVendorAccess } from "@/lib/rbac";
 
 // Seat + time occupancy for one library on one day. All availability comes
@@ -189,7 +190,7 @@ export async function getLibraryOccupancy(
   const bookingById = new Map(bookings.map((b) => [b.id, b]));
   const subscriptionById = new Map(subscriptions.map((s) => [s.id, s]));
 
-  const profiles = await lookupProfiles(bookings.map((b) => b.userId));
+  const profiles = await lookupCustomerProfiles(bookings.map((b) => b.userId));
 
   const busyBySeat = new Map<string, typeof busy>();
   for (const b of busy) {
@@ -385,25 +386,6 @@ async function getRevenue(
     byPlan: sortDesc(byPlan),
     bySlot: sortDesc(bySlot),
   };
-}
-
-async function lookupProfiles(userIds: string[]) {
-  const map = new Map<string, { fullName: string | null; email: string | null }>();
-  const ids = [...new Set(userIds)];
-  if (ids.length === 0) return map;
-
-  // public.profiles / auth.users belong to the customer app's schemas; read
-  // with raw SQL (see lib/profiles.ts for why there's no Prisma model).
-  const rows = await prisma.$queryRaw<
-    { id: string; fullName: string | null; email: string | null }[]
-  >`
-    SELECT p."id"::text AS "id", p."full_name" AS "fullName", u."email" AS "email"
-    FROM "public"."profiles" p
-    LEFT JOIN "auth"."users" u ON u."id" = p."id"
-    WHERE p."id"::text = ANY(${ids}::text[])
-  `;
-  for (const row of rows) map.set(row.id, row);
-  return map;
 }
 
 export async function cancelLibraryBooking(bookingId: string) {

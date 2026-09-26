@@ -8,6 +8,7 @@ import { ReviewTable } from "@/components/reviews/review-table";
 import { AcademicsPanel } from "@/components/vendors/exam-hub/academics-panel";
 import { VendorFacilitiesEditor } from "@/components/vendors/facilities/vendor-facilities-editor";
 import { TrainersList } from "@/components/vendors/gym/trainers-list";
+import { BookingTable } from "@/components/vendors/bookings/booking-table";
 import { LibraryOccupancyPanel } from "@/components/vendors/library/occupancy-panel";
 import { SeatConfiguration } from "@/components/vendors/library/seat-configuration";
 import { VendorMediaGallery } from "@/components/vendors/media/vendor-media-gallery";
@@ -29,6 +30,7 @@ import { getRequiredDocuments } from "@/config/verification-requirements";
 import { prisma } from "@/lib/prisma";
 import { listCourses, listSubjects } from "@/server/actions/courses.actions";
 import { listFacilities } from "@/server/actions/facilities.actions";
+import { listVendorBookings } from "@/server/actions/bookings.actions";
 import { getLibraryOccupancy } from "@/server/actions/library-occupancy.actions";
 import { listLibrarySeatTypes } from "@/server/actions/library-seat-types.actions";
 import { listMembershipPlans } from "@/server/actions/membership-plans.actions";
@@ -79,6 +81,7 @@ export default async function VendorDetailPage({
     media,
     reviews,
     subscriptions,
+    bookings,
   ] = await Promise.all([
     listVendorCategories(),
     listFacilities(),
@@ -93,6 +96,7 @@ export default async function VendorDetailPage({
     canViewSubscriptions
       ? listSubscriptions({ vendorId: id })
       : Promise.resolve([]),
+    listVendorBookings(id),
   ]);
 
   const categoryTabLabel = CATEGORY_TAB_LABEL[categorySlug];
@@ -142,6 +146,7 @@ export default async function VendorDetailPage({
           <TabsTrigger value="plans">Plans</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
           {occupancy && <TabsTrigger value="occupancy">Occupancy</TabsTrigger>}
+          <TabsTrigger value="bookings">Bookings</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
           {canViewReviews && <TabsTrigger value="reviews">Reviews</TabsTrigger>}
           {canViewSubscriptions && (
@@ -248,6 +253,10 @@ export default async function VendorDetailPage({
             <LibraryOccupancyPanel data={occupancy} />
           </TabsContent>
         )}
+
+        <TabsContent value="bookings">
+          <BookingTable bookings={bookings} />
+        </TabsContent>
 
         <TabsContent value="photos">
           <VendorMediaGallery vendorId={vendor.id} media={media} />

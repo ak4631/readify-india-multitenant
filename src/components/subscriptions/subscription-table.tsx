@@ -17,7 +17,22 @@ import type { Subscription, Vendor, MembershipPlan } from "@/generated/prisma/cl
 import { usePermission } from "@/hooks/use-permission";
 import { cancelSubscription } from "@/server/actions/subscriptions.actions";
 
-type SubscriptionRow = Subscription & { vendor?: Vendor; plan?: MembershipPlan };
+type SubscriptionRow = Subscription & {
+  vendor?: Vendor;
+  plan?: MembershipPlan;
+  seat?: { label: string } | null;
+};
+
+// slotStartTime is a Postgres TIME (Prisma returns it as a 1970-01-01 UTC
+// date), so its UTC time-of-day is the library-local wall-clock time.
+function formatDailySlot(subscription: SubscriptionRow) {
+  if (!subscription.slotStartTime || !subscription.slotHours) return null;
+  const start = subscription.slotStartTime.toISOString().slice(11, 16);
+  const [h, m] = start.split(":").map(Number);
+  const endMinutes = (h * 60 + m + subscription.slotHours * 60) % (24 * 60);
+  const end = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+  return `${start} – ${end} (${subscription.slotHours}h) daily`;
+}
 
 const STATUS_VARIANTS: Record<
   Subscription["status"],
@@ -62,7 +77,7 @@ export function SubscriptionTable({
   }
 
   const columnCount =
-    3 + (showVendor ? 1 : 0) + (showCustomer ? 1 : 0) + (canCancel ? 1 : 0);
+    4 + (showVendor ? 1 : 0) + (showCustomer ? 1 : 0) + (canCancel ? 1 : 0);
 
   return (
     <Table>
@@ -71,6 +86,7 @@ export function SubscriptionTable({
           {showCustomer && <TableHead>Customer</TableHead>}
           {showVendor && <TableHead>Partner listing</TableHead>}
           <TableHead>Plan</TableHead>
+          <TableHead>Seat &amp; daily slot</TableHead>
           <TableHead>Start date</TableHead>
           <TableHead>End date</TableHead>
           <TableHead>Amount</TableHead>
@@ -90,6 +106,18 @@ export function SubscriptionTable({
               </TableCell>
             )}
             <TableCell>{subscription.planName ?? subscription.plan?.name}</TableCell>
+            <TableCell>
+              {subscription.seat ? (
+                <>
+                  <p className="font-medium">{subscription.seat.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDailySlot(subscription) ?? "—"}
+                  </p>
+                </>
+              ) : (
+                "—"
+              )}
+            </TableCell>
             <TableCell>{formatDate(subscription.startDate)}</TableCell>
             <TableCell>{formatDate(subscription.endDate)}</TableCell>
             <TableCell>₹{subscription.amountPaid.toString()}</TableCell>

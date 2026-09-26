@@ -31,7 +31,7 @@ export async function listSubscriptions(filters: { vendorId?: string } = {}) {
       vendor: actor?.partnerId ? { partnerId: actor.partnerId } : undefined,
     },
     orderBy: { createdAt: "desc" },
-    include: { vendor: true, plan: true },
+    include: { vendor: true, plan: true, seat: { select: { label: true } } },
   });
 }
 

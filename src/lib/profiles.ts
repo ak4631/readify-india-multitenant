@@ -31,3 +31,21 @@ export async function listCustomerProfiles(): Promise<CustomerProfile[]> {
     ORDER BY p."created_at" DESC
   `;
 }
+
+// Names/emails for a set of customer ids (booking.userId etc.), keyed by id.
+export async function lookupCustomerProfiles(userIds: string[]) {
+  const map = new Map<string, { fullName: string | null; email: string | null }>();
+  const ids = [...new Set(userIds)];
+  if (ids.length === 0) return map;
+
+  const rows = await prisma.$queryRaw<
+    { id: string; fullName: string | null; email: string | null }[]
+  >`
+    SELECT p."id"::text AS "id", p."full_name" AS "fullName", u."email" AS "email"
+    FROM "public"."profiles" p
+    LEFT JOIN "auth"."users" u ON u."id" = p."id"
+    WHERE p."id"::text = ANY(${ids}::text[])
+  `;
+  for (const row of rows) map.set(row.id, row);
+  return map;
+}
