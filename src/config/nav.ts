@@ -73,7 +73,6 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/customers",
     requiredPermission: "customer.read",
     icon: UserRound,
-    platformOnly: true,
   },
   {
     label: "Subscriptions",

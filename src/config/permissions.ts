@@ -99,6 +99,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[] | "*"> = {
     "verification.read",
     "facility.read",
     "dashboard.read",
+    "customer.read",
     "subscription.read",
   ],
   PARTNER_ADMIN: [
@@ -121,6 +122,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[] | "*"> = {
     "review.hide",
     "review.delete",
     "review.restore",
+    "customer.read",
     "subscription.read",
     "subscription.cancel",
   ],
@@ -132,6 +134,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[] | "*"> = {
     "verification.upload",
     "verification.read",
     "facility.read",
+    "customer.read",
     "subscription.read",
   ],
   SUPPORT: [

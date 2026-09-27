@@ -104,6 +104,21 @@ export async function requireVendorAccess(
   return session;
 }
 
+// Null for platform staff (SUPER_ADMIN, ADMIN, SUPPORT, ...) who aren't tied
+// to any one partner and should see data across all of them; the partner id
+// for a partner-side account, so its data can be scoped to just their own
+// listings (customers, subscriptions, ...).
+export async function getSessionPartnerId(
+  session: Session,
+): Promise<string | null> {
+  if (isSuperAdmin(session)) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { partnerId: true },
+  });
+  return user?.partnerId ?? null;
+}
+
 export async function getAccessibleVendorIds(
   session: Session,
 ): Promise<string[] | null> {
