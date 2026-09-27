@@ -2,10 +2,11 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -63,9 +65,22 @@ export function PlanFormDialog({
       durationValue: plan?.durationValue ?? 1,
       durationUnit: plan?.durationUnit ?? "MONTHS",
       dailyHours: plan?.dailyHours ?? null,
+      isFlexible: plan?.isFlexible ?? false,
     },
   });
   const durationUnit = useWatch({ control: form.control, name: "durationUnit" });
+  const isFlexible = useWatch({ control: form.control, name: "isFlexible" });
+
+  // Flexible plans are always "1 Hour" duration under the hood (price is a
+  // per-hour rate, not tied to any fixed duration) -- lock those fields
+  // instead of asking the partner to set them redundantly.
+  useEffect(() => {
+    if (isFlexible) {
+      form.setValue("durationUnit", "HOURS");
+      form.setValue("durationValue", 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFlexible]);
 
   async function onSubmit(values: MembershipPlanInput) {
     setIsSubmitting(true);
@@ -124,13 +139,29 @@ export function PlanFormDialog({
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="isFlexible"
+              render={({ field }) => (
+                <FormItem>
+                  <Label className="flex items-center gap-2 font-normal">
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={(checked) => field.onChange(checked === true)}
+                    />
+                    Flexible plan (customer picks 1-14 days at checkout)
+                  </Label>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="price"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Price (₹)</FormLabel>
+                    <FormLabel>{isFlexible ? "Rate per hour (₹)" : "Price (₹)"}</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -144,50 +175,55 @@ export function PlanFormDialog({
                   </FormItem>
                 )}
               />
+              {!isFlexible && (
+                <FormField
+                  control={form.control}
+                  name="durationValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Duration</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={field.value}
+                          onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+            {!isFlexible && (
               <FormField
                 control={form.control}
-                name="durationValue"
+                name="durationUnit"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Duration</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={field.value}
-                        onChange={(e) => field.onChange(e.target.valueAsNumber)}
-                      />
-                    </FormControl>
+                    <FormLabel>Duration Unit</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="DAYS">Days</SelectItem>
+                        <SelectItem value="MONTHS">Months</SelectItem>
+                        <SelectItem value="YEARS">Years</SelectItem>
+                        <SelectItem value="SESSIONS">Sessions</SelectItem>
+                        <SelectItem value="HOURS">Hours (single visit)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
-            <FormField
-              control={form.control}
-              name="durationUnit"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Duration Unit</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="DAYS">Days</SelectItem>
-                      <SelectItem value="MONTHS">Months</SelectItem>
-                      <SelectItem value="YEARS">Years</SelectItem>
-                      <SelectItem value="SESSIONS">Sessions</SelectItem>
-                      <SelectItem value="HOURS">Hours (single visit)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {(durationUnit === "DAYS" ||
+            )}
+            {(isFlexible ||
+              durationUnit === "DAYS" ||
               durationUnit === "MONTHS" ||
               durationUnit === "YEARS") && (
               <FormField
@@ -195,13 +231,15 @@ export function PlanFormDialog({
                 name="dailyHours"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Hours per day (library seat)</FormLabel>
+                    <FormLabel>
+                      {isFlexible ? "Hours per day" : "Hours per day (library seat)"}
+                    </FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         min={1}
                         max={24}
-                        placeholder="Blank = full opening hours"
+                        placeholder={isFlexible ? undefined : "Blank = full opening hours"}
                         value={field.value ?? ""}
                         onChange={(e) =>
                           field.onChange(

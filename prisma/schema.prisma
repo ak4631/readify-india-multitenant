@@ -482,7 +482,12 @@ model MembershipPlan {
   durationValue Int          @map("duration_value")
   durationUnit  DurationUnit @map("duration_unit")
   // Hours/day a DAYS/MONTHS/YEARS plan occupies its seat; null = whole opening window.
+  // Required (not null) when isFlexible -- see below.
   dailyHours    Int?         @map("daily_hours")
+  // When true, `price` is a per-hour rate (durationUnit must be HOURS,
+  // dailyHours must be set) and the customer picks 1-14 days at purchase
+  // time instead of the plan having one fixed duration/price.
+  isFlexible    Boolean      @default(false) @map("is_flexible")
   status        PlanStatus   @default(ACTIVE)
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")

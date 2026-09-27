@@ -49,9 +49,18 @@ export function PlanList({
               <div>
                 <CardTitle>{plan.name}</CardTitle>
                 <p className="text-muted-foreground text-sm">
-                  ₹{Number(plan.price).toLocaleString()} / {plan.durationValue}{" "}
-                  {plan.durationUnit.toLowerCase()}
-                  {plan.dailyHours ? ` · ${plan.dailyHours}h/day` : ""}
+                  {plan.isFlexible ? (
+                    <>
+                      ₹{Number(plan.price).toLocaleString()}/hr · {plan.dailyHours}h/day · customer
+                      picks 1-14 days
+                    </>
+                  ) : (
+                    <>
+                      ₹{Number(plan.price).toLocaleString()} / {plan.durationValue}{" "}
+                      {plan.durationUnit.toLowerCase()}
+                      {plan.dailyHours ? ` · ${plan.dailyHours}h/day` : ""}
+                    </>
+                  )}
                 </p>
               </div>
               <Badge
