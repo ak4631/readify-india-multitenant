@@ -34,7 +34,7 @@ export default async function VendorsPage({
       <PageHeader
         eyebrow="Partners"
         title="Partner listings"
-        description={`${vendors.length} listings across Library, Gym, Study Cafe, and Exam Hub.`}
+        description={`${vendors.length} listings across Library, Gym, Co-working Space, and Exam Hub.`}
         actions={
           hasPermission(session, "vendor.create") && session ? (
             <Button

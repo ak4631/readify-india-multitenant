@@ -53,7 +53,7 @@ export default async function NewVendorPage({
       <PageHeader
         eyebrow="Partner onboarding"
         title="Add a listing"
-        description="Add a Library, Gym, Study Cafe, or Exam Hub listing to the partner workspace."
+        description="Add a Library, Gym, Co-working Space, or Exam Hub listing to the partner workspace."
       />
       <WizardProgress currentStep={Math.min(step, 3)} />
       {stepContent}

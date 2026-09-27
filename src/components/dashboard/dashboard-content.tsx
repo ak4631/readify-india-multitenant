@@ -53,7 +53,7 @@ export function DashboardContent({
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                 Track vendor volume, pending reviews, users, and bookings across
-                Library, Gym, Study Cafe, and Exam Hub.
+                Library, Gym, Co-working Space, and Exam Hub.
               </p>
             </div>
             <Button

@@ -1,297 +1,36 @@
 -- ---------------------------------------------------------------------------
--- Library seat availability by seat + time (free hours per seat).
+-- Bring the live database up to date with migration
+-- 20260926100000_library_seat_hours_availability.
 --
--- Replaces the per-bucket counter model (admin.booking_slots) for vendors that
--- have library seats. A booking/subscription now occupies a specific seat for
--- a concrete time window; availability is derived by subtracting those windows
--- from the vendor's opening window for the day.
+-- That migration was already run manually against this database, but at an
+-- earlier point in its own development -- before the "no seat picker,
+-- server auto-assigns" rewrite, the owner-set gym capacity, the seat_number
+-- return column, and the Study Cafe -> Co-working Space rename were added to
+-- it. Re-running that file verbatim now fails with "relation already exists"
+-- (admin.library_seats etc. are already there, with 30 real seat rows and
+-- real bookings/subscriptions against them).
 --
--- Vendors WITHOUT admin.library_seats rows (gyms, etc.) keep the legacy bucket
--- behaviour inside create_customer_booking / get_slot_availability.
+-- This migration is therefore a targeted DELTA: it only touches the pieces
+-- that differ between what's live and the current migration.sql, confirmed
+-- column-by-column and function-by-function against the live database before
+-- writing this file (see the session's diagnostic queries). Nothing here
+-- creates a table or column that already exists, and nothing here touches
+-- admin.library_seats/bookings/subscriptions data.
 --
--- Concurrency: every writer goes through the SECURITY DEFINER RPCs below, and
--- each takes a row lock on the chosen admin.library_seats row before checking
--- for overlap, so two customers can never take the same seat/time window.
+-- NOT-NULL constraints: the earlier local verification of the coworking-space
+-- rename ran on Postgres 18 (embedded-postgres), which gives every NOT NULL
+-- column its own named pg_constraint row. Production is Postgres 17.6, which
+-- does not -- confirmed via pg_constraint before writing this file -- so the
+-- two "RENAME CONSTRAINT ..._not_null" statements from the original migration
+-- are correctly omitted below (they would error "constraint does not exist").
 -- ---------------------------------------------------------------------------
 
--- 1. Plans can be hourly (e.g. "6 hours") ------------------------------------
-ALTER TYPE "admin"."DurationUnit" ADD VALUE IF NOT EXISTS 'HOURS';
+-- 1. Owner-set capacity for non-seat categories (gym, co-working-space, exam-hub) --
+ALTER TABLE "admin"."vendors" ADD COLUMN "capacity" INTEGER;
+ALTER TABLE "admin"."vendors"
+  ADD CONSTRAINT "vendors_capacity_positive" CHECK ("capacity" IS NULL OR "capacity" > 0);
 
--- Hours per day a DAYS/MONTHS/YEARS (subscription) plan occupies its seat.
--- NULL = the whole opening window of the day.
-ALTER TABLE "admin"."membership_plans" ADD COLUMN "daily_hours" INTEGER;
-ALTER TABLE "admin"."membership_plans"
-  ADD CONSTRAINT "membership_plans_daily_hours_range" CHECK ("daily_hours" IS NULL OR "daily_hours" BETWEEN 1 AND 24);
-
--- 2. Vendor timezone (opening hours are wall-clock times) --------------------
-ALTER TABLE "admin"."vendors" ADD COLUMN "time_zone" TEXT NOT NULL DEFAULT 'Asia/Kolkata';
-
--- 3. Individual seats --------------------------------------------------------
-CREATE TABLE "admin"."library_seats" (
-    "id" TEXT NOT NULL,
-    "vendor_id" TEXT NOT NULL,
-    "seat_type_id" TEXT,
-    "label" TEXT NOT NULL,
-    "is_active" BOOLEAN NOT NULL DEFAULT true,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "library_seats_pkey" PRIMARY KEY ("id")
-);
-
-CREATE UNIQUE INDEX "library_seats_vendor_id_label_key" ON "admin"."library_seats"("vendor_id", "label");
-CREATE INDEX "library_seats_vendor_id_idx" ON "admin"."library_seats"("vendor_id");
-
-ALTER TABLE "admin"."library_seats" ADD CONSTRAINT "library_seats_vendor_id_fkey"
-  FOREIGN KEY ("vendor_id") REFERENCES "admin"."vendors"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "admin"."library_seats" ADD CONSTRAINT "library_seats_seat_type_id_fkey"
-  FOREIGN KEY ("seat_type_id") REFERENCES "admin"."library_seat_types"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- 4. Bookings / subscriptions carry seat + time window -----------------------
-ALTER TABLE "admin"."bookings"
-  ADD COLUMN "seat_id" TEXT,
-  ADD COLUMN "start_at" TIMESTAMPTZ(3),
-  ADD COLUMN "end_at" TIMESTAMPTZ(3),
-  ADD COLUMN "duration_hours" DECIMAL(5,2);
-
-ALTER TABLE "admin"."bookings" ADD CONSTRAINT "bookings_seat_id_fkey"
-  FOREIGN KEY ("seat_id") REFERENCES "admin"."library_seats"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-CREATE INDEX "bookings_seat_id_start_at_idx" ON "admin"."bookings"("seat_id", "start_at");
-
-ALTER TABLE "admin"."subscriptions"
-  ADD COLUMN "seat_id" TEXT,
-  ADD COLUMN "slot_start_time" TIME,
-  ADD COLUMN "slot_hours" INTEGER;
-
-ALTER TABLE "admin"."subscriptions" ADD CONSTRAINT "subscriptions_seat_id_fkey"
-  FOREIGN KEY ("seat_id") REFERENCES "admin"."library_seats"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-CREATE INDEX "subscriptions_seat_id_idx" ON "admin"."subscriptions"("seat_id");
-
--- 5. Keep seats in sync with admin.library_seat_types.total_count ------------
--- Admin edits "Regular: 20" in the seat-type UI; these triggers materialise
--- that as 20 seat rows so nothing else (admin actions) has to change.
-CREATE OR REPLACE FUNCTION "admin"."sync_seats_for_type"(p_type_id text)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_vendor_id text;
-  v_name text;
-  v_target int;
-  v_active int;
-  v_total int;
-  v_excess int;
-  v_deactivated int;
-  v_seat_id text;
-  i int;
-BEGIN
-  SELECT t."vendor_id", t."name", t."total_count" INTO v_vendor_id, v_name, v_target
-  FROM admin.library_seat_types t WHERE t."id" = p_type_id;
-  IF v_vendor_id IS NULL THEN RETURN; END IF;
-
-  SELECT count(*) FILTER (WHERE s."is_active"), count(*) INTO v_active, v_total
-  FROM admin.library_seats s WHERE s."seat_type_id" = p_type_id;
-
-  IF v_active < v_target THEN
-    -- Reuse previously deactivated seats first, then create new ones.
-    UPDATE admin.library_seats s SET "is_active" = true
-    WHERE s."id" IN (
-      SELECT s2."id" FROM admin.library_seats s2
-      WHERE s2."seat_type_id" = p_type_id AND NOT s2."is_active"
-      ORDER BY s2."created_at" LIMIT (v_target - v_active)
-    );
-    GET DIAGNOSTICS v_deactivated = ROW_COUNT;
-    v_active := v_active + v_deactivated;
-
-    FOR i IN 1..GREATEST(v_target - v_active, 0) LOOP
-      v_total := v_total + 1;
-      INSERT INTO admin.library_seats ("id", "vendor_id", "seat_type_id", "label")
-      VALUES (gen_random_uuid()::text, v_vendor_id, p_type_id, v_name || ' ' || v_total)
-      ON CONFLICT ("vendor_id", "label") DO NOTHING;
-    END LOOP;
-  ELSIF v_active > v_target THEN
-    v_excess := v_active - v_target;
-    -- Only seats with no current/future occupancy can be removed.
-    WITH removable AS (
-      SELECT s."id" FROM admin.library_seats s
-      WHERE s."seat_type_id" = p_type_id AND s."is_active"
-        AND NOT EXISTS (
-          SELECT 1 FROM admin.bookings b
-          WHERE b."seat_id" = s."id" AND b."status" IN ('PENDING', 'CONFIRMED') AND b."end_at" > now()
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM admin.subscriptions sub
-          WHERE sub."seat_id" = s."id" AND sub."status" = 'ACTIVE' AND sub."end_date" > now()
-        )
-      ORDER BY s."created_at" DESC
-      LIMIT v_excess
-    )
-    UPDATE admin.library_seats s SET "is_active" = false
-    WHERE s."id" IN (SELECT "id" FROM removable);
-    GET DIAGNOSTICS v_deactivated = ROW_COUNT;
-
-    IF v_deactivated < v_excess THEN
-      RAISE EXCEPTION 'Cannot reduce "%" seats to %: some seats have active bookings or subscriptions', v_name, v_target;
-    END IF;
-  END IF;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION "admin"."trg_sync_seats_after_type_change"()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  PERFORM admin.sync_seats_for_type(NEW."id");
-  RETURN NEW;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION "admin"."trg_deactivate_seats_before_type_delete"()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM admin.library_seats s
-    WHERE s."seat_type_id" = OLD."id"
-      AND (
-        EXISTS (SELECT 1 FROM admin.bookings b WHERE b."seat_id" = s."id" AND b."status" IN ('PENDING', 'CONFIRMED') AND b."end_at" > now())
-        OR EXISTS (SELECT 1 FROM admin.subscriptions sub WHERE sub."seat_id" = s."id" AND sub."status" = 'ACTIVE' AND sub."end_date" > now())
-      )
-  ) THEN
-    RAISE EXCEPTION 'Cannot delete seat type "%": some of its seats have active bookings or subscriptions', OLD."name";
-  END IF;
-  UPDATE admin.library_seats SET "is_active" = false WHERE "seat_type_id" = OLD."id";
-  RETURN OLD;
-END;
-$$;
-
-CREATE TRIGGER "library_seat_types_sync_seats"
-  AFTER INSERT OR UPDATE OF "total_count" ON "admin"."library_seat_types"
-  FOR EACH ROW EXECUTE FUNCTION "admin"."trg_sync_seats_after_type_change"();
-
-CREATE TRIGGER "library_seat_types_deactivate_seats"
-  BEFORE DELETE ON "admin"."library_seat_types"
-  FOR EACH ROW EXECUTE FUNCTION "admin"."trg_deactivate_seats_before_type_delete"();
-
--- Backfill seats for existing seat types.
-INSERT INTO "admin"."library_seats" ("id", "vendor_id", "seat_type_id", "label")
-SELECT gen_random_uuid()::text, t."vendor_id", t."id", t."name" || ' ' || n
-FROM "admin"."library_seat_types" t
-CROSS JOIN LATERAL generate_series(1, t."total_count") AS n
-ON CONFLICT ("vendor_id", "label") DO NOTHING;
-
--- 6. Time helpers -------------------------------------------------------------
-
--- Opening window for a vendor on a calendar date, as timestamptz in the
--- vendor's timezone. No row = closed. No schedule configured = 06:00-22:00
--- (the hours the old fixed buckets assumed). close <= open, or 23:59+, means
--- the window runs to the next midnight / next day (so 00:00-00:00 = 24h).
-CREATE OR REPLACE FUNCTION "admin"."vendor_open_window"(p_vendor_id text, p_date date)
-RETURNS TABLE (open_at timestamptz, close_at timestamptz)
-LANGUAGE plpgsql
-STABLE
-AS $$
-DECLARE
-  v_tz text;
-  v_open time;
-  v_close time;
-  v_closed boolean;
-  v_open_ts timestamp;
-  v_close_ts timestamp;
-BEGIN
-  SELECT v."time_zone" INTO v_tz FROM admin.vendors v WHERE v."id" = p_vendor_id;
-  IF v_tz IS NULL THEN RETURN; END IF;
-
-  SELECT s."open_time", s."close_time", s."is_closed" INTO v_open, v_close, v_closed
-  FROM admin.vendor_schedules s
-  WHERE s."vendor_id" = p_vendor_id
-    AND s."day_of_week"::text = upper(to_char(p_date, 'FMDay'));
-
-  IF NOT FOUND THEN
-    v_open := TIME '06:00'; v_close := TIME '22:00'; v_closed := false;
-  END IF;
-  IF v_closed THEN RETURN; END IF;
-
-  v_open_ts := p_date + v_open;
-  IF v_close >= TIME '23:59' THEN
-    v_close_ts := (p_date + 1) + TIME '00:00';
-  ELSE
-    v_close_ts := p_date + v_close;
-    IF v_close_ts <= v_open_ts THEN v_close_ts := v_close_ts + interval '1 day'; END IF;
-  END IF;
-
-  open_at := v_open_ts AT TIME ZONE v_tz;
-  close_at := v_close_ts AT TIME ZONE v_tz;
-  RETURN NEXT;
-END;
-$$;
-
--- Every interval a seat is occupied inside [p_from, p_to): live bookings plus
--- each day of every active subscription. Cancelled/expired rows drop out, and
--- a booking frees its seat automatically once end_at has passed.
-CREATE OR REPLACE FUNCTION "admin"."seat_busy_intervals"(p_seat_id text, p_from timestamptz, p_to timestamptz)
-RETURNS TABLE (start_at timestamptz, end_at timestamptz, source text, ref_id text)
-LANGUAGE sql
-STABLE
-AS $$
-  SELECT x.s, x.e, x.src, x.ref
-  FROM (
-    SELECT b."start_at" AS s, b."end_at" AS e, 'booking'::text AS src, b."id" AS ref
-    FROM admin.bookings b
-    WHERE b."seat_id" = p_seat_id
-      AND b."status" IN ('PENDING', 'CONFIRMED')
-      AND b."start_at" IS NOT NULL
-
-    UNION ALL
-
-    SELECT
-      ((d::date + sub."slot_start_time") AT TIME ZONE v."time_zone") AS s,
-      ((d::date + sub."slot_start_time") AT TIME ZONE v."time_zone") + make_interval(hours => sub."slot_hours") AS e,
-      'subscription'::text AS src,
-      sub."id" AS ref
-    FROM admin.subscriptions sub
-    JOIN admin.vendors v ON v."id" = sub."vendor_id"
-    CROSS JOIN LATERAL generate_series(
-      GREATEST(sub."start_date"::date, ((p_from AT TIME ZONE v."time_zone")::date - 1))::timestamp,
-      LEAST((sub."end_date"::date - 1), (p_to AT TIME ZONE v."time_zone")::date)::timestamp,
-      interval '1 day'
-    ) AS d
-    WHERE sub."seat_id" = p_seat_id
-      AND sub."status" = 'ACTIVE'
-      AND sub."slot_start_time" IS NOT NULL
-      AND sub."slot_hours" IS NOT NULL
-  ) x
-  WHERE x.s < p_to AND x.e > p_from
-$$;
-
--- Free gaps for one seat inside [p_open, p_close).
-CREATE OR REPLACE FUNCTION "admin"."seat_free_windows"(p_seat_id text, p_open timestamptz, p_close timestamptz)
-RETURNS TABLE (win_start timestamptz, win_end timestamptz)
-LANGUAGE plpgsql
-STABLE
-AS $$
-DECLARE
-  v_cursor timestamptz := p_open;
-  r record;
-BEGIN
-  FOR r IN
-    SELECT bi."start_at" AS s, bi."end_at" AS e
-    FROM admin.seat_busy_intervals(p_seat_id, p_open, p_close) bi
-    ORDER BY bi."start_at"
-  LOOP
-    IF r.s > v_cursor THEN
-      win_start := v_cursor; win_end := r.s; RETURN NEXT;
-    END IF;
-    IF r.e > v_cursor THEN v_cursor := r.e; END IF;
-  END LOOP;
-  IF v_cursor < p_close THEN
-    win_start := v_cursor; win_end := p_close; RETURN NEXT;
-  END IF;
-END;
-$$;
-
--- 7. Availability helpers -------------------------------------------------------
+-- 2. Availability helpers (new) -----------------------------------------------
 
 -- True when a daily slot (start time + hours) fits inside the opening window
 -- of every open weekday in the week starting p_from (covers the whole schedule).
@@ -414,12 +153,9 @@ BEGIN
 END;
 $$;
 
--- 8. Customer-facing availability: counts only, never seat identities --------
--- One row per start time at which a p_hours-long visit fits, with how many
--- seats are free for it, e.g. (24, '06:00', '12:00', 7). A vendor with seats
--- but nothing bookable returns one row with NULL start and 0 seats; a vendor
--- without seats returns no rows (legacy bucket flow). p_hours NULL = the
--- whole opening window.
+-- 3. Customer-facing availability: counts only, never seat identities (new) ---
+-- Supersedes public.get_library_availability (the earlier per-seat-list
+-- version) -- dropped at the end of this file since nothing calls it anymore.
 CREATE OR REPLACE FUNCTION "public"."get_library_slot_options"(p_vendor_id text, p_date date, p_hours numeric DEFAULT NULL)
 RETURNS TABLE (total_seats int, start_time text, end_time text, seats_available int)
 LANGUAGE plpgsql
@@ -591,12 +327,11 @@ $$;
 
 GRANT EXECUTE ON FUNCTION "public"."get_library_subscription_options" TO authenticated;
 
--- 9. create_customer_booking: seat + time aware, seat auto-assigned ------------
--- p_seat_id is optional: NULL (what the customer app sends) lets the system
--- pick a seat (see admin.pick_seat). p_start_time is vendor-local "HH24:MI",
--- default = the day's opening time. For vendors without library seats the
--- legacy bucket path below is unchanged.
-DROP FUNCTION IF EXISTS "public"."create_customer_booking"(text, text, text, text, text, text, text);
+-- 4. create_customer_booking: seat auto-assigned + owner capacity + seat_number
+-- Live signature is unchanged (still 9 text args) but the return type is
+-- gaining a column (seat_number), which CREATE OR REPLACE cannot do -- an
+-- explicit DROP of the exact live signature is required first.
+DROP FUNCTION IF EXISTS "public"."create_customer_booking"(text, text, text, text, text, text, text, text, text);
 
 CREATE OR REPLACE FUNCTION "public"."create_customer_booking"(
   p_vendor_id text,
@@ -794,12 +529,10 @@ $$;
 
 GRANT EXECUTE ON FUNCTION "public"."create_customer_booking" TO authenticated;
 
--- 10. create_customer_subscription: daily time slot, seat auto-assigned --------
--- The customer picks a daily start time (default: opening time); the plan's
--- daily_hours (or the whole opening window) sets the length. A seat that is
--- free at that slot for the WHOLE plan span is assigned (admin.pick_seat_for_
--- span) and held every day of the subscription.
-DROP FUNCTION IF EXISTS "public"."create_customer_subscription"(text, text);
+-- 5. create_customer_subscription: seat auto-assigned + seat_number -----------
+-- Live signature is unchanged (still 4 text args) but the return type is
+-- gaining a column (seat_number) -- same reasoning as above.
+DROP FUNCTION IF EXISTS "public"."create_customer_subscription"(text, text, text, text);
 
 CREATE OR REPLACE FUNCTION "public"."create_customer_subscription"(
   p_vendor_id text,
@@ -953,79 +686,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION "public"."create_customer_subscription" TO authenticated;
 
--- 11. Expose seat + time on the customer's own lists --------------------------
--- New columns appended at the end (CREATE OR REPLACE VIEW requires that).
-CREATE OR REPLACE VIEW "public"."customer_bookings" AS
-SELECT
-  b."id",
-  b."booking_code",
-  to_char(b."booking_date", 'YYYY-MM-DD') AS "booking_date",
-  b."date_label",
-  b."time_label",
-  b."seat_label",
-  b."amount" AS "total_amount",
-  lower(b."status"::text) AS "status",
-  b."created_at",
-  b."vendor_name" AS "library_name",
-  ls."label" AS "seat_number",
-  b."duration_hours"
-FROM "admin"."bookings" b
-LEFT JOIN "admin"."library_seats" ls ON ls."id" = b."seat_id"
-WHERE b."user_id" = auth.uid()::text;
-
-CREATE OR REPLACE VIEW "public"."customer_subscriptions" AS
-SELECT
-  s."id",
-  s."vendor_id",
-  s."vendor_name" AS "library_name",
-  s."plan_id",
-  s."plan_name",
-  to_char(s."start_date", 'YYYY-MM-DD') AS "start_date",
-  to_char(s."end_date", 'YYYY-MM-DD') AS "end_date",
-  s."amount_paid" AS "total_amount",
-  CASE
-    WHEN s."status" = 'ACTIVE' AND s."end_date" < now() THEN 'expired'
-    ELSE lower(s."status"::text)
-  END AS "status",
-  s."created_at",
-  ls."label" AS "seat_number",
-  to_char(s."slot_start_time", 'HH24:MI') AS "slot_start",
-  s."slot_hours"
-FROM "admin"."subscriptions" s
-LEFT JOIN "admin"."library_seats" ls ON ls."id" = s."seat_id"
-WHERE s."user_id" = auth.uid()::text
-ORDER BY s."created_at" DESC;
-
--- Plans list gains daily_hours (appended: CREATE OR REPLACE VIEW only allows
--- new columns at the end) so the customer app can size subscription slots.
-CREATE OR REPLACE VIEW "public"."listing_plans" AS
-SELECT
-  p."id",
-  p."vendor_id",
-  p."name",
-  p."description",
-  p."price",
-  p."currency",
-  p."duration_value",
-  p."duration_unit",
-  p."daily_hours"
-FROM "admin"."membership_plans" p
-JOIN "admin"."vendors" v ON v."id" = p."vendor_id"
-WHERE p."status" = 'ACTIVE' AND v."status" = 'PUBLISHED'
-ORDER BY p."price" ASC;
-
--- 12. Owner-set capacity for non-seat categories (gym, co-working-space, exam-hub) --
--- Library ignores this -- its capacity is the count of admin.library_seats
--- rows, and create_customer_booking/get_slot_availability take the seat path
--- before ever reading this column.
-ALTER TABLE "admin"."vendors" ADD COLUMN "capacity" INTEGER;
-ALTER TABLE "admin"."vendors"
-  ADD CONSTRAINT "vendors_capacity_positive" CHECK ("capacity" IS NULL OR "capacity" > 0);
-
--- get_slot_availability (the read side of the legacy bucket flow, used by
--- fetchSlotAvailability for every vendor without library seats) gets the same
--- vendor.capacity > seat-type-sum > hardcoded-20 fallback as the write side
--- above, so the UI and the booking RPC never disagree on capacity.
+-- 6. get_slot_availability: same owner-capacity fallback as create_customer_booking
 CREATE OR REPLACE FUNCTION "public"."get_slot_availability"(
   p_vendor_id text,
   p_slot_date date
@@ -1076,28 +737,19 @@ $$;
 
 GRANT EXECUTE ON FUNCTION "public"."get_slot_availability" TO authenticated;
 
--- 13. Rename "Study Cafe" category to "Co-working Space" ----------------------
--- Renames both the display name AND the slug -- every code identifier keyed by
--- the old slug (categorySlug checks, verification-requirements, folder paths,
--- and the RN app's derived category filter id) is updated to match in the
--- same commit, so nothing in the app still says "study-cafe" anywhere.
+-- Superseded by get_library_slot_options -- nothing in the app calls this anymore.
+DROP FUNCTION IF EXISTS "public"."get_library_availability"(text, date);
+
+-- 7. Rename "Study Cafe" category to "Co-working Space" -----------------------
 UPDATE "admin"."vendor_categories"
 SET "name" = 'Co-working Space', "slug" = 'co-working-space'
 WHERE "slug" = 'study-cafe';
 
--- The underlying detail table/model is renamed too (StudyCafeDetails ->
--- CoworkingSpaceDetails in schema.prisma) -- metadata-only renames, no data
--- moves and no downtime.
 ALTER TABLE "admin"."study_cafe_details" RENAME TO "coworking_space_details";
 ALTER TABLE "admin"."coworking_space_details"
   RENAME CONSTRAINT "study_cafe_details_pkey" TO "coworking_space_details_pkey";
 ALTER TABLE "admin"."coworking_space_details"
   RENAME CONSTRAINT "study_cafe_details_vendor_id_fkey" TO "coworking_space_details_vendor_id_fkey";
 ALTER INDEX "admin"."study_cafe_details_vendor_id_key" RENAME TO "coworking_space_details_vendor_id_key";
--- Postgres auto-names NOT NULL constraints "<table>_<column>_not_null" at
--- creation time and doesn't rename them when the table is renamed, so they'd
--- otherwise still say "study_cafe_details" in pg_constraint forever.
-ALTER TABLE "admin"."coworking_space_details"
-  RENAME CONSTRAINT "study_cafe_details_id_not_null" TO "coworking_space_details_id_not_null";
-ALTER TABLE "admin"."coworking_space_details"
-  RENAME CONSTRAINT "study_cafe_details_vendor_id_not_null" TO "coworking_space_details_vendor_id_not_null";
+-- (No RENAME CONSTRAINT for the auto-named NOT NULL constraints here -- see
+-- the note at the top of this file: Postgres 17 doesn't create them.)

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { MenuItemFormDialog } from "@/components/vendors/study-cafe/menu-item-form-dialog";
+import { MenuItemFormDialog } from "@/components/vendors/co-working-space/menu-item-form-dialog";
 import type { MenuCategory, MenuItem } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {

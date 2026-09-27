@@ -17,6 +17,10 @@ import {
   type VendorAddressInput,
   type VendorBasicInfoInput,
 } from "@/lib/validations/vendor.schema";
+import {
+  vendorCapacitySchema,
+  type VendorCapacityInput,
+} from "@/lib/validations/vendor-capacity.schema";
 import type { VendorStatus } from "@/generated/prisma/enums";
 
 export interface VendorFilters {
@@ -149,6 +153,39 @@ export async function updateVendorProfile(
       entityId: vendorId,
       oldValue: before,
       newValue: after,
+    });
+  });
+
+  revalidatePath(`/vendors/${vendorId}`);
+}
+
+// Owner-set capacity for categories without a per-seat model (gym, co-working-space,
+// exam-hub). Library ignores this -- its capacity comes from LibrarySeat rows,
+// so this is only meaningful/shown for other categories.
+export async function updateVendorCapacity(
+  vendorId: string,
+  input: VendorCapacityInput,
+) {
+  const session = await requireVendorAccess(vendorId, "vendor.update");
+  const data = vendorCapacitySchema.parse(input);
+
+  await prisma.$transaction(async (tx) => {
+    const before = await tx.vendor.findUniqueOrThrow({
+      where: { id: vendorId },
+    });
+
+    const after = await tx.vendor.update({
+      where: { id: vendorId },
+      data: { capacity: data.capacity },
+    });
+
+    await writeAuditLog(tx, {
+      userId: session.user.id,
+      action: "UPDATE_VENDOR_CAPACITY",
+      entityType: "vendor",
+      entityId: vendorId,
+      oldValue: { capacity: before.capacity },
+      newValue: { capacity: after.capacity },
     });
   });
 

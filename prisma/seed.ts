@@ -25,7 +25,7 @@ const FACILITIES = [
 const VENDOR_CATEGORIES = [
   { name: "Library", slug: "library" },
   { name: "Gym", slug: "gym" },
-  { name: "Study Cafe", slug: "study-cafe" },
+  { name: "Co-working Space", slug: "co-working-space" },
   { name: "Exam Hub", slug: "exam-hub" },
 ];
 

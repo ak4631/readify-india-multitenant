@@ -143,7 +143,7 @@ export function StepBasicInfo({
                     <FormLabel>Listing name</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Example: Prime Study Cafe"
+                        placeholder="Example: Prime Co-working Space"
                         {...field}
                       />
                     </FormControl>

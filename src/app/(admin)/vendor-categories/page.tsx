@@ -13,7 +13,7 @@ export default async function VendorCategoriesPage() {
       <PageHeader
         eyebrow="Catalog"
         title="Listing categories"
-        description={`${categories.length} marketplace categories. Keep Library, Gym, Study Cafe, and Exam Hub here.`}
+        description={`${categories.length} marketplace categories. Keep Library, Gym, Co-working Space, and Exam Hub here.`}
         actions={<CategoryFormDialog trigger={<Button>Add category</Button>} />}
       />
       <Card>

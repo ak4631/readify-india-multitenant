@@ -326,6 +326,10 @@ model Vendor {
   verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
   rejectionReason    String?            @map("rejection_reason")
   timeZone           String             @default("Asia/Kolkata") @map("time_zone")
+  // Owner-set capacity for categories with no per-seat model (gym, co-working-space,
+  // exam-hub). Null = falls back to the legacy default of 20. Library ignores
+  // this -- its capacity comes from LibrarySeat rows instead.
+  capacity           Int?
   averageRating     Decimal?           @map("average_rating") @db.Decimal(2, 1)
   reviewCount        Int                @default(0) @map("review_count")
   createdById        String             @map("created_by")
@@ -348,7 +352,7 @@ model Vendor {
   reviews          Review[]
   bookings         Booking[]
   subscriptions    Subscription[]
-  studyCafeDetails StudyCafeDetails?
+  coworkingSpaceDetails CoworkingSpaceDetails?
   examHubDetails   ExamHubDetails?
   trainers         Trainer[]
   teachers         Teacher[]
@@ -772,17 +776,17 @@ model TrainerAvailability {
 }
 
 // ---------------------------------------------------------------------------
-// Study Cafe
+// Co-working Space
 // ---------------------------------------------------------------------------
 
-model StudyCafeDetails {
+model CoworkingSpaceDetails {
   id              String @id @default(cuid())
   vendorId        String @unique @map("vendor_id")
   seatingCapacity Int?   @map("seating_capacity")
 
   vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
-  @@map("study_cafe_details")
+  @@map("coworking_space_details")
   @@schema("admin")
 }
 

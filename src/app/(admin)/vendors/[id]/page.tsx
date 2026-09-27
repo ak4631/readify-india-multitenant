@@ -15,13 +15,14 @@ import { VendorMediaGallery } from "@/components/vendors/media/vendor-media-gall
 import { PlanList } from "@/components/vendors/plans/plan-list";
 import { SubscriptionTable } from "@/components/subscriptions/subscription-table";
 import { VendorScheduleEditor } from "@/components/vendors/schedule/vendor-schedule-editor";
-import { MenuEditor } from "@/components/vendors/study-cafe/menu-editor";
+import { MenuEditor } from "@/components/vendors/co-working-space/menu-editor";
 import { VendorAddressEditDialog } from "@/components/vendors/vendor-address-edit-dialog";
 import { DocumentList } from "@/components/vendors/verification/document-list";
 import { UploadForm } from "@/components/vendors/verification/upload-form";
 import { VendorLifecycleActions } from "@/components/vendors/vendor-lifecycle-actions";
 import { VendorProfileEditDialog } from "@/components/vendors/vendor-profile-edit-dialog";
 import { VendorAccountDialog } from "@/components/vendors/vendor-account-dialog";
+import { VendorCapacityCard } from "@/components/vendors/vendor-capacity-card";
 import {
   VendorStatusBadge,
   VerificationStatusBadge,
@@ -50,7 +51,7 @@ import { getCurrentSession, hasPermission } from "@/lib/rbac";
 const CATEGORY_TAB_LABEL: Record<string, string> = {
   library: "Seats",
   gym: "Trainers",
-  "study-cafe": "Menu",
+  "co-working-space": "Menu",
   "exam-hub": "Academics",
 };
 
@@ -209,6 +210,9 @@ export default async function VendorDetailPage({
               <VendorAccountDialog vendorId={vendor.id} />
             )}
           </div>
+          {categorySlug !== "library" && (
+            <VendorCapacityCard vendorId={vendor.id} capacity={vendor.capacity} />
+          )}
           {hasPermission(session, "vendorAccount.create") &&
             vendor.partner.users.length > 0 && (
               <Card>
@@ -292,9 +296,9 @@ export default async function VendorDetailPage({
             <GymCategoryPanel vendorId={vendor.id} />
           </TabsContent>
         )}
-        {categorySlug === "study-cafe" && (
+        {categorySlug === "co-working-space" && (
           <TabsContent value="category">
-            <StudyCafeCategoryPanel vendorId={vendor.id} />
+            <CoworkingSpaceCategoryPanel vendorId={vendor.id} />
           </TabsContent>
         )}
         {categorySlug === "exam-hub" && (
@@ -326,7 +330,7 @@ async function GymCategoryPanel({ vendorId }: { vendorId: string }) {
   );
 }
 
-async function StudyCafeCategoryPanel({ vendorId }: { vendorId: string }) {
+async function CoworkingSpaceCategoryPanel({ vendorId }: { vendorId: string }) {
   const categories = await listMenu(vendorId);
   return <MenuEditor vendorId={vendorId} categories={categories} />;
 }
