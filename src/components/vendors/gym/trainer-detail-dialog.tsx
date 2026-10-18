@@ -22,28 +22,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type {
-  Trainer,
-  TrainerAvailability,
-  TrainerPricing,
-  TrainerSpecialization,
-  TrainerSpecializationMap,
-} from "@/generated/prisma/client";
+import type { TrainerSpecialization } from "@/generated/prisma/client";
 import { TRAINER_DAYS_OF_WEEK } from "@/lib/validations/trainer.schema";
 import {
   addTrainerPricing,
   deleteTrainerPricing,
   setTrainerAvailability,
   setTrainerSpecializations,
+  type TrainerRow,
 } from "@/server/actions/trainers.actions";
-
-type TrainerWithRelations = Trainer & {
-  specializations: (TrainerSpecializationMap & {
-    specialization: TrainerSpecialization;
-  })[];
-  pricing: TrainerPricing[];
-  availability: TrainerAvailability[];
-};
 
 function toHHMM(date: Date): string {
   return date.toISOString().slice(11, 16);
@@ -54,7 +41,7 @@ export function TrainerDetailDialog({
   allSpecializations,
   trigger,
 }: {
-  trainer: TrainerWithRelations;
+  trainer: TrainerRow;
   allSpecializations: TrainerSpecialization[];
   trigger: React.ReactElement;
 }) {

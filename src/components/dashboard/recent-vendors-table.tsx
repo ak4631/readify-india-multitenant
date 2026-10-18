@@ -11,7 +11,12 @@ import {
 import { VendorStatusBadge } from "@/components/vendors/vendor-status-badge";
 import type { Vendor, VendorCategory } from "@/generated/prisma/client";
 
-type RecentVendor = Vendor & { category: VendorCategory };
+// averageRating comes across as a plain number, not Prisma's Decimal --
+// see the comment in dashboard.actions.ts on why that conversion happens.
+type RecentVendor = Omit<Vendor, "averageRating"> & {
+  averageRating: number | null;
+  category: VendorCategory;
+};
 
 export function RecentVendorsTable({ vendors }: { vendors: RecentVendor[] }) {
   return (

@@ -8,23 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrainerDetailDialog } from "@/components/vendors/gym/trainer-detail-dialog";
 import { TrainerFormDialog } from "@/components/vendors/gym/trainer-form-dialog";
-import type {
-  Trainer,
-  TrainerAvailability,
-  TrainerPricing,
-  TrainerSpecialization,
-  TrainerSpecializationMap,
-} from "@/generated/prisma/client";
+import type { TrainerSpecialization } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { deactivateTrainer } from "@/server/actions/trainers.actions";
-
-type TrainerRow = Trainer & {
-  specializations: (TrainerSpecializationMap & {
-    specialization: TrainerSpecialization;
-  })[];
-  pricing: TrainerPricing[];
-  availability: TrainerAvailability[];
-};
+import { deactivateTrainer, type TrainerRow } from "@/server/actions/trainers.actions";
 
 export function TrainersList({
   vendorId,

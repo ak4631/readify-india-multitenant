@@ -7,16 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlanFormDialog } from "@/components/vendors/plans/plan-form-dialog";
-import type { MembershipPlan } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { archiveMembershipPlan } from "@/server/actions/membership-plans.actions";
+import { archiveMembershipPlan, type PlanRow } from "@/server/actions/membership-plans.actions";
 
 export function PlanList({
   vendorId,
   plans,
 }: {
   vendorId: string;
-  plans: MembershipPlan[];
+  plans: PlanRow[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();

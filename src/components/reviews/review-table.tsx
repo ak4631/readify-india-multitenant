@@ -13,15 +13,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Review, Vendor } from "@/generated/prisma/client";
+import type { Review } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
   deleteReview,
   hideReview,
   restoreReview,
+  type ReviewRow,
 } from "@/server/actions/reviews.actions";
-
-type ReviewRow = Review & { vendor?: Vendor };
 
 const STATUS_VARIANTS: Record<
   Review["status"],

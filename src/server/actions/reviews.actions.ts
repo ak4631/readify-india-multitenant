@@ -25,7 +25,7 @@ export async function listReviews(filters: { vendorId?: string } = {}) {
     throw new Error("Partner access required");
   }
 
-  return prisma.review.findMany({
+  const reviews = await prisma.review.findMany({
     where: {
       vendorId: filters.vendorId,
       vendor: actor?.partnerId ? { partnerId: actor.partnerId } : undefined,
@@ -33,7 +33,19 @@ export async function listReviews(filters: { vendorId?: string } = {}) {
     orderBy: { createdAt: "desc" },
     include: { vendor: true },
   });
+
+  // Decimal (Vendor.averageRating) is a class instance, not a plain object --
+  // Next.js refuses to pass it from this Server Action to a Client Component
+  // (ReviewTable receives this array as a prop).
+  return reviews.map((review) => ({
+    ...review,
+    vendor: review.vendor
+      ? { ...review.vendor, averageRating: review.vendor.averageRating ? Number(review.vendor.averageRating) : null }
+      : review.vendor,
+  }));
 }
+
+export type ReviewRow = Awaited<ReturnType<typeof listReviews>>[number];
 
 async function setReviewStatus(
   reviewId: string,

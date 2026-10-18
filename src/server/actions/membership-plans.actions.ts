@@ -11,11 +11,18 @@ import {
 
 export async function listMembershipPlans(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
-  return prisma.membershipPlan.findMany({
+  const plans = await prisma.membershipPlan.findMany({
     where: { vendorId },
     orderBy: { createdAt: "asc" },
   });
+
+  // Prisma's Decimal is a class instance, not a plain object -- Next.js
+  // refuses to pass it from this Server Action to a Client Component
+  // (PlanList/PlanFormDialog receive this array as props).
+  return plans.map((plan) => ({ ...plan, price: Number(plan.price) }));
 }
+
+export type PlanRow = Awaited<ReturnType<typeof listMembershipPlans>>[number];
 
 export async function createMembershipPlan(
   vendorId: string,

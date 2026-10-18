@@ -13,12 +13,22 @@ import {
 
 export async function listMenu(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
-  return prisma.menuCategory.findMany({
+  const categories = await prisma.menuCategory.findMany({
     where: { vendorId },
     orderBy: { sortOrder: "asc" },
     include: { items: { orderBy: { name: "asc" } } },
   });
+
+  // Decimal (MenuItem.price) is a class instance, not a plain object --
+  // Next.js refuses to pass it from this Server Action to a Client Component
+  // (MenuEditor receives this array as a prop).
+  return categories.map((category) => ({
+    ...category,
+    items: category.items.map((item) => ({ ...item, price: Number(item.price) })),
+  }));
 }
+
+export type MenuCategoryRow = Awaited<ReturnType<typeof listMenu>>[number];
 
 export async function createMenuCategory(
   vendorId: string,
@@ -102,7 +112,9 @@ export async function createMenuItem(
   });
 
   revalidatePath(`/vendors/${vendorId}`);
-  return item;
+  // Same Decimal-serialization reasoning as listMenu above -- this return
+  // value is also consumed directly by the client caller.
+  return { ...item, price: Number(item.price) };
 }
 
 export async function updateMenuItem(

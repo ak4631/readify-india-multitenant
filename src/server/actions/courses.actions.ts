@@ -18,7 +18,7 @@ export async function listSubjects() {
 
 export async function listCourses(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
-  return prisma.course.findMany({
+  const courses = await prisma.course.findMany({
     where: { vendorId },
     orderBy: { name: "asc" },
     include: {
@@ -27,7 +27,14 @@ export async function listCourses(vendorId: string) {
       lectures: { orderBy: { startTime: "asc" } },
     },
   });
+
+  // Decimal (Course.price) is a class instance, not a plain object -- Next.js
+  // refuses to pass it from this Server Action to a Client Component
+  // (CoursesList/CourseDetailDialog receive this array as a prop).
+  return courses.map((course) => ({ ...course, price: Number(course.price) }));
 }
+
+export type CourseRow = Awaited<ReturnType<typeof listCourses>>[number];
 
 export async function createCourse(vendorId: string, input: CourseInput) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
@@ -59,7 +66,9 @@ export async function createCourse(vendorId: string, input: CourseInput) {
   });
 
   revalidatePath(`/vendors/${vendorId}`);
-  return course;
+  // Same Decimal-serialization reasoning as listCourses above -- this return
+  // value is also consumed directly by the client caller.
+  return { ...course, price: Number(course.price) };
 }
 
 export async function updateCourse(courseId: string, input: CourseInput) {

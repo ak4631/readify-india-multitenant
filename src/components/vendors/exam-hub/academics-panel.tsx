@@ -1,18 +1,7 @@
 import { CoursesList } from "@/components/vendors/exam-hub/courses-list";
 import { TeachersList } from "@/components/vendors/exam-hub/teachers-list";
-import type {
-  Course,
-  CourseTeacher,
-  Lecture,
-  Subject,
-  Teacher,
-} from "@/generated/prisma/client";
-
-type CourseRow = Course & {
-  subject: Subject | null;
-  teachers: (CourseTeacher & { teacher: Teacher })[];
-  lectures: Lecture[];
-};
+import type { Subject, Teacher } from "@/generated/prisma/client";
+import type { CourseRow } from "@/server/actions/courses.actions";
 
 export function AcademicsPanel({
   vendorId,

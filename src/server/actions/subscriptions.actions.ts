@@ -25,7 +25,7 @@ export async function listSubscriptions(filters: { vendorId?: string } = {}) {
     throw new Error("Partner access required");
   }
 
-  return prisma.subscription.findMany({
+  const subscriptions = await prisma.subscription.findMany({
     where: {
       vendorId: filters.vendorId,
       vendor: actor?.partnerId ? { partnerId: actor.partnerId } : undefined,
@@ -33,7 +33,24 @@ export async function listSubscriptions(filters: { vendorId?: string } = {}) {
     orderBy: { createdAt: "desc" },
     include: { vendor: true, plan: true, seat: { select: { label: true } } },
   });
+
+  // Decimal is a class instance, not a plain object -- Next.js refuses to
+  // pass it from this Server Action to a Client Component (SubscriptionTable
+  // receives this array as a prop, and also calls this action directly from
+  // the client for cancellation refreshes). Three fields here are Decimal:
+  // the subscription's own amountPaid, plus vendor.averageRating and
+  // plan.price pulled in by the includes above.
+  return subscriptions.map((sub) => ({
+    ...sub,
+    amountPaid: Number(sub.amountPaid),
+    vendor: sub.vendor
+      ? { ...sub.vendor, averageRating: sub.vendor.averageRating ? Number(sub.vendor.averageRating) : null }
+      : sub.vendor,
+    plan: sub.plan ? { ...sub.plan, price: Number(sub.plan.price) } : sub.plan,
+  }));
 }
+
+export type SubscriptionRow = Awaited<ReturnType<typeof listSubscriptions>>[number];
 
 export async function cancelSubscription(subscriptionId: string) {
   const subscription = await prisma.subscription.findUniqueOrThrow({

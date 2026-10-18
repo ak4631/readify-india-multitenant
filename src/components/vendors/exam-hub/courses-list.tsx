@@ -8,21 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CourseDetailDialog } from "@/components/vendors/exam-hub/course-detail-dialog";
 import { CourseFormDialog } from "@/components/vendors/exam-hub/course-form-dialog";
-import type {
-  Course,
-  CourseTeacher,
-  Lecture,
-  Subject,
-  Teacher,
-} from "@/generated/prisma/client";
+import type { Subject, Teacher } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { archiveCourse } from "@/server/actions/courses.actions";
-
-type CourseRow = Course & {
-  subject: Subject | null;
-  teachers: (CourseTeacher & { teacher: Teacher })[];
-  lectures: Lecture[];
-};
+import { archiveCourse, type CourseRow } from "@/server/actions/courses.actions";
 
 export function CoursesList({
   vendorId,

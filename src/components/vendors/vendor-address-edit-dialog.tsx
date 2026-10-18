@@ -23,12 +23,14 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import type { VendorAddress } from "@/generated/prisma/client";
 import {
   vendorAddressSchema,
   type VendorAddressInput,
 } from "@/lib/validations/vendor.schema";
-import { updateVendorAddress } from "@/server/actions/vendors.actions";
+import {
+  updateVendorAddress,
+  type VendorDetail,
+} from "@/server/actions/vendors.actions";
 import { AddressMapPicker } from "./wizard/address-map-picker";
 import type { GeocodeResult } from "@/lib/geocoding";
 
@@ -37,7 +39,7 @@ export function VendorAddressEditDialog({
   address,
 }: {
   vendorId: string;
-  address: VendorAddress | null;
+  address: VendorDetail["address"];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);

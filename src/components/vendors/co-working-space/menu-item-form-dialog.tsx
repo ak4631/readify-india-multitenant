@@ -26,12 +26,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { MenuItem } from "@/generated/prisma/client";
 import {
   menuItemSchema,
   type MenuItemInput,
 } from "@/lib/validations/menu.schema";
-import { createMenuItem, updateMenuItem } from "@/server/actions/menu.actions";
+import {
+  createMenuItem,
+  updateMenuItem,
+  type MenuCategoryRow,
+} from "@/server/actions/menu.actions";
 
 export function MenuItemFormDialog({
   vendorId,
@@ -41,7 +44,7 @@ export function MenuItemFormDialog({
 }: {
   vendorId: string;
   categoryId: string;
-  item?: MenuItem;
+  item?: MenuCategoryRow["items"][number];
   trigger: React.ReactElement;
 }) {
   const router = useRouter();

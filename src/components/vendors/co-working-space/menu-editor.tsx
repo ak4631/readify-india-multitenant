@@ -8,22 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { MenuItemFormDialog } from "@/components/vendors/co-working-space/menu-item-form-dialog";
-import type { MenuCategory, MenuItem } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
   createMenuCategory,
   deleteMenuCategory,
   deleteMenuItem,
+  type MenuCategoryRow,
 } from "@/server/actions/menu.actions";
-
-type CategoryWithItems = MenuCategory & { items: MenuItem[] };
 
 export function MenuEditor({
   vendorId,
   categories,
 }: {
   vendorId: string;
-  categories: CategoryWithItems[];
+  categories: MenuCategoryRow[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();

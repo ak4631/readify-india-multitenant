@@ -23,23 +23,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type {
-  Course,
-  CourseTeacher,
-  Lecture,
-  Teacher,
-} from "@/generated/prisma/client";
+import type { Teacher } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
   cancelLecture,
   createLecture,
   setCourseTeachers,
+  type CourseRow,
 } from "@/server/actions/courses.actions";
-
-type CourseWithRelations = Course & {
-  teachers: (CourseTeacher & { teacher: Teacher })[];
-  lectures: Lecture[];
-};
 
 export function CourseDetailDialog({
   vendorId,
@@ -48,7 +39,7 @@ export function CourseDetailDialog({
   trigger,
 }: {
   vendorId: string;
-  course: CourseWithRelations;
+  course: CourseRow;
   allTeachers: Teacher[];
   trigger: React.ReactElement;
 }) {

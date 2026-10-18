@@ -13,15 +13,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Subscription, Vendor, MembershipPlan } from "@/generated/prisma/client";
+import type { Subscription } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { cancelSubscription } from "@/server/actions/subscriptions.actions";
-
-type SubscriptionRow = Subscription & {
-  vendor?: Vendor;
-  plan?: MembershipPlan;
-  seat?: { label: string } | null;
-};
+import { cancelSubscription, type SubscriptionRow } from "@/server/actions/subscriptions.actions";
 
 // slotStartTime is a Postgres TIME (Prisma returns it as a 1970-01-01 UTC
 // date), so its UTC time-of-day is the library-local wall-clock time.
@@ -120,7 +114,7 @@ export function SubscriptionTable({
             </TableCell>
             <TableCell>{formatDate(subscription.startDate)}</TableCell>
             <TableCell>{formatDate(subscription.endDate)}</TableCell>
-            <TableCell>₹{subscription.amountPaid.toString()}</TableCell>
+            <TableCell>₹{subscription.amountPaid.toLocaleString("en-IN")}</TableCell>
             <TableCell>
               <Badge variant={STATUS_VARIANTS[subscription.status]}>
                 {subscription.status}

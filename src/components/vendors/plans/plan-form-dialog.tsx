@@ -33,7 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { MembershipPlan } from "@/generated/prisma/client";
 import {
   membershipPlanSchema,
   type MembershipPlanInput,
@@ -41,6 +40,7 @@ import {
 import {
   createMembershipPlan,
   updateMembershipPlan,
+  type PlanRow,
 } from "@/server/actions/membership-plans.actions";
 
 export function PlanFormDialog({
@@ -49,7 +49,7 @@ export function PlanFormDialog({
   trigger,
 }: {
   vendorId: string;
-  plan?: MembershipPlan;
+  plan?: PlanRow;
   trigger: React.ReactElement;
 }) {
   const router = useRouter();

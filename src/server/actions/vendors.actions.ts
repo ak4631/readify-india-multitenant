@@ -50,7 +50,7 @@ export async function listVendors(filters: VendorFilters = {}) {
 export async function getVendorById(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
 
-  return prisma.vendor.findUnique({
+  const vendor = await prisma.vendor.findUnique({
     where: { id: vendorId },
     include: {
       category: true,
@@ -65,7 +65,25 @@ export async function getVendorById(vendorId: string) {
       },
     },
   });
+  if (!vendor) return null;
+
+  // Decimal (averageRating, address.latitude/longitude) is a class instance,
+  // not a plain object -- Next.js refuses to pass it from this Server Action
+  // to the many Client Components on the vendor detail page.
+  return {
+    ...vendor,
+    averageRating: vendor.averageRating ? Number(vendor.averageRating) : null,
+    address: vendor.address
+      ? {
+          ...vendor.address,
+          latitude: vendor.address.latitude ? Number(vendor.address.latitude) : null,
+          longitude: vendor.address.longitude ? Number(vendor.address.longitude) : null,
+        }
+      : vendor.address,
+  };
 }
+
+export type VendorDetail = NonNullable<Awaited<ReturnType<typeof getVendorById>>>;
 
 async function uniqueSlug(name: string): Promise<string> {
   const base = slugify(name);

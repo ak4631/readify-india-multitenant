@@ -31,18 +31,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { Vendor, VendorCategory } from "@/generated/prisma/client";
+import type { VendorCategory } from "@/generated/prisma/client";
 import {
   vendorBasicInfoSchema,
   type VendorBasicInfoInput,
 } from "@/lib/validations/vendor.schema";
-import { updateVendorProfile } from "@/server/actions/vendors.actions";
+import {
+  updateVendorProfile,
+  type VendorDetail,
+} from "@/server/actions/vendors.actions";
 
 export function VendorProfileEditDialog({
   vendor,
   categories,
 }: {
-  vendor: Vendor;
+  vendor: VendorDetail;
   categories: VendorCategory[];
 }) {
   const router = useRouter();

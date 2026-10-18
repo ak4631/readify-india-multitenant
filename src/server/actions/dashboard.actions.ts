@@ -46,7 +46,15 @@ export async function getDashboardMetrics() {
       category: categoryMap.get(row.categoryId) ?? "Unknown",
       count: row._count._all,
     })),
-    recentVendors,
+    // Prisma's Decimal is a class instance, not a plain object -- Next.js
+    // refuses to pass it from this Server Action to a Client Component
+    // (DashboardContent gets this whole object as a prop, and also calls
+    // this action directly from the client via react-query, which has the
+    // same plain-serializable-value requirement).
+    recentVendors: recentVendors.map((vendor) => ({
+      ...vendor,
+      averageRating: vendor.averageRating ? Number(vendor.averageRating) : null,
+    })),
   };
 }
 

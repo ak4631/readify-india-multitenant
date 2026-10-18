@@ -31,12 +31,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { Course, Subject } from "@/generated/prisma/client";
+import type { Subject } from "@/generated/prisma/client";
 import {
   courseSchema,
   type CourseInput,
 } from "@/lib/validations/academics.schema";
-import { createCourse, updateCourse } from "@/server/actions/courses.actions";
+import {
+  createCourse,
+  updateCourse,
+  type CourseRow,
+} from "@/server/actions/courses.actions";
 
 export function CourseFormDialog({
   vendorId,
@@ -46,7 +50,7 @@ export function CourseFormDialog({
 }: {
   vendorId: string;
   subjects: Subject[];
-  course?: Course;
+  course?: CourseRow;
   trigger: React.ReactElement;
 }) {
   const router = useRouter();

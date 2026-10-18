@@ -19,7 +19,7 @@ function toTime(hhmm: string): Date {
 
 export async function listTrainers(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
-  return prisma.trainer.findMany({
+  const trainers = await prisma.trainer.findMany({
     where: { vendorId },
     orderBy: { createdAt: "asc" },
     include: {
@@ -28,7 +28,17 @@ export async function listTrainers(vendorId: string) {
       availability: true,
     },
   });
+
+  // Decimal (TrainerPricing.price) is a class instance, not a plain object --
+  // Next.js refuses to pass it from this Server Action to a Client Component
+  // (TrainersList/TrainerDetailDialog receive this array as props).
+  return trainers.map((trainer) => ({
+    ...trainer,
+    pricing: trainer.pricing.map((p) => ({ ...p, price: Number(p.price) })),
+  }));
 }
+
+export type TrainerRow = Awaited<ReturnType<typeof listTrainers>>[number];
 
 export async function listTrainerSpecializations() {
   await requirePermission("vendor.read");
