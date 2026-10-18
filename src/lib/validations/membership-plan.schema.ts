@@ -4,7 +4,11 @@ export const membershipPlanSchema = z
   .object({
     name: z.string().min(2, "Name is required"),
     description: z.string().optional(),
-    price: z.number().positive("Price must be greater than 0"),
+    price: z
+      .number()
+      .positive("Price must be greater than 0")
+      .max(1_000_000)
+      .multipleOf(0.01),
     durationValue: z.number().int().positive("Duration must be greater than 0"),
     durationUnit: z.enum(["DAYS", "MONTHS", "YEARS", "SESSIONS", "HOURS"]),
     // Hours per day a DAYS/MONTHS/YEARS plan holds its seat. Empty = the whole
@@ -14,6 +18,11 @@ export const membershipPlanSchema = z
       .int()
       .min(1, "Must be at least 1 hour")
       .max(24, "Cannot exceed 24 hours")
+      .nullable()
+      .optional(),
+    dailyStart: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a valid HH:MM time")
       .nullable()
       .optional(),
     // A flexible plan's `price` is a per-hour rate; the customer picks 1-14
@@ -33,6 +42,22 @@ export const membershipPlanSchema = z
   .refine((v) => !v.isFlexible || v.dailyHours != null, {
     path: ["dailyHours"],
     message: "Flexible plans require hours per day",
+  })
+  .refine(
+    (v) =>
+      v.isFlexible ||
+      (v.durationUnit === "MONTHS" && [1, 3].includes(v.durationValue)) ||
+      (v.durationUnit === "YEARS" && v.durationValue === 1),
+    {
+      path: ["durationValue"],
+      message:
+        "Choose a monthly, quarterly or yearly subscription, or enable Flex Booking",
+    },
+  )
+  .refine((v) => v.isFlexible || (!!v.dailyStart && !!v.dailyHours), {
+    path: ["dailyStart"],
+    message:
+      "Subscriptions require an owner-defined start time and hours per day",
   })
   .transform((v) => ({
     ...v,

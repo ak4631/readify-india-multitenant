@@ -7,7 +7,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { CustomerRow, CustomersResult } from "@/server/actions/customers.actions";
+import type {
+  CustomerRow,
+  CustomersResult,
+} from "@/server/actions/customers.actions";
 
 function formatDate(date: Date) {
   return date.toLocaleDateString("en-IN", {
@@ -53,6 +56,17 @@ export function CustomerTable({
           <TableRow key={customer.id}>
             <TableCell className="font-medium">
               {customer.fullName ?? "—"}
+              {scope === "partner" && (
+                <div className="mt-1 flex gap-1">
+                  {customer.present && <Badge>Checked in</Badge>}
+                  {!!customer.activeSubscriptions && (
+                    <Badge variant="secondary">Permanent</Badge>
+                  )}
+                  {!!customer.flexibleBookings && (
+                    <Badge variant="secondary">Flexible</Badge>
+                  )}
+                </div>
+              )}
             </TableCell>
             <TableCell>{customer.email ?? "—"}</TableCell>
             {scope === "partner" ? (
@@ -69,7 +83,9 @@ export function CustomerTable({
                   ₹{(customer.totalSpent ?? 0).toLocaleString("en-IN")}
                 </TableCell>
                 <TableCell>
-                  {customer.lastActivityAt ? formatDate(customer.lastActivityAt) : "—"}
+                  {customer.lastActivityAt
+                    ? formatDate(customer.lastActivityAt)
+                    : "—"}
                 </TableCell>
               </>
             ) : (
@@ -87,7 +103,10 @@ export function CustomerTable({
         ))}
         {customers.length === 0 && (
           <TableRow>
-            <TableCell colSpan={columnCount} className="text-muted-foreground text-center">
+            <TableCell
+              colSpan={columnCount}
+              className="text-muted-foreground text-center"
+            >
               {scope === "partner"
                 ? "No customers have booked or subscribed with your listings yet."
                 : "No customers yet."}

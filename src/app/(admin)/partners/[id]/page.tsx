@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ApplicationReview } from "@/components/partners/application-review";
 import { ArrowLeft, Plus, UserPlus } from "lucide-react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
@@ -93,6 +94,13 @@ export default async function PartnerDetailPage({
             <PartnerTeamTable users={users} />
           </CardContent>
         </Card>
+      )}
+      {partner.approvalStatus === "PENDING" &&
+        hasPermission(session, "partner.status") && (
+          <ApplicationReview partnerId={partner.id} />
+        )}
+      {partner.applicationReason && (
+        <p>Application decision: {partner.applicationReason}</p>
       )}
       <Card>
         <CardHeader>

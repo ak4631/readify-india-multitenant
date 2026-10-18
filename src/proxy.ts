@@ -4,6 +4,16 @@ import { ROUTE_PERMISSIONS } from "@/config/permissions";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // These endpoints enforce customer JWTs, gateway signatures or job secrets
+  // themselves. A browser staff-session redirect would break mobile checkout.
+  if (
+    pathname === "/api/registration" ||
+    pathname.startsWith("/api/customer/") ||
+    pathname.startsWith("/api/payments/") ||
+    pathname.startsWith("/api/jobs/") ||
+    pathname.startsWith("/checkout/")
+  )
+    return NextResponse.next();
 
   // Files in public/ must remain available before authentication (for example,
   // the Readify logo on the login screen).
@@ -31,5 +41,7 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!login|register|api/auth|_next/static|_next/image|favicon.ico).*)",
+  ],
 };

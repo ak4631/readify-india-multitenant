@@ -1,5 +1,6 @@
 "use server";
 
+import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -26,6 +27,17 @@ export async function updateVendorSchedule(
   const data = vendorScheduleSchema.parse(input);
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "SCHEDULE",
+        vendorId,
+        data,
+      )
+    )
+      return;
     const before = await tx.vendorSchedule.findMany({ where: { vendorId } });
 
     for (const day of data.days) {

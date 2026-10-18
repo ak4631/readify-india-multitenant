@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import {
-  isSuperAdmin,
+  getSessionPartnerId,
   requirePermission,
+  requirePlatformPermission,
   requireVendorAccess,
 } from "@/lib/rbac";
 
@@ -15,20 +17,12 @@ export async function listReviews(filters: { vendorId?: string } = {}) {
     await requireVendorAccess(filters.vendorId, "vendor.read");
   }
 
-  const actor = isSuperAdmin(session)
-    ? null
-    : await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { partnerId: true },
-      });
-  if (!isSuperAdmin(session) && !actor?.partnerId) {
-    throw new Error("Partner access required");
-  }
+  const partnerId = await getSessionPartnerId(session);
 
   const reviews = await prisma.review.findMany({
     where: {
       vendorId: filters.vendorId,
-      vendor: actor?.partnerId ? { partnerId: actor.partnerId } : undefined,
+      vendor: partnerId ? { partnerId } : undefined,
     },
     orderBy: { createdAt: "desc" },
     include: { vendor: true },
@@ -40,7 +34,12 @@ export async function listReviews(filters: { vendorId?: string } = {}) {
   return reviews.map((review) => ({
     ...review,
     vendor: review.vendor
-      ? { ...review.vendor, averageRating: review.vendor.averageRating ? Number(review.vendor.averageRating) : null }
+      ? {
+          ...review.vendor,
+          averageRating: review.vendor.averageRating
+            ? Number(review.vendor.averageRating)
+            : null,
+        }
       : review.vendor,
   }));
 }
@@ -53,11 +52,8 @@ async function setReviewStatus(
   permission: "review.hide" | "review.delete" | "review.restore",
   action: "HIDE_REVIEW" | "DELETE_REVIEW" | "RESTORE_REVIEW",
 ) {
-  const review = await prisma.review.findUniqueOrThrow({
-    where: { id: reviewId },
-    select: { vendorId: true },
-  });
-  const session = await requireVendorAccess(review.vendorId, permission);
+  const moderator = await requirePlatformPermission(permission);
+  const session = moderator;
 
   const vendorId = await prisma.$transaction(async (tx) => {
     const before = await tx.review.findUniqueOrThrow({
@@ -82,6 +78,36 @@ async function setReviewStatus(
 
   revalidatePath("/reviews");
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function replyToReview(reviewId: string, reply: string) {
+  const text = z.string().trim().min(1).max(2000).parse(reply);
+  const review = await prisma.review.findUniqueOrThrow({
+    where: { id: reviewId },
+  });
+  const session = await requireVendorAccess(review.vendorId, "vendor.update");
+  if (!session.user.roles.includes("PARTNER_ADMIN"))
+    throw new Error("Only the partner owner can reply to reviews");
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.review.findUniqueOrThrow({
+      where: { id: reviewId },
+    });
+    if (current.status !== "PUBLISHED")
+      throw new Error("Only published reviews can receive a reply");
+    await tx.review.update({
+      where: { id: reviewId },
+      data: { ownerReply: text, repliedAt: new Date() },
+    });
+    await writeAuditLog(tx, {
+      userId: session.user.id,
+      action: "REPLY_REVIEW",
+      entityType: "review",
+      entityId: reviewId,
+      newValue: { ownerReply: text },
+    });
+  });
+  revalidatePath("/reviews");
+  revalidatePath(`/vendors/${review.vendorId}`);
 }
 
 export async function hideReview(reviewId: string) {

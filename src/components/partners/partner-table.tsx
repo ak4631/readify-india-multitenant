@@ -42,6 +42,7 @@ export function PartnerTable({ partners }: { partners: PartnerRow[] }) {
     <Table>
       <TableHeader>
         <TableRow>
+          <TableHead>Application</TableHead>
           <TableHead>Organization</TableHead>
           <TableHead>Listings</TableHead>
           <TableHead>Team</TableHead>
@@ -52,6 +53,14 @@ export function PartnerTable({ partners }: { partners: PartnerRow[] }) {
       <TableBody>
         {partners.map((partner) => (
           <TableRow key={partner.id}>
+            <TableCell>
+              <Link
+                href={`/partners/${partner.id}`}
+                className="text-primary underline"
+              >
+                {partner.approvalStatus}
+              </Link>
+            </TableCell>
             <TableCell>
               <Link
                 href={`/partners/${partner.id}`}
@@ -77,7 +86,7 @@ export function PartnerTable({ partners }: { partners: PartnerRow[] }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={pending}
+                  disabled={pending || partner.approvalStatus !== "APPROVED"}
                   aria-busy={pending}
                   onClick={() => toggle(partner)}
                 >

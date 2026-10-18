@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+import { useSession } from "next-auth/react";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,7 @@ import {
   deleteReview,
   hideReview,
   restoreReview,
+  replyToReview,
   type ReviewRow,
 } from "@/server/actions/reviews.actions";
 
@@ -44,6 +47,10 @@ export function ReviewTable({
   const canHide = usePermission("review.hide");
   const canDelete = usePermission("review.delete");
   const canRestore = usePermission("review.restore");
+  const { data: session } = useSession();
+  const canReply = session?.user.roles.includes("PARTNER_ADMIN") ?? false;
+  const [replyId, setReplyId] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
 
   function run(action: () => Promise<void>, message: string) {
     startTransition(async () => {
@@ -77,6 +84,33 @@ export function ReviewTable({
             <TableCell>{"⭐".repeat(review.rating)}</TableCell>
             <TableCell className="max-w-xs truncate">
               {review.reviewText ?? "—"}
+              {review.ownerReply && (
+                <p className="mt-2 whitespace-normal text-sm text-muted-foreground">
+                  Owner: {review.ownerReply}
+                </p>
+              )}
+              {replyId === review.id && (
+                <div className="mt-2 space-y-2">
+                  <Textarea
+                    aria-label="Reply to customer"
+                    value={reply}
+                    onChange={(event) => setReply(event.target.value)}
+                    maxLength={2000}
+                  />
+                  <Button
+                    disabled={isPending || !reply.trim()}
+                    onClick={() =>
+                      run(async () => {
+                        await replyToReview(review.id, reply);
+                        setReplyId(null);
+                        setReply("");
+                      }, "Reply saved")
+                    }
+                  >
+                    Save reply
+                  </Button>
+                </div>
+              )}
             </TableCell>
             <TableCell>
               <Badge variant={STATUS_VARIANTS[review.status]}>
@@ -84,6 +118,18 @@ export function ReviewTable({
               </Badge>
             </TableCell>
             <TableCell className="flex justify-end gap-2">
+              {canReply && review.status === "PUBLISHED" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setReplyId(review.id);
+                    setReply(review.ownerReply ?? "");
+                  }}
+                >
+                  Reply
+                </Button>
+              )}
               {canHide && review.status === "PUBLISHED" && (
                 <Button
                   variant="outline"

@@ -121,8 +121,16 @@ export function StepBasicInfo({
                         </FormControl>
                         <SelectContent>
                           {categories.map((category) => (
-                            <SelectItem key={category.id} value={category.id}>
+                            <SelectItem
+                              key={category.id}
+                              value={category.id}
+                              disabled={
+                                !category.launchEnabled ||
+                                category.status !== "ACTIVE"
+                              }
+                            >
                               {category.name}
+                              {!category.launchEnabled ? " ? Coming soon" : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>

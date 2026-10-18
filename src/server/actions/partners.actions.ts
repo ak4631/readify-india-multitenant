@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -49,6 +50,7 @@ export async function listPartnerUsers(partnerId: string) {
   await requirePartnerAccess(partnerId, "partnerUser.read");
   return prisma.user.findMany({
     where: { partnerId },
+    omit: { passwordHash: true },
     include: { roles: { include: { role: true } } },
     orderBy: { name: "asc" },
   });
@@ -243,4 +245,52 @@ export async function updatePartnerUser(input: PartnerUserUpdateInput) {
     });
   });
   revalidatePath(`/partners/${target.partnerId}`);
+}
+
+export async function reviewPartnerApplication(
+  partnerId: string,
+  approve: boolean,
+  reason?: string,
+) {
+  const session = await requireSuperAdmin();
+  const decisionReason = approve
+    ? null
+    : z.string().trim().min(3).max(1000).parse(reason);
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM admin.partners WHERE id=${partnerId} FOR UPDATE`;
+    const before = await tx.partner.findUniqueOrThrow({
+      where: { id: partnerId },
+    });
+    if (before.approvalStatus !== "PENDING")
+      throw new Error("This application has already been reviewed");
+    await tx.partner.update({
+      where: { id: partnerId },
+      data: {
+        approvalStatus: approve ? "APPROVED" : "REJECTED",
+        status: approve ? "ACTIVE" : "INACTIVE",
+        applicationReason: decisionReason,
+      },
+    });
+    await tx.portalNotification.create({
+      data: {
+        userId: before.createdById,
+        title: approve
+          ? "Partner application approved"
+          : "Partner application rejected",
+        body: approve
+          ? "Your organization is active. You can now onboard Library listings."
+          : decisionReason!,
+        href: "/vendors",
+      },
+    });
+    await writeAuditLog(tx, {
+      userId: session.user.id,
+      action: "REVIEW_PARTNER_APPLICATION",
+      entityType: "partner",
+      entityId: partnerId,
+      newValue: { approved: approve, reason: decisionReason },
+    });
+  });
+  revalidatePath("/partners");
+  revalidatePath(`/partners/${partnerId}`);
 }

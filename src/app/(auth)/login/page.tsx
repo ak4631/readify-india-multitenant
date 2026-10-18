@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import Image from "next/image";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -60,17 +60,15 @@ function LoginForm() {
       <div className="w-full max-w-md">
         <div className="mb-8">
           <div className="mb-5 flex items-center gap-3">
-            <Image
-              src="/readify-logo.jpg"
-              alt="Readify India"
-              width={44}
-              height={44}
-              className="size-11 rounded-lg border border-border bg-white object-contain shadow-sm"
-              priority
-            />
+            <span
+              aria-hidden="true"
+              className="grid size-10 place-items-center rounded-lg bg-primary text-xl font-bold text-primary-foreground"
+            >
+              V
+            </span>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                Readify India
+                Vriddhora
               </h1>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Management Portal
@@ -149,6 +147,12 @@ function LoginForm() {
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Button>
             </form>
+            <Link
+              href="/register"
+              className="mt-4 block text-sm text-primary underline"
+            >
+              Apply for a partner account
+            </Link>
           </Form>
         </section>
       </div>

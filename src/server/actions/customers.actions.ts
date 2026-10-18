@@ -23,9 +23,12 @@ export type CustomerRow = {
   // Platform scope: account creation date. Partner scope: first booking/
   // subscription with this partner.
   joinedAt: Date;
+  flexibleBookings?: number;
+  present?: boolean;
 };
 
 export type CustomersResult = {
+  asOf: Date;
   scope: "platform" | "partner";
   customers: CustomerRow[];
 };
@@ -37,6 +40,7 @@ export async function listCustomers(): Promise<CustomersResult> {
   if (!partnerId) {
     const profiles = await listCustomerProfiles();
     return {
+      asOf: new Date(),
       scope: "platform",
       customers: profiles.map((p) => ({
         id: p.id,
@@ -53,7 +57,11 @@ export async function listCustomers(): Promise<CustomersResult> {
     };
   }
 
-  return { scope: "partner", customers: await listPartnerCustomers(partnerId) };
+  return {
+    asOf: new Date(),
+    scope: "partner",
+    customers: await listPartnerCustomers(partnerId),
+  };
 }
 
 async function listPartnerCustomers(partnerId: string): Promise<CustomerRow[]> {
@@ -87,7 +95,9 @@ async function listPartnerCustomers(partnerId: string): Promise<CustomerRow[]> {
   // Track first-seen/last-seen as nullable and only ever widen the range --
   // simpler and less error-prone than trying to detect "is this the first
   // event for this user" from the aggregate counters.
-  type PartnerAccumulator = Omit<CustomerRow, "joinedAt"> & { joinedAt: Date | null };
+  type PartnerAccumulator = Omit<CustomerRow, "joinedAt"> & {
+    joinedAt: Date | null;
+  };
   const byUser = new Map<string, PartnerAccumulator>();
   const rowFor = (userId: string) => {
     let row = byUser.get(userId);
@@ -118,7 +128,6 @@ async function listPartnerCustomers(partnerId: string): Promise<CustomerRow[]> {
     if (stat._min.createdAt) widen(row, stat._min.createdAt);
     if (stat._max.createdAt) widen(row, stat._max.createdAt);
     row.totalBookings = stat._count._all;
-    row.totalSpent = (row.totalSpent ?? 0) + Number(stat._sum.amount ?? 0);
   }
   for (const sub of subscriptions) {
     const row = rowFor(sub.userId);
@@ -126,7 +135,44 @@ async function listPartnerCustomers(partnerId: string): Promise<CustomerRow[]> {
     if (sub.status === "ACTIVE") {
       row.activeSubscriptions = (row.activeSubscriptions ?? 0) + 1;
     }
-    row.totalSpent = (row.totalSpent ?? 0) + Number(sub.amountPaid);
+  }
+
+  const [flex, paid, present] = await Promise.all([
+    prisma.flexBooking.groupBy({
+      by: ["userId"],
+      where: { vendorId: { in: vendorIds } },
+      _count: { _all: true },
+      _min: { createdAt: true },
+      _max: { createdAt: true },
+    }),
+    prisma.paymentOrder.groupBy({
+      by: ["userId"],
+      where: {
+        vendorId: { in: vendorIds },
+        capturedAt: { not: null },
+        status: { in: ["CAPTURED", "CANCELLED"] },
+      },
+      _sum: { amountPaise: true },
+    }),
+    prisma.attendanceVisit.findMany({
+      where: { vendorId: { in: vendorIds }, checkedOutAt: null },
+      select: { userId: true },
+    }),
+  ]);
+  for (const entry of flex) {
+    const row = rowFor(entry.userId);
+    row.flexibleBookings = entry._count._all;
+    row.totalBookings = (row.totalBookings ?? 0) + entry._count._all;
+    if (entry._min.createdAt) widen(row, entry._min.createdAt);
+    if (entry._max.createdAt) widen(row, entry._max.createdAt);
+  }
+  for (const entry of paid) {
+    const row = byUser.get(entry.userId);
+    if (row) row.totalSpent = Number(entry._sum.amountPaise ?? 0) / 100;
+  }
+  for (const entry of present) {
+    const row = byUser.get(entry.userId);
+    if (row) row.present = true;
   }
 
   const profiles = await lookupCustomerProfiles([...byUser.keys()]);
@@ -136,9 +182,15 @@ async function listPartnerCustomers(partnerId: string): Promise<CustomerRow[]> {
     row.email = profile?.email ?? null;
   }
 
-  return [...byUser.values()]
-    .sort((a, b) => (b.lastActivityAt?.getTime() ?? 0) - (a.lastActivityAt?.getTime() ?? 0))
-    // joinedAt is always set by this point -- every row was created by a
-    // booking or subscription event, and both branches above call widen().
-    .map((row) => ({ ...row, joinedAt: row.joinedAt as Date }));
+  return (
+    [...byUser.values()]
+      .sort(
+        (a, b) =>
+          (b.lastActivityAt?.getTime() ?? 0) -
+          (a.lastActivityAt?.getTime() ?? 0),
+      )
+      // joinedAt is always set by this point -- every row was created by a
+      // booking or subscription event, and both branches above call widen().
+      .map((row) => ({ ...row, joinedAt: row.joinedAt as Date }))
+  );
 }

@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { cancelPaidPurchase } from "@/lib/payments";
 import {
-  isSuperAdmin,
+  getSessionPartnerId,
   requirePermission,
   requireVendorAccess,
 } from "@/lib/rbac";
@@ -15,20 +16,12 @@ export async function listSubscriptions(filters: { vendorId?: string } = {}) {
     await requireVendorAccess(filters.vendorId, "vendor.read");
   }
 
-  const actor = isSuperAdmin(session)
-    ? null
-    : await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { partnerId: true },
-      });
-  if (!isSuperAdmin(session) && !actor?.partnerId) {
-    throw new Error("Partner access required");
-  }
+  const partnerId = await getSessionPartnerId(session);
 
   const subscriptions = await prisma.subscription.findMany({
     where: {
       vendorId: filters.vendorId,
-      vendor: actor?.partnerId ? { partnerId: actor.partnerId } : undefined,
+      vendor: partnerId ? { partnerId } : undefined,
     },
     orderBy: { createdAt: "desc" },
     include: { vendor: true, plan: true, seat: { select: { label: true } } },
@@ -44,13 +37,20 @@ export async function listSubscriptions(filters: { vendorId?: string } = {}) {
     ...sub,
     amountPaid: Number(sub.amountPaid),
     vendor: sub.vendor
-      ? { ...sub.vendor, averageRating: sub.vendor.averageRating ? Number(sub.vendor.averageRating) : null }
+      ? {
+          ...sub.vendor,
+          averageRating: sub.vendor.averageRating
+            ? Number(sub.vendor.averageRating)
+            : null,
+        }
       : sub.vendor,
     plan: sub.plan ? { ...sub.plan, price: Number(sub.plan.price) } : sub.plan,
   }));
 }
 
-export type SubscriptionRow = Awaited<ReturnType<typeof listSubscriptions>>[number];
+export type SubscriptionRow = Awaited<
+  ReturnType<typeof listSubscriptions>
+>[number];
 
 export async function cancelSubscription(subscriptionId: string) {
   const subscription = await prisma.subscription.findUniqueOrThrow({
@@ -61,6 +61,18 @@ export async function cancelSubscription(subscriptionId: string) {
     subscription.vendorId,
     "subscription.cancel",
   );
+  const payment = await prisma.paymentOrder.findUnique({
+    where: { targetId: subscriptionId },
+  });
+  if (payment) {
+    await cancelPaidPurchase(subscriptionId, {
+      userId: session.user.id,
+      kind: "partner",
+    });
+    revalidatePath("/subscriptions");
+    revalidatePath(`/vendors/${subscription.vendorId}`);
+    return;
+  }
 
   const vendorId = await prisma.$transaction(async (tx) => {
     const before = await tx.subscription.findUniqueOrThrow({

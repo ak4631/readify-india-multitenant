@@ -1,9 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS } from "@/config/nav";
+import { visibleNavigation } from "@/config/nav";
 import type { PermissionKey } from "@/config/permissions";
 import { cn } from "@/lib/utils";
 
@@ -15,14 +14,7 @@ export function Sidebar({
   roles: string[];
 }) {
   const pathname = usePathname();
-  const isVendorAccount = roles.some((role) =>
-    ["PARTNER_ADMIN", "PARTNER_EMPLOYEE"].includes(role),
-  );
-  const visibleItems = NAV_ITEMS.filter(
-    (item) =>
-      permissions.includes(item.requiredPermission) &&
-      !(isVendorAccount && item.platformOnly),
-  );
+  const visibleItems = visibleNavigation(permissions, roles);
 
   return (
     <aside className="hidden min-h-svh w-72 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[12px_0_32px_oklch(0.2_0.03_170_/_0.08)] md:flex md:flex-col">
@@ -33,17 +25,15 @@ export function Sidebar({
           }
           className="flex items-center gap-3"
         >
-          <Image
-            src="/readify-logo.jpg"
-            alt="Readify India"
-            width={40}
-            height={40}
-            className="size-10 rounded-lg border border-sidebar-border bg-white object-contain shadow-sm"
-            priority
-          />
+          <span
+            aria-hidden="true"
+            className="grid size-10 place-items-center rounded-lg bg-primary text-xl font-bold text-primary-foreground"
+          >
+            V
+          </span>
           <span>
             <span className="block text-lg font-semibold tracking-tight text-sidebar-foreground">
-              Readify India
+              Vriddhora
             </span>
             <span className="mt-0.5 block text-xs font-medium text-sidebar-foreground/60">
               Management Portal

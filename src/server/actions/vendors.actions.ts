@@ -1,5 +1,8 @@
 "use server";
 
+import { lockListing, queueListingChange } from "@/lib/listing-changes";
+import { getRequiredDocuments } from "@/config/verification-requirements";
+import { launchPlansReady } from "@/lib/launch-plans";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -56,11 +59,11 @@ export async function getVendorById(vendorId: string) {
       category: true,
       address: true,
       verifications: { orderBy: { createdAt: "desc" } },
-      createdBy: true,
-      approvedBy: true,
+      createdBy: { select: { id: true, name: true } },
+      approvedBy: { select: { id: true, name: true } },
       partner: {
         include: {
-          users: { include: { roles: { include: { role: true } } } },
+          users: { select: { id: true, name: true, email: true } },
         },
       },
     },
@@ -76,14 +79,20 @@ export async function getVendorById(vendorId: string) {
     address: vendor.address
       ? {
           ...vendor.address,
-          latitude: vendor.address.latitude ? Number(vendor.address.latitude) : null,
-          longitude: vendor.address.longitude ? Number(vendor.address.longitude) : null,
+          latitude: vendor.address.latitude
+            ? Number(vendor.address.latitude)
+            : null,
+          longitude: vendor.address.longitude
+            ? Number(vendor.address.longitude)
+            : null,
         }
       : vendor.address,
   };
 }
 
-export type VendorDetail = NonNullable<Awaited<ReturnType<typeof getVendorById>>>;
+export type VendorDetail = NonNullable<
+  Awaited<ReturnType<typeof getVendorById>>
+>;
 
 async function uniqueSlug(name: string): Promise<string> {
   const base = slugify(name);
@@ -99,6 +108,13 @@ async function uniqueSlug(name: string): Promise<string> {
 export async function createVendorDraft(input: VendorBasicInfoInput) {
   const session = await requirePermission("vendor.create");
   const data = vendorBasicInfoSchema.parse(input);
+  const category = await prisma.vendorCategory.findUniqueOrThrow({
+    where: { id: data.categoryId },
+  });
+  if (!category.launchEnabled || category.status !== "ACTIVE")
+    throw new Error(
+      "This service is coming soon. Only active services can be onboarded.",
+    );
   const slug = await uniqueSlug(data.name);
   const actor = await prisma.user.findUniqueOrThrow({
     where: { id: session.user.id },
@@ -146,8 +162,27 @@ export async function updateVendorProfile(
 ) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   const data = vendorBasicInfoSchema.parse(input);
+  const existing = await prisma.vendor.findUniqueOrThrow({
+    where: { id: vendorId },
+    select: { categoryId: true },
+  });
+  if (existing.categoryId !== data.categoryId)
+    throw new Error(
+      "A listing's service cannot be changed. Create a separate listing instead.",
+    );
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "PROFILE",
+        vendorId,
+        data,
+      )
+    )
+      return;
     const before = await tx.vendor.findUniqueOrThrow({
       where: { id: vendorId },
     });
@@ -188,6 +223,17 @@ export async function updateVendorCapacity(
   const data = vendorCapacitySchema.parse(input);
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "CAPACITY",
+        vendorId,
+        data,
+      )
+    )
+      return;
     const before = await tx.vendor.findUniqueOrThrow({
       where: { id: vendorId },
     });
@@ -218,6 +264,17 @@ export async function updateVendorAddress(
   const data = vendorAddressSchema.parse(input);
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "ADDRESS",
+        vendorId,
+        data,
+      )
+    )
+      return;
     const address = await tx.vendorAddress.upsert({
       where: { vendorId },
       update: data,
@@ -248,15 +305,70 @@ async function transitionVendor(
   },
 ) {
   await prisma.$transaction(async (tx) => {
-    const vendor = await tx.vendor.findUniqueOrThrow({
-      where: { id: vendorId },
-    });
+    const vendor = await lockListing(tx, vendorId);
     assertTransition(vendor.status, to);
+    if (to === "APPROVED" || to === "PUBLISHED") {
+      const category = await tx.vendorCategory.findUniqueOrThrow({
+        where: { id: vendor.categoryId },
+      });
+      const partner = await tx.partner.findUniqueOrThrow({
+        where: { id: vendor.partnerId },
+      });
+      if (
+        !category.launchEnabled ||
+        category.status !== "ACTIVE" ||
+        partner.status !== "ACTIVE"
+      )
+        throw new Error("This partner or service is not active");
+      const documents = await tx.vendorVerification.findMany({
+        where: { vendorId, status: "VERIFIED" },
+      });
+      if (
+        getRequiredDocuments(category.slug).some(
+          (type) =>
+            !documents.some((document) => document.documentType === type),
+        )
+      )
+        throw new Error(
+          "Verify all required documents before approving this listing",
+        );
+      if (to === "PUBLISHED") {
+        const [address, seats, schedules, plans] = await Promise.all([
+          tx.vendorAddress.findUnique({ where: { vendorId } }),
+          tx.librarySeat.count({ where: { vendorId, isActive: true } }),
+          tx.vendorSchedule.count({ where: { vendorId, isClosed: false } }),
+          tx.membershipPlan.findMany({ where: { vendorId, status: "ACTIVE" } }),
+        ]);
+        if (
+          !address ||
+          address.latitude === null ||
+          address.longitude === null ||
+          !seats ||
+          !schedules ||
+          !launchPlansReady(plans)
+        )
+          throw new Error(
+            "Configure a mapped address, seats, opening hours, Flex, monthly, quarterly and yearly plans before publishing",
+          );
+        for (const plan of plans.filter(
+          (plan) => !plan.isFlexible && plan.dailyStart && plan.dailyHours,
+        )) {
+          const fit = await tx.$queryRaw<
+            { fits: boolean }[]
+          >`SELECT admin.slot_fits_schedule(${vendorId},(now() AT TIME ZONE ${vendor.timeZone})::date,${plan.dailyStart}::time,${plan.dailyHours}::int,${vendor.timeZone}) AS fits`;
+          if (!fit[0]?.fits)
+            throw new Error(
+              `The daily window for ${plan.name} is outside your opening hours`,
+            );
+        }
+      }
+    }
 
     const updated = await tx.vendor.update({
       where: { id: vendorId },
       data: {
         status: to,
+        verificationStatus: to === "APPROVED" ? "VERIFIED" : undefined,
         approvedById: extra?.approvedById,
         rejectionReason: extra?.rejectionReason,
         publishedAt: extra?.publishedAt,
@@ -271,6 +383,19 @@ async function transitionVendor(
       oldValue: { status: vendor.status },
       newValue: { status: updated.status },
     });
+    const recipients = await tx.user.findMany({
+      where: { partnerId: vendor.partnerId, status: "ACTIVE" },
+      select: { id: true },
+    });
+    if (recipients.length)
+      await tx.portalNotification.createMany({
+        data: recipients.map((user) => ({
+          userId: user.id,
+          title: `Listing ${to.toLowerCase().replaceAll("_", " ")}`,
+          body: `${vendor.name}${extra?.rejectionReason ? `: ${extra.rejectionReason}` : ""}`,
+          href: `/vendors/${vendorId}`,
+        })),
+      });
   });
 
   revalidatePath("/vendors");
@@ -279,19 +404,45 @@ async function transitionVendor(
 
 export async function submitVendorForReview(vendorId: string) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
-  await transitionVendor(
-    vendorId,
-    "SUBMITTED",
-    session.user.id,
-    "SUBMIT_VENDOR_FOR_REVIEW",
-  );
-  // Auto-advance straight to UNDER_REVIEW — there's no separate "intake queue" step in Phase 1.
-  await transitionVendor(
-    vendorId,
-    "UNDER_REVIEW",
-    session.user.id,
-    "SUBMIT_VENDOR_FOR_REVIEW",
-  );
+  await prisma.$transaction(async (tx) => {
+    const vendor = await lockListing(tx, vendorId);
+    assertTransition(vendor.status, "SUBMITTED");
+    assertTransition("SUBMITTED", "UNDER_REVIEW");
+    await tx.vendor.update({
+      where: { id: vendorId },
+      data: { status: "UNDER_REVIEW" },
+    });
+    for (const [from, to] of [
+      [vendor.status, "SUBMITTED"],
+      ["SUBMITTED", "UNDER_REVIEW"],
+    ])
+      await writeAuditLog(tx, {
+        userId: session.user.id,
+        action: "SUBMIT_VENDOR_FOR_REVIEW",
+        entityType: "vendor",
+        entityId: vendorId,
+        oldValue: { status: from },
+        newValue: { status: to },
+      });
+    const reviewers = await tx.user.findMany({
+      where: {
+        status: "ACTIVE",
+        roles: { some: { role: { name: "SUPER_ADMIN" } } },
+      },
+      select: { id: true },
+    });
+    if (reviewers.length)
+      await tx.portalNotification.createMany({
+        data: reviewers.map((user) => ({
+          userId: user.id,
+          title: "Listing awaiting approval",
+          body: vendor.name,
+          href: `/vendors/${vendorId}`,
+        })),
+      });
+  });
+  revalidatePath("/vendors");
+  revalidatePath(`/vendors/${vendorId}`);
 }
 
 export async function approveVendor(vendorId: string) {
@@ -340,5 +491,26 @@ export async function suspendVendor(vendorId: string) {
     "SUSPENDED",
     session.user.id,
     "SUSPEND_VENDOR",
+  );
+}
+
+export async function reviseRejectedVendor(vendorId: string) {
+  const session = await requireVendorAccess(vendorId, "vendor.update");
+  await transitionVendor(
+    vendorId,
+    "DRAFT",
+    session.user.id,
+    "UPDATE_VENDOR_PROFILE",
+    { rejectionReason: null },
+  );
+}
+
+export async function requestListingReactivation(vendorId: string) {
+  const session = await requireVendorAccess(vendorId, "vendor.update");
+  await transitionVendor(
+    vendorId,
+    "UNDER_REVIEW",
+    session.user.id,
+    "SUBMIT_VENDOR_FOR_REVIEW",
   );
 }

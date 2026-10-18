@@ -73,7 +73,9 @@ async function seedRoles() {
     });
 
     const keys = permissionKeys === "*" ? allPermissionKeys : permissionKeys;
-    const permissions = await prisma.permission.findMany({ where: { key: { in: keys } } });
+    const permissions = await prisma.permission.findMany({
+      where: { key: { in: keys } },
+    });
 
     await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
     if (permissions.length > 0) {
@@ -91,7 +93,11 @@ async function seedVendorCategories() {
     await prisma.vendorCategory.upsert({
       where: { slug: category.slug },
       update: {},
-      create: { ...category, sortOrder: index },
+      create: {
+        ...category,
+        sortOrder: index,
+        launchEnabled: category.slug === "library",
+      },
     });
   }
   console.log(`Seeded ${VENDOR_CATEGORIES.length} vendor categories.`);
@@ -99,21 +105,35 @@ async function seedVendorCategories() {
 
 async function seedFacilities() {
   for (const name of FACILITIES) {
-    await prisma.facility.upsert({ where: { name }, update: {}, create: { name } });
+    await prisma.facility.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
   }
   console.log(`Seeded ${FACILITIES.length} facilities.`);
 }
 
 async function seedTrainerSpecializations() {
   for (const name of TRAINER_SPECIALIZATIONS) {
-    await prisma.trainerSpecialization.upsert({ where: { name }, update: {}, create: { name } });
+    await prisma.trainerSpecialization.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
   }
-  console.log(`Seeded ${TRAINER_SPECIALIZATIONS.length} trainer specializations.`);
+  console.log(
+    `Seeded ${TRAINER_SPECIALIZATIONS.length} trainer specializations.`,
+  );
 }
 
 async function seedSubjects() {
   for (const name of SUBJECTS) {
-    await prisma.subject.upsert({ where: { name }, update: {}, create: { name } });
+    await prisma.subject.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
   }
   console.log(`Seeded ${SUBJECTS.length} subjects.`);
 }
@@ -136,7 +156,9 @@ async function seedSuperAdmin() {
     create: { name: "Super Admin", email, passwordHash },
   });
 
-  const superAdminRole = await prisma.role.findUniqueOrThrow({ where: { name: "SUPER_ADMIN" } });
+  const superAdminRole = await prisma.role.findUniqueOrThrow({
+    where: { name: "SUPER_ADMIN" },
+  });
 
   await prisma.userRole.upsert({
     where: { userId_roleId: { userId: user.id, roleId: superAdminRole.id } },

@@ -17,7 +17,9 @@ import type { Role, User, UserRole } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import { setPartnerUserActive } from "@/server/actions/partners.actions";
 
-type TeamUser = User & { roles: (UserRole & { role: Role })[] };
+type TeamUser = Omit<User, "passwordHash"> & {
+  roles: (UserRole & { role: Role })[];
+};
 
 export function PartnerTeamTable({ users }: { users: TeamUser[] }) {
   const [pending, startTransition] = useTransition();

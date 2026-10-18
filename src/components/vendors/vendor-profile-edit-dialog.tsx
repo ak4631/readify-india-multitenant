@@ -104,7 +104,11 @@ export function VendorProfileEditDialog({
                 return (
                   <FormItem>
                     <FormLabel>Category</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      disabled
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger className="w-full">
                           <SelectValue>{selectedCategoryLabel}</SelectValue>

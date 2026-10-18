@@ -16,7 +16,9 @@ import type { User, UserRole, Role } from "@/generated/prisma/client";
 import { activateUser, suspendUser } from "@/server/actions/users.actions";
 import { usePermission } from "@/hooks/use-permission";
 
-type UserRow = User & { roles: (UserRole & { role: Role })[] };
+type UserRow = Omit<User, "passwordHash"> & {
+  roles: (UserRole & { role: Role })[];
+};
 
 export function UserTable({ users }: { users: UserRow[] }) {
   const [isPending, startTransition] = useTransition();

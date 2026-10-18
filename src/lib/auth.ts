@@ -4,8 +4,6 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import type { PermissionKey } from "@/config/permissions";
 
-const STALE_AFTER_MS = 5 * 60 * 1000;
-
 async function loadRolesAndPermissions(userId: string) {
   const userRoles = await prisma.userRole.findMany({
     where: { userId },
@@ -79,8 +77,9 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
 
-      const issuedAtMs = (typeof token.iat === "number" ? token.iat : 0) * 1000;
-      if (Date.now() - issuedAtMs > STALE_AFTER_MS) {
+      // Revalidate on every authenticated request: removed staff must lose access
+      // before their next action, regardless of JWT age or cookie rotation.
+      if (token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id },
           include: { partner: { select: { status: true } } },

@@ -27,7 +27,15 @@ import { cancelSubscription } from "@/server/actions/subscriptions.actions";
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const hrs = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}h`;
 
-function Stat({ title, value, hint }: { title: string; value: string; hint?: string }) {
+function Stat({
+  title,
+  value,
+  hint,
+}: {
+  title: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="rounded-xl bg-muted/50 px-4 py-3">
       <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -52,7 +60,9 @@ function RevenueTable({ title, rows }: { title: string; rows: RevenueRow[] }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{title.includes("plan") ? "Plan" : "Slot"}</TableHead>
+                <TableHead>
+                  {title.includes("plan") ? "Plan" : "Slot"}
+                </TableHead>
                 <TableHead className="text-right">Bookings</TableHead>
                 <TableHead className="text-right">Revenue</TableHead>
               </TableRow>
@@ -62,7 +72,9 @@ function RevenueTable({ title, rows }: { title: string; rows: RevenueRow[] }) {
                 <TableRow key={row.key}>
                   <TableCell>{row.key}</TableCell>
                   <TableCell className="text-right">{row.count}</TableCell>
-                  <TableCell className="text-right">{inr(row.revenue)}</TableCell>
+                  <TableCell className="text-right">
+                    {inr(row.revenue)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -158,16 +170,23 @@ export function LibraryOccupancyPanel({ data }: { data: LibraryOccupancy }) {
                   <TableHead>Occupied</TableHead>
                   <TableHead>Free</TableHead>
                   <TableHead>Free windows</TableHead>
-                  {canManage && <TableHead className="text-right">Actions</TableHead>}
+                  {canManage && (
+                    <TableHead className="text-right">Actions</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.seats.map((seat) => (
-                  <TableRow key={seat.seatId} className={seat.isActive ? "" : "opacity-50"}>
+                  <TableRow
+                    key={seat.seatId}
+                    className={seat.isActive ? "" : "opacity-50"}
+                  >
                     <TableCell>
                       <p className="font-medium">{seat.label}</p>
                       {seat.seatType && (
-                        <p className="text-xs text-muted-foreground">{seat.seatType}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {seat.seatType}
+                        </p>
                       )}
                     </TableCell>
                     <TableCell>
@@ -192,7 +211,10 @@ export function LibraryOccupancyPanel({ data }: { data: LibraryOccupancy }) {
                         ? seat.freeWindows.length === 0
                           ? "Fully booked"
                           : seat.freeWindows
-                              .map((w) => `${w.startLabel}–${w.endLabel} (${hrs(w.hours)})`)
+                              .map(
+                                (w) =>
+                                  `${w.startLabel}–${w.endLabel} (${hrs(w.hours)})`,
+                              )
                               .join(", ")
                         : "Seat disabled"}
                     </TableCell>
@@ -204,7 +226,11 @@ export function LibraryOccupancyPanel({ data }: { data: LibraryOccupancy }) {
                           disabled={isPending}
                           onClick={() =>
                             run(
-                              () => setLibrarySeatActive(seat.seatId, !seat.isActive),
+                              () =>
+                                setLibrarySeatActive(
+                                  seat.seatId,
+                                  !seat.isActive,
+                                ),
                               seat.isActive ? "Seat disabled" : "Seat enabled",
                             )
                           }
@@ -218,9 +244,12 @@ export function LibraryOccupancyPanel({ data }: { data: LibraryOccupancy }) {
               </TableBody>
             </Table>
             <p className="mt-3 text-xs text-muted-foreground">
-              <span className="mr-1 inline-block size-2 rounded-full bg-primary" /> Booking
-              <span className="mr-1 ml-3 inline-block size-2 rounded-full bg-sky-500" /> Subscription
-              <span className="mr-1 ml-3 inline-block size-2 rounded-full bg-emerald-500/40" /> Free
+              <span className="mr-1 inline-block size-2 rounded-full bg-primary" />{" "}
+              Booking
+              <span className="mr-1 ml-3 inline-block size-2 rounded-full bg-sky-500" />{" "}
+              Subscription
+              <span className="mr-1 ml-3 inline-block size-2 rounded-full bg-emerald-500/40" />{" "}
+              Free
             </p>
           </CardContent>
         </Card>
@@ -232,7 +261,9 @@ export function LibraryOccupancyPanel({ data }: { data: LibraryOccupancy }) {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No bookings for this date.</p>
+            <p className="text-sm text-muted-foreground">
+              No bookings for this date.
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -260,21 +291,28 @@ export function LibraryOccupancyPanel({ data }: { data: LibraryOccupancy }) {
                     </TableCell>
                     <TableCell>{seat.label}</TableCell>
                     <TableCell>
-                      {interval.startLabel}–{interval.endLabel} ({hrs(interval.hours)})
+                      {interval.startLabel}–{interval.endLabel} (
+                      {hrs(interval.hours)})
                     </TableCell>
                     <TableCell>{interval.planName}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {interval.source === "subscription" ? "Subscription" : "Booking"}
+                        {interval.source === "subscription"
+                          ? "Subscription"
+                          : interval.source === "flex"
+                            ? "Flex Booking"
+                            : "Booking"}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge>{interval.status}</Badge>
                     </TableCell>
-                    <TableCell className="text-right">{inr(interval.revenue)}</TableCell>
+                    <TableCell className="text-right">
+                      {inr(interval.revenue)}
+                    </TableCell>
                     {(canManage || canCancelSubscription) && (
                       <TableCell className="text-right">
-                        {interval.source === "booking" && canManage && (
+                        {interval.source !== "subscription" && canManage && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -289,21 +327,22 @@ export function LibraryOccupancyPanel({ data }: { data: LibraryOccupancy }) {
                             Cancel
                           </Button>
                         )}
-                        {interval.source === "subscription" && canCancelSubscription && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isPending}
-                            onClick={() =>
-                              run(
-                                () => cancelSubscription(interval.refId),
-                                "Subscription cancelled",
-                              )
-                            }
-                          >
-                            Cancel
-                          </Button>
-                        )}
+                        {interval.source === "subscription" &&
+                          canCancelSubscription && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={isPending}
+                              onClick={() =>
+                                run(
+                                  () => cancelSubscription(interval.refId),
+                                  "Subscription cancelled",
+                                )
+                              }
+                            >
+                              Cancel
+                            </Button>
+                          )}
                       </TableCell>
                     )}
                   </TableRow>
@@ -320,8 +359,8 @@ export function LibraryOccupancyPanel({ data }: { data: LibraryOccupancy }) {
       </div>
       <p className="text-xs text-muted-foreground">
         Revenue is the plan price for bookings and subscriptions created in the{" "}
-        {data.revenue.periodLabel.toLowerCase()} (customer platform fee excluded, cancelled
-        excluded).
+        {data.revenue.periodLabel.toLowerCase()} (customer platform fee
+        excluded, cancelled excluded).
       </p>
     </div>
   );

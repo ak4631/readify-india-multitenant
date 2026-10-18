@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,15 +40,23 @@ export function StepAddress({ vendorId }: { vendorId: string }) {
     },
   });
 
+  const [latitude, longitude] = useWatch({
+    control: form.control,
+    name: ["latitude", "longitude"],
+  });
+
   function handleMapChange(lat: number, lng: number) {
     form.setValue("latitude", lat, { shouldValidate: true });
     form.setValue("longitude", lng, { shouldValidate: true });
   }
 
   function handleAddressSelect(result: GeocodeResult) {
-    if (result.city && !form.getValues("city")) form.setValue("city", result.city);
-    if (result.state && !form.getValues("state")) form.setValue("state", result.state);
-    if (result.pincode && !form.getValues("pincode")) form.setValue("pincode", result.pincode);
+    if (result.city && !form.getValues("city"))
+      form.setValue("city", result.city);
+    if (result.state && !form.getValues("state"))
+      form.setValue("state", result.state);
+    if (result.pincode && !form.getValues("pincode"))
+      form.setValue("pincode", result.pincode);
   }
 
   async function onSubmit(values: VendorAddressInput) {
@@ -81,8 +89,8 @@ export function StepAddress({ vendorId }: { vendorId: string }) {
               <FormLabel>Pin location on map</FormLabel>
               <div className="mt-2">
                 <AddressMapPicker
-                  latitude={form.watch("latitude")}
-                  longitude={form.watch("longitude")}
+                  latitude={latitude}
+                  longitude={longitude}
                   onChange={handleMapChange}
                   onAddressSelect={handleAddressSelect}
                 />

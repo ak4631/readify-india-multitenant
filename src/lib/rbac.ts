@@ -49,6 +49,32 @@ export function isSuperAdmin(session: Session): boolean {
   return session.user.roles.includes("SUPER_ADMIN");
 }
 
+export function isPlatformStaff(session: Session): boolean {
+  // A detached partner account must never become a platform account merely
+  // because its partner_id was cleared.
+  return (
+    !session.user.roles.some((role) =>
+      ["PARTNER_ADMIN", "PARTNER_EMPLOYEE", "USER"].includes(role),
+    ) &&
+    session.user.roles.some((role) =>
+      [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "SUPPORT",
+        "VENDOR_MANAGER",
+        "CONTENT_MODERATOR",
+      ].includes(role),
+    )
+  );
+}
+
+export async function requirePlatformPermission(permission: PermissionKey) {
+  const session = await requirePermission(permission);
+  if (!isPlatformStaff(session))
+    throw new Error("Platform staff access required");
+  return session;
+}
+
 export async function requireSuperAdmin(): Promise<Session> {
   const session = await getCurrentSession();
   if (!session?.user) throw new Error("Not authenticated");
@@ -61,7 +87,7 @@ export async function requirePartnerAccess(
   permission: PermissionKey,
 ): Promise<Session> {
   const session = await requirePermission(permission);
-  if (isSuperAdmin(session)) return session;
+  if (isPlatformStaff(session)) return session;
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -82,7 +108,7 @@ export async function requireVendorAccess(
   permission: PermissionKey,
 ): Promise<Session> {
   const session = await requirePermission(permission);
-  if (isSuperAdmin(session)) return session;
+  if (isPlatformStaff(session)) return session;
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -111,18 +137,19 @@ export async function requireVendorAccess(
 export async function getSessionPartnerId(
   session: Session,
 ): Promise<string | null> {
-  if (isSuperAdmin(session)) return null;
+  if (isPlatformStaff(session)) return null;
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { partnerId: true },
   });
-  return user?.partnerId ?? null;
+  if (!user?.partnerId) throw new Error("Partner access required");
+  return user.partnerId;
 }
 
 export async function getAccessibleVendorIds(
   session: Session,
 ): Promise<string[] | null> {
-  if (isSuperAdmin(session)) return null;
+  if (isPlatformStaff(session)) return null;
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { partnerId: true },

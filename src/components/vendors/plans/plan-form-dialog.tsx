@@ -65,10 +65,14 @@ export function PlanFormDialog({
       durationValue: plan?.durationValue ?? 1,
       durationUnit: plan?.durationUnit ?? "MONTHS",
       dailyHours: plan?.dailyHours ?? null,
+      dailyStart: plan?.dailyStart ?? null,
       isFlexible: plan?.isFlexible ?? false,
     },
   });
-  const durationUnit = useWatch({ control: form.control, name: "durationUnit" });
+  const durationUnit = useWatch({
+    control: form.control,
+    name: "durationUnit",
+  });
   const isFlexible = useWatch({ control: form.control, name: "isFlexible" });
 
   // Flexible plans are always "1 Hour" duration under the hood (price is a
@@ -87,10 +91,10 @@ export function PlanFormDialog({
     try {
       if (plan) {
         await updateMembershipPlan(plan.id, values);
-        toast.success("Plan updated");
+        toast.success("Plan saved. Approved listings require Admin review.");
       } else {
         await createMembershipPlan(vendorId, values);
-        toast.success("Plan created");
+        toast.success("Plan saved. Approved listings require Admin review.");
       }
       setOpen(false);
       form.reset();
@@ -147,7 +151,9 @@ export function PlanFormDialog({
                   <Label className="flex items-center gap-2 font-normal">
                     <Checkbox
                       checked={field.value}
-                      onCheckedChange={(checked) => field.onChange(checked === true)}
+                      onCheckedChange={(checked) =>
+                        field.onChange(checked === true)
+                      }
                     />
                     Flexible plan (customer picks 1-14 days at checkout)
                   </Label>
@@ -161,7 +167,9 @@ export function PlanFormDialog({
                 name="price"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{isFlexible ? "Rate per hour (₹)" : "Price (₹)"}</FormLabel>
+                    <FormLabel>
+                      {isFlexible ? "Rate per hour (₹)" : "Price (₹)"}
+                    </FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -187,7 +195,9 @@ export function PlanFormDialog({
                           type="number"
                           min={1}
                           value={field.value}
-                          onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                          onChange={(e) =>
+                            field.onChange(e.target.valueAsNumber)
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -210,11 +220,8 @@ export function PlanFormDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="DAYS">Days</SelectItem>
                         <SelectItem value="MONTHS">Months</SelectItem>
                         <SelectItem value="YEARS">Years</SelectItem>
-                        <SelectItem value="SESSIONS">Sessions</SelectItem>
-                        <SelectItem value="HOURS">Hours (single visit)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -232,14 +239,18 @@ export function PlanFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      {isFlexible ? "Hours per day" : "Hours per day (library seat)"}
+                      {isFlexible
+                        ? "Hours per day"
+                        : "Hours per day (library seat)"}
                     </FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         min={1}
                         max={24}
-                        placeholder={isFlexible ? undefined : "Blank = full opening hours"}
+                        placeholder={
+                          isFlexible ? undefined : "Blank = full opening hours"
+                        }
                         value={field.value ?? ""}
                         onChange={(e) =>
                           field.onChange(
@@ -247,6 +258,27 @@ export function PlanFormDialog({
                               ? null
                               : e.target.valueAsNumber,
                           )
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {!isFlexible && ["MONTHS", "YEARS"].includes(durationUnit) && (
+              <FormField
+                control={form.control}
+                name="dailyStart"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Daily access starts at</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="time"
+                        value={field.value ?? ""}
+                        onChange={(event) =>
+                          field.onChange(event.target.value || null)
                         }
                       />
                     </FormControl>

@@ -1,5 +1,7 @@
 "use server";
 
+import { queueListingChange } from "@/lib/listing-changes";
+import { cancelPaidPurchase } from "@/lib/payments";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +14,7 @@ import { requireVendorAccess } from "@/lib/rbac";
 // availability), so the partner view and the booking path can't disagree.
 
 export type OccupancyInterval = {
-  source: "booking" | "subscription";
+  source: "booking" | "subscription" | "flex";
   refId: string;
   startLabel: string;
   endLabel: string;
@@ -72,7 +74,6 @@ export type LibraryOccupancy = {
   };
 };
 
-const PLATFORM_FEE = 6; // mirrors create_customer_booking's v_platform_fee
 const REVENUE_DAYS = 30;
 
 const HOURS_MS = 3_600_000;
@@ -111,7 +112,9 @@ export async function getLibraryOccupancy(
   });
   const label = makeLabeler(vendor.timeZone);
 
-  const windowRows = await prisma.$queryRaw<{ open_at: Date; close_at: Date }[]>`
+  const windowRows = await prisma.$queryRaw<
+    { open_at: Date; close_at: Date }[]
+  >`
     SELECT open_at, close_at FROM admin.vendor_open_window(${vendorId}, ${date}::date)
   `;
 
@@ -152,7 +155,10 @@ export async function getLibraryOccupancy(
   const spanMs = closeAt.getTime() - openAt.getTime();
   const pct = (d: Date) =>
     Math.round(
-      Math.min(Math.max(((d.getTime() - openAt.getTime()) / spanMs) * 100, 0), 100) * 10,
+      Math.min(
+        Math.max(((d.getTime() - openAt.getTime()) / spanMs) * 100, 0),
+        100,
+      ) * 10,
     ) / 10;
 
   const busy = await prisma.$queryRaw<
@@ -160,7 +166,7 @@ export async function getLibraryOccupancy(
       seatId: string;
       startAt: Date;
       endAt: Date;
-      source: "booking" | "subscription";
+      source: "booking" | "subscription" | "flex";
       refId: string;
     }[]
   >`
@@ -172,7 +178,9 @@ export async function getLibraryOccupancy(
     ORDER BY bi."start_at"
   `;
 
-  const bookingIds = busy.filter((b) => b.source === "booking").map((b) => b.refId);
+  const bookingIds = busy
+    .filter((b) => b.source === "booking")
+    .map((b) => b.refId);
   const subscriptionIds = busy
     .filter((b) => b.source === "subscription")
     .map((b) => b.refId);
@@ -187,10 +195,30 @@ export async function getLibraryOccupancy(
       include: { plan: { select: { name: true } } },
     }),
   ]);
+  const verified = await prisma.paymentOrder.findMany({
+    where: {
+      targetId: { in: busy.map((item) => item.refId) },
+      capturedAt: { not: null },
+      status: { in: ["CAPTURED", "CANCELLED"] },
+    },
+    select: { targetId: true, amountPaise: true },
+  });
+  const paidByTarget = new Map(
+    verified.map((order) => [order.targetId, order.amountPaise / 100]),
+  );
   const bookingById = new Map(bookings.map((b) => [b.id, b]));
+  const flex = await prisma.flexBooking.findMany({
+    where: {
+      id: { in: busy.filter((b) => b.source === "flex").map((b) => b.refId) },
+    },
+  });
+  const flexById = new Map(flex.map((b) => [b.id, b]));
   const subscriptionById = new Map(subscriptions.map((s) => [s.id, s]));
 
-  const profiles = await lookupCustomerProfiles(bookings.map((b) => b.userId));
+  const profiles = await lookupCustomerProfiles([
+    ...bookings.map((b) => b.userId),
+    ...flex.map((b) => b.userId),
+  ]);
 
   const busyBySeat = new Map<string, typeof busy>();
   for (const b of busy) {
@@ -237,7 +265,26 @@ export async function getLibraryOccupancy(
           customerEmail: profile?.email ?? null,
           planName: booking.plan?.name ?? booking.seatLabel ?? "—",
           status: booking.status,
-          revenue: bookingRevenue(booking),
+          revenue: paidByTarget.get(booking.id) ?? 0,
+          bookingCode: booking.bookingCode,
+        });
+      } else if (b.source === "flex") {
+        const booking = flexById.get(b.refId);
+        if (!booking) continue;
+        const profile = profiles.get(booking.userId);
+        intervals.push({
+          source: "flex",
+          refId: booking.id,
+          startLabel: label(b.startAt),
+          endLabel: label(b.endAt),
+          startPct: pct(b.startAt),
+          endPct: pct(b.endAt),
+          hours: hoursBetween(b.startAt, b.endAt),
+          customerName: profile?.fullName ?? "Customer",
+          customerEmail: profile?.email ?? null,
+          planName: `Flex · ${booking.days} days`,
+          status: booking.status,
+          revenue: paidByTarget.get(booking.id) ?? 0,
           bookingCode: booking.bookingCode,
         });
       } else {
@@ -255,7 +302,7 @@ export async function getLibraryOccupancy(
           customerEmail: null,
           planName: sub.plan?.name ?? sub.planName ?? "—",
           status: sub.status,
-          revenue: Number(sub.amountPaid),
+          revenue: paidByTarget.get(sub.id) ?? 0,
           bookingCode: null,
         });
       }
@@ -282,7 +329,10 @@ export async function getLibraryOccupancy(
   });
 
   const activeSeatRows = seatRows.filter((s) => s.isActive);
-  const occupiedSeatHours = activeSeatRows.reduce((n, s) => n + s.occupiedHours, 0);
+  const occupiedSeatHours = activeSeatRows.reduce(
+    (n, s) => n + s.occupiedHours,
+    0,
+  );
   const totalSeatHours = activeSeatRows.length * totalHoursPerSeat;
 
   return {
@@ -294,7 +344,8 @@ export async function getLibraryOccupancy(
     totalHoursPerSeat,
     summary: {
       activeSeats: activeSeatRows.length,
-      fullyFreeSeats: activeSeatRows.filter((s) => s.occupiedHours === 0).length,
+      fullyFreeSeats: activeSeatRows.filter((s) => s.occupiedHours === 0)
+        .length,
       partiallyFreeSeats: activeSeatRows.filter(
         (s) => s.occupiedHours > 0 && s.freeHours > 0,
       ).length,
@@ -305,7 +356,10 @@ export async function getLibraryOccupancy(
         totalSeatHours > 0
           ? Math.round((occupiedSeatHours / totalSeatHours) * 1000) / 10
           : 0,
-      activeBookings: new Set(bookingIds).size,
+      activeBookings: new Set([
+        ...bookingIds,
+        ...flex.map((booking) => booking.id),
+      ]).size,
       activeSubscriptions: new Set(subscriptionIds).size,
     },
     seats: seatRows,
@@ -313,82 +367,56 @@ export async function getLibraryOccupancy(
   };
 }
 
-function bookingRevenue(booking: {
-  amount: unknown;
-  plan?: { price: unknown } | null;
-}) {
-  // Bookings store price + platform fee; the partner earns the plan price.
-  if (booking.plan) return Number(booking.plan.price);
-  return Math.max(Number(booking.amount) - PLATFORM_FEE, 0);
-}
-
 async function getRevenue(
   vendorId: string,
-  label: (d: Date) => string,
+  _label: (date: Date) => string,
 ): Promise<LibraryOccupancy["revenue"]> {
+  void _label;
   const since = new Date(Date.now() - REVENUE_DAYS * 24 * HOURS_MS);
-
-  const [bookings, subscriptions] = await Promise.all([
-    prisma.booking.findMany({
-      where: {
-        vendorId,
-        seatId: { not: null },
-        status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] },
-        createdAt: { gte: since },
-      },
-      include: { plan: { select: { name: true, price: true } } },
-    }),
-    prisma.subscription.findMany({
-      where: {
-        vendorId,
-        seatId: { not: null },
-        status: { in: ["ACTIVE", "EXPIRED"] },
-        createdAt: { gte: since },
-      },
-      include: { plan: { select: { name: true } } },
-    }),
-  ]);
-
+  const rows = await prisma.$queryRaw<
+    { amountPaise: number; planName: string; slotLabel: string }[]
+  >`
+    SELECT o.amount_paise AS "amountPaise", coalesce(b.seat_label,sub.plan_name,p.name,'Plan') AS "planName",
+      CASE WHEN o.target_type='visit' THEN coalesce(b.time_label,'Single visit')
+        WHEN o.target_type='flex' THEN to_char(f.slot_start,'HH24:MI')||' - Flex'
+        ELSE to_char(sub.slot_start_time,'HH24:MI')||' - Subscription' END AS "slotLabel"
+    FROM admin.payment_orders o
+    LEFT JOIN admin.bookings b ON b.id=o.target_id AND o.target_type='visit'
+    LEFT JOIN admin.flex_bookings f ON f.id=o.target_id AND o.target_type='flex'
+    LEFT JOIN admin.subscriptions sub ON sub.id=o.target_id AND o.target_type='subscription'
+    LEFT JOIN admin.membership_plans p ON p.id=f.plan_id
+    WHERE o.vendor_id=${vendorId} AND o.captured_at IS NOT NULL AND o.status IN ('CAPTURED','CANCELLED') AND o.created_at>=${since}
+  `;
   const byPlan = new Map<string, RevenueRow>();
   const bySlot = new Map<string, RevenueRow>();
-  let total = 0;
-
-  for (const b of bookings) {
-    const amount = bookingRevenue(b);
-    total += amount;
-    addRevenue(byPlan, b.plan?.name ?? b.seatLabel ?? "Unknown plan", amount);
-    if (b.startAt && b.endAt) {
-      addRevenue(bySlot, `${label(b.startAt)} – ${label(b.endAt)}`, amount);
-    }
+  for (const row of rows) {
+    addRevenue(byPlan, row.planName, row.amountPaise / 100);
+    addRevenue(bySlot, row.slotLabel, row.amountPaise / 100);
   }
-  for (const s of subscriptions) {
-    const amount = Number(s.amountPaid);
-    total += amount;
-    addRevenue(byPlan, s.plan?.name ?? s.planName ?? "Unknown plan", amount);
-    if (s.slotStartTime && s.slotHours) {
-      const start = s.slotStartTime.toISOString().slice(11, 16);
-      const endMinutes =
-        (Number(start.slice(0, 2)) * 60 + Number(start.slice(3)) + s.slotHours * 60) %
-        (24 * 60);
-      const end = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(
-        endMinutes % 60,
-      ).padStart(2, "0")}`;
-      addRevenue(bySlot, `${start} – ${end} (subscription)`, amount);
-    }
-  }
-
-  const sortDesc = (rows: Map<string, RevenueRow>) =>
-    [...rows.values()].sort((a, b) => b.revenue - a.revenue);
-
   return {
-    periodLabel: `Last ${REVENUE_DAYS} days`,
-    total,
-    byPlan: sortDesc(byPlan),
-    bySlot: sortDesc(bySlot),
+    periodLabel: `Last ${REVENUE_DAYS} days - verified retained payments, including customer fees`,
+    total: rows.reduce((sum, row) => sum + row.amountPaise / 100, 0),
+    byPlan: [...byPlan.values()],
+    bySlot: [...bySlot.values()],
   };
 }
 
 export async function cancelLibraryBooking(bookingId: string) {
+  const payment = await prisma.paymentOrder.findUnique({
+    where: { targetId: bookingId },
+  });
+  if (payment) {
+    const session = await requireVendorAccess(
+      payment.vendorId,
+      "vendor.update",
+    );
+    await cancelPaidPurchase(bookingId, {
+      userId: session.user.id,
+      kind: "partner",
+    });
+    revalidatePath(`/vendors/${payment.vendorId}`);
+    return;
+  }
   const record = await prisma.booking.findUniqueOrThrow({
     where: { id: bookingId },
     select: { vendorId: true },
@@ -396,7 +424,9 @@ export async function cancelLibraryBooking(bookingId: string) {
   const session = await requireVendorAccess(record.vendorId, "vendor.update");
 
   await prisma.$transaction(async (tx) => {
-    const before = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
+    const before = await tx.booking.findUniqueOrThrow({
+      where: { id: bookingId },
+    });
     if (before.status === "CANCELLED" || before.status === "COMPLETED") {
       throw new Error("This booking can no longer be cancelled");
     }
@@ -434,6 +464,17 @@ export async function setLibrarySeatActive(seatId: string, isActive: boolean) {
   const session = await requireVendorAccess(seat.vendorId, "vendor.update");
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        seat.vendorId,
+        session.user.id,
+        "SEAT_ACTIVE",
+        seatId,
+        { isActive },
+      )
+    )
+      return;
     if (!isActive) {
       const now = new Date();
       const [futureBookings, activeSubs] = await Promise.all([

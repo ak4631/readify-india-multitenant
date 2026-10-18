@@ -1,6 +1,7 @@
 import type { PermissionKey } from "@/config/permissions";
 import {
   BarChart3,
+  Bell,
   Building2,
   ClipboardCheck,
   CreditCard,
@@ -19,21 +20,77 @@ export interface NavItem {
   requiredPermission: PermissionKey;
   icon: LucideIcon;
   platformOnly?: boolean;
+  ownerOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  {
+    label: "Bookings",
+    href: "/bookings",
+    requiredPermission: "vendor.read",
+    icon: ClipboardCheck,
+  },
+  {
+    label: "Plans & Subscriptions",
+    href: "/plans",
+    requiredPermission: "vendor.read",
+    icon: CreditCard,
+  },
+  {
+    label: "Service Management",
+    href: "/service-management",
+    requiredPermission: "vendor.read",
+    icon: Store,
+  },
+  {
+    label: "Payments & Revenue",
+    href: "/payments",
+    requiredPermission: "subscription.read",
+    icon: CreditCard,
+  },
+  {
+    label: "Team Members",
+    href: "/team",
+    requiredPermission: "partnerUser.read",
+    icon: Users,
+  },
+  {
+    label: "Control Panel",
+    href: "/control-panel",
+    requiredPermission: "vendor.read",
+    icon: BarChart3,
+    ownerOnly: true,
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    requiredPermission: "vendor.read",
+    icon: Building2,
+  },
+  {
+    label: "Help & Support",
+    href: "/support",
+    requiredPermission: "vendor.read",
+    icon: UserRound,
+  },
+  {
+    label: "Notifications",
+    href: "/notifications",
+    requiredPermission: "vendor.read",
+    icon: Bell,
+  },
   {
     label: "Dashboard",
     href: "/dashboard",
     requiredPermission: "dashboard.read",
     icon: BarChart3,
-    platformOnly: true,
   },
   {
     label: "Partners",
     href: "/partners",
     requiredPermission: "partner.read",
     icon: Building2,
+    platformOnly: true,
   },
   {
     label: "Listings",
@@ -79,6 +136,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/subscriptions",
     requiredPermission: "subscription.read",
     icon: CreditCard,
+    platformOnly: true,
   },
   {
     label: "Audit Logs",
@@ -88,3 +146,43 @@ export const NAV_ITEMS: NavItem[] = [
     platformOnly: true,
   },
 ];
+
+const PARTNER_MODULE_ORDER = [
+  "/dashboard",
+  "/vendors",
+  "/bookings",
+  "/customers",
+  "/plans",
+  "/service-management",
+  "/payments",
+  "/reviews",
+  "/team",
+  "/notifications",
+  "/control-panel",
+  "/settings",
+  "/support",
+];
+
+export function visibleNavigation(
+  permissions: PermissionKey[],
+  roles: string[],
+) {
+  const partner = roles.some((role) =>
+    ["PARTNER_ADMIN", "PARTNER_EMPLOYEE"].includes(role),
+  );
+  const items = NAV_ITEMS.filter(
+    (item) =>
+      permissions.includes(item.requiredPermission) &&
+      (!item.ownerOnly ||
+        (roles.includes("PARTNER_ADMIN") &&
+          !roles.includes("PARTNER_EMPLOYEE"))) &&
+      !(partner && item.platformOnly),
+  );
+  return partner
+    ? items.sort(
+        (a, b) =>
+          PARTNER_MODULE_ORDER.indexOf(a.href) -
+          PARTNER_MODULE_ORDER.indexOf(b.href),
+      )
+    : items;
+}

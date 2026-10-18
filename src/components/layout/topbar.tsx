@@ -1,12 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { NAV_ITEMS } from "@/config/nav";
+import { visibleNavigation } from "@/config/nav";
 import type { PermissionKey } from "@/config/permissions";
 import { cn } from "@/lib/utils";
 import { Building2, LogOut } from "lucide-react";
@@ -31,31 +30,20 @@ export function Topbar({
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const isVendorAccount = roles.some((role) =>
-    ["PARTNER_ADMIN", "PARTNER_EMPLOYEE"].includes(role),
-  );
-  const visibleItems = NAV_ITEMS.filter(
-    (item) =>
-      permissions.includes(item.requiredPermission) &&
-      !(isVendorAccount && item.platformOnly),
-  );
+  const visibleItems = visibleNavigation(permissions, roles);
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-card/90 shadow-[0_10px_28px_oklch(0.25_0.03_170_/_0.04)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-4 px-4 py-3 md:px-8">
         <div className="flex items-center gap-3 md:hidden">
-          <Image
-            src="/readify-logo.jpg"
-            alt="Readify India"
-            width={36}
-            height={36}
-            className="size-9 rounded-lg border border-border bg-white object-contain"
-            priority
-          />
+          <span
+            aria-hidden="true"
+            className="grid size-10 place-items-center rounded-lg bg-primary text-xl font-bold text-primary-foreground"
+          >
+            V
+          </span>
           <div className="min-w-0">
-            <p className="text-base font-semibold tracking-tight">
-              Readify India
-            </p>
+            <p className="text-base font-semibold tracking-tight">Vriddhora</p>
             <p className="max-w-36 truncate text-xs font-medium text-muted-foreground">
               {organizationName ?? "Management Portal"}
             </p>

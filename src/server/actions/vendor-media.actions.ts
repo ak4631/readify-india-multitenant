@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -30,6 +32,17 @@ export async function uploadVendorMedia(formData: FormData) {
   const { url: mediaUrl, fileId } = await uploadVendorPhoto(vendorId, file);
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "MEDIA_CREATE",
+        randomUUID(),
+        { mediaUrl, externalId: fileId },
+      )
+    )
+      return;
     const existingCount = await tx.vendorMedia.count({ where: { vendorId } });
 
     const media = await tx.vendorMedia.create({
@@ -64,6 +77,17 @@ export async function deleteVendorMedia(mediaId: string) {
   );
 
   const deleted = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        mediaRecord.vendorId,
+        session.user.id,
+        "MEDIA_DELETE",
+        mediaId,
+        {},
+      )
+    )
+      return null;
     const media = await tx.vendorMedia.findUniqueOrThrow({
       where: { id: mediaId },
     });
@@ -80,11 +104,11 @@ export async function deleteVendorMedia(mediaId: string) {
     return media;
   });
 
-  if (deleted.externalId) {
+  if (deleted?.externalId) {
     await deleteVendorPhoto(deleted.externalId).catch(() => {});
   }
 
-  revalidatePath(`/vendors/${deleted.vendorId}`);
+  revalidatePath(`/vendors/${mediaRecord.vendorId}`);
 }
 
 export async function setPrimaryVendorMedia(mediaId: string) {
@@ -97,6 +121,17 @@ export async function setPrimaryVendorMedia(mediaId: string) {
   );
 
   const vendorId = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        mediaRecord.vendorId,
+        session.user.id,
+        "MEDIA_PRIMARY",
+        mediaId,
+        {},
+      )
+    )
+      return mediaRecord.vendorId;
     const media = await tx.vendorMedia.findUniqueOrThrow({
       where: { id: mediaId },
     });

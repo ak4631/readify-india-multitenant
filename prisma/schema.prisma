@@ -130,6 +130,7 @@ enum BookingStatus {
 }
 
 enum SubscriptionStatus {
+  PENDING
   ACTIVE
   EXPIRED
   CANCELLED
@@ -229,6 +230,9 @@ model Partner {
   email       String?
   phone       String?
   status      PartnerStatus @default(ACTIVE)
+  approvalStatus String @default("APPROVED") @map("approval_status")
+  applicationReason String? @map("application_reason")
+  requestedServiceId String? @map("requested_service_id")
   createdById String        @map("created_by")
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
@@ -303,6 +307,7 @@ model VendorCategory {
   icon        String?
   status      CategoryStatus @default(ACTIVE)
   sortOrder   Int            @default(0) @map("sort_order")
+  launchEnabled Boolean      @default(false) @map("launch_enabled")
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
 
@@ -484,6 +489,7 @@ model MembershipPlan {
   // Hours/day a DAYS/MONTHS/YEARS plan occupies its seat; null = whole opening window.
   // Required (not null) when isFlexible -- see below.
   dailyHours    Int?         @map("daily_hours")
+  dailyStart    String?      @map("daily_start") @db.VarChar(5)
   // When true, `price` is a per-hour rate (durationUnit must be HOURS,
   // dailyHours must be set) and the customer picks 1-14 days at purchase
   // time instead of the plan having one fixed duration/price.
@@ -649,6 +655,8 @@ model Review {
   bookingId  String?      @unique @map("booking_id")
   rating     Int
   reviewText String?      @map("review_text")
+  ownerReply String?      @map("owner_reply")
+  repliedAt  DateTime?    @map("replied_at")
   status     ReviewStatus @default(PUBLISHED)
   createdAt  DateTime     @default(now()) @map("created_at")
   updatedAt  DateTime     @updatedAt @map("updated_at")
@@ -942,5 +950,185 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
   @@map("audit_logs")
+  @@schema("admin")
+}
+
+// Pending material changes never overwrite the approved customer-facing rows.
+model ListingChange {
+  id           String   @id @default(cuid())
+  vendorId     String   @map("vendor_id")
+  kind         String
+  targetId     String   @map("target_id")
+  payload      Json
+  status       String   @default("PENDING")
+  requestedBy  String   @map("requested_by")
+  reviewedBy   String?  @map("reviewed_by")
+  reason       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  reviewedAt   DateTime? @map("reviewed_at")
+
+  @@index([vendorId, status])
+  @@map("listing_changes")
+  @@schema("admin")
+}
+
+model PortalNotification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("portal_notifications")
+  @@schema("admin")
+}
+
+model FlexBooking {
+  id           String @id @default(cuid())
+  userId       String @map("user_id")
+  vendorId     String @map("vendor_id")
+  planId       String @map("plan_id")
+  parentId     String? @map("parent_id")
+  seatId       String @map("seat_id")
+  startDate    DateTime @map("start_date") @db.Date
+  days         Int
+  slotStart    DateTime @map("slot_start") @db.Time
+  slotHours    Int @map("slot_hours")
+  amount       Decimal @db.Decimal(10, 2)
+  status       BookingStatus @default(PENDING)
+  bookingCode  String @unique @map("booking_code")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([vendorId, startDate])
+  @@index([userId])
+  @@map("flex_bookings")
+  @@schema("admin")
+}
+
+model SeatReservation {
+  id         String @id @default(cuid())
+  seatId     String @map("seat_id")
+  source     String
+  sourceId   String @map("source_id")
+  window     Unsupported("tstzrange")
+
+  @@index([source, sourceId])
+  @@map("seat_reservations")
+  @@schema("admin")
+}
+
+model PaymentOrder {
+  id                String @id @default(cuid())
+  userId            String @map("user_id")
+  vendorId          String @map("vendor_id")
+  targetType        String @map("target_type")
+  targetId          String @unique @map("target_id")
+  amountPaise       Int @map("amount_paise")
+  customerFeePaise  Int @default(600) @map("customer_fee_paise")
+  commissionPaise   Int? @map("commission_paise")
+  currency          String @default("INR")
+  status            String @default("CREATED")
+  gatewayOrderId    String? @unique @map("gateway_order_id")
+  gatewayPaymentId  String? @unique @map("gateway_payment_id")
+  refundId          String? @unique @map("refund_id")
+  idempotencyKey    String @map("idempotency_key")
+  requestHash       String @map("request_hash")
+  startsAt          DateTime @map("starts_at") @db.Timestamptz(3)
+  expiresAt         DateTime @map("expires_at") @db.Timestamptz(3)
+  cancelledAt       DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  capturedAt        DateTime? @map("captured_at") @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, idempotencyKey])
+  @@index([vendorId, status])
+  @@map("payment_orders")
+  @@schema("admin")
+}
+
+model PaymentEvent {
+  id        String @id
+  orderId   String @map("order_id")
+  kind      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("payment_events")
+  @@schema("admin")
+}
+
+model AttendanceVisit {
+  id           String @id @default(cuid())
+  vendorId     String @map("vendor_id")
+  userId       String @map("user_id")
+  targetId     String @map("target_id")
+  serviceDate  DateTime @map("service_date") @db.Date
+  checkedInAt  DateTime @default(now()) @map("checked_in_at") @db.Timestamptz(3)
+  checkedOutAt DateTime? @map("checked_out_at") @db.Timestamptz(3)
+  admittedBy   String @map("admitted_by")
+  releasedBy   String? @map("released_by")
+
+  @@index([targetId, serviceDate])
+  @@index([vendorId, checkedOutAt])
+  @@map("attendance_visits")
+  @@schema("admin")
+}
+
+model CustomerNotification {
+  id        String @id @default(cuid())
+  userId    String @map("user_id")
+  eventKey  String @unique @map("event_key")
+  title     String
+  body      String
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("customer_notifications")
+  @@schema("admin")
+}
+
+model SupportTicket {
+  id          String @id @default(cuid())
+  userId      String @map("user_id")
+  partnerId   String? @map("partner_id")
+  subject     String
+  message     String
+  status      String @default("OPEN")
+  response    String?
+  respondedBy String? @map("responded_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([partnerId, status])
+  @@map("support_tickets")
+  @@schema("admin")
+}
+
+model RequestThrottle {
+  key String @id
+  count Int
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@map("request_throttles")
+  @@schema("admin")
+}
+
+model PartnerPayout {
+  id String @id @default(cuid())
+  partnerId String @map("partner_id")
+  amountPaise Int @map("amount_paise")
+  currency String @default("INR")
+  status String @default("PENDING")
+  externalReference String? @unique @map("external_reference")
+  periodFrom DateTime @map("period_from") @db.Date
+  periodTo DateTime @map("period_to") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([partnerId, status])
+  @@map("partner_payouts")
   @@schema("admin")
 }

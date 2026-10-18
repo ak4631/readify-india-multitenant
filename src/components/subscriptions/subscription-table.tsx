@@ -15,7 +15,10 @@ import {
 } from "@/components/ui/table";
 import type { Subscription } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { cancelSubscription, type SubscriptionRow } from "@/server/actions/subscriptions.actions";
+import {
+  cancelSubscription,
+  type SubscriptionRow,
+} from "@/server/actions/subscriptions.actions";
 
 // slotStartTime is a Postgres TIME (Prisma returns it as a 1970-01-01 UTC
 // date), so its UTC time-of-day is the library-local wall-clock time.
@@ -32,6 +35,7 @@ const STATUS_VARIANTS: Record<
   Subscription["status"],
   "default" | "secondary" | "destructive"
 > = {
+  PENDING: "secondary",
   ACTIVE: "default",
   EXPIRED: "secondary",
   CANCELLED: "destructive",
@@ -99,7 +103,9 @@ export function SubscriptionTable({
                 {subscription.vendorName ?? subscription.vendor?.name}
               </TableCell>
             )}
-            <TableCell>{subscription.planName ?? subscription.plan?.name}</TableCell>
+            <TableCell>
+              {subscription.planName ?? subscription.plan?.name}
+            </TableCell>
             <TableCell>
               {subscription.seat ? (
                 <>
@@ -114,7 +120,9 @@ export function SubscriptionTable({
             </TableCell>
             <TableCell>{formatDate(subscription.startDate)}</TableCell>
             <TableCell>{formatDate(subscription.endDate)}</TableCell>
-            <TableCell>₹{subscription.amountPaid.toLocaleString("en-IN")}</TableCell>
+            <TableCell>
+              ₹{subscription.amountPaid.toLocaleString("en-IN")}
+            </TableCell>
             <TableCell>
               <Badge variant={STATUS_VARIANTS[subscription.status]}>
                 {subscription.status}

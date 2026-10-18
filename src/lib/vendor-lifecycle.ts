@@ -7,7 +7,7 @@ export const ALLOWED_TRANSITIONS: Record<VendorStatus, VendorStatus[]> = {
   APPROVED: ["PUBLISHED"],
   PUBLISHED: ["SUSPENDED"],
   REJECTED: ["DRAFT"],
-  SUSPENDED: [],
+  SUSPENDED: ["UNDER_REVIEW"],
 };
 
 export function canTransition(from: VendorStatus, to: VendorStatus): boolean {

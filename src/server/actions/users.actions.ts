@@ -56,6 +56,7 @@ export async function listUsers() {
 
   return prisma.user.findMany({
     orderBy: { createdAt: "desc" },
+    omit: { passwordHash: true },
     include: { roles: { include: { role: true } } },
   });
 }
@@ -65,6 +66,7 @@ export async function getUserById(userId: string) {
 
   return prisma.user.findUnique({
     where: { id: userId },
+    omit: { passwordHash: true },
     include: { roles: { include: { role: true } } },
   });
 }

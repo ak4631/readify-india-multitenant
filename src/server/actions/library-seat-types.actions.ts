@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +27,17 @@ export async function createLibrarySeatType(
   const data = librarySeatTypeSchema.parse(input);
 
   const seatType = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "SEAT_CREATE",
+        randomUUID(),
+        data,
+      )
+    )
+      return;
     const created = await tx.librarySeatType.create({
       data: { ...data, vendorId },
     });
@@ -58,6 +71,17 @@ export async function updateLibrarySeatType(
   const data = librarySeatTypeSchema.parse(input);
 
   const vendorId = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        seatTypeRecord.vendorId,
+        session.user.id,
+        "SEAT_UPDATE",
+        seatTypeId,
+        data,
+      )
+    )
+      return seatTypeRecord.vendorId;
     const before = await tx.librarySeatType.findUniqueOrThrow({
       where: { id: seatTypeId },
     });
@@ -91,6 +115,17 @@ export async function deleteLibrarySeatType(seatTypeId: string) {
   );
 
   const vendorId = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        seatTypeRecord.vendorId,
+        session.user.id,
+        "SEAT_DELETE",
+        seatTypeId,
+        {},
+      )
+    )
+      return seatTypeRecord.vendorId;
     const before = await tx.librarySeatType.findUniqueOrThrow({
       where: { id: seatTypeId },
     });

@@ -4,8 +4,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Readify India Partner Portal",
-  description: "Readify India partner marketplace management portal",
+  title: "Vriddhora Partner Portal",
+  description: "Vriddhora partner marketplace management portal",
 };
 
 export default function RootLayout({

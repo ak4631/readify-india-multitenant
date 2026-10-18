@@ -9,10 +9,16 @@ import { assertTransition } from "../../src/lib/vendor-lifecycle";
 // going through the Server Actions themselves (those need a Next.js request scope
 // for requirePermission()/headers()). Runs against the live "admin" schema and
 // cleans up its own rows.
-const adapter = new PrismaPg({ connectionString: process.env.DIRECT_URL });
+const adapter = new PrismaPg({
+  connectionString: process.env.TEST_DATABASE_URL,
+});
 const prisma = new PrismaClient({ adapter });
 
-describe("vendor onboarding sequence", () => {
+const live =
+  process.env.ALLOW_LIVE_DATABASE_TESTS === "1" &&
+  !!process.env.TEST_DATABASE_URL;
+
+(live ? describe : describe.skip)("vendor onboarding sequence", () => {
   let categoryId: string;
   let userId: string;
   let vendorId: string;

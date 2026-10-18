@@ -1,5 +1,6 @@
 "use server";
 
+import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,17 @@ export async function setVendorFacilities(
   const session = await requireVendorAccess(vendorId, "vendor.update");
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "FACILITIES",
+        vendorId,
+        facilityIds,
+      )
+    )
+      return;
     const before = await tx.vendorFacility.findMany({ where: { vendorId } });
 
     await tx.vendorFacility.deleteMany({ where: { vendorId } });

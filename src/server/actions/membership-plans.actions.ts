@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -32,6 +34,17 @@ export async function createMembershipPlan(
   const data = membershipPlanSchema.parse(input);
 
   const plan = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "PLAN_CREATE",
+        randomUUID(),
+        data,
+      )
+    )
+      return;
     const created = await tx.membershipPlan.create({
       data: { ...data, vendorId },
     });
@@ -65,6 +78,17 @@ export async function updateMembershipPlan(
   const data = membershipPlanSchema.parse(input);
 
   const vendorId = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        planRecord.vendorId,
+        session.user.id,
+        "PLAN_UPDATE",
+        planId,
+        data,
+      )
+    )
+      return planRecord.vendorId;
     const before = await tx.membershipPlan.findUniqueOrThrow({
       where: { id: planId },
     });
@@ -98,6 +122,17 @@ export async function archiveMembershipPlan(planId: string) {
   );
 
   const vendorId = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        planRecord.vendorId,
+        session.user.id,
+        "PLAN_ARCHIVE",
+        planId,
+        {},
+      )
+    )
+      return planRecord.vendorId;
     const before = await tx.membershipPlan.findUniqueOrThrow({
       where: { id: planId },
     });

@@ -20,6 +20,9 @@ import {
   publishVendor,
   rejectVendor,
   suspendVendor,
+  submitVendorForReview,
+  reviseRejectedVendor,
+  requestListingReactivation,
 } from "@/server/actions/vendors.actions";
 
 export function VendorLifecycleActions({
@@ -38,6 +41,7 @@ export function VendorLifecycleActions({
   const canReject = usePermission("vendor.reject");
   const canPublish = usePermission("vendor.publish");
   const canSuspend = usePermission("vendor.suspend");
+  const canEdit = usePermission("vendor.update");
 
   function run(action: () => Promise<void>, successMessage: string) {
     startTransition(async () => {
@@ -53,6 +57,48 @@ export function VendorLifecycleActions({
 
   return (
     <div className="flex gap-2">
+      {status === "DRAFT" && canEdit && (
+        <Button
+          size="sm"
+          disabled={isPending}
+          onClick={() =>
+            run(
+              () => submitVendorForReview(vendorId),
+              "Submitted for Admin review",
+            )
+          }
+        >
+          Submit for review
+        </Button>
+      )}
+      {status === "REJECTED" && canEdit && (
+        <Button
+          size="sm"
+          disabled={isPending}
+          onClick={() =>
+            run(
+              () => reviseRejectedVendor(vendorId),
+              "Draft reopened for corrections",
+            )
+          }
+        >
+          Revise listing
+        </Button>
+      )}
+      {status === "SUSPENDED" && canEdit && (
+        <Button
+          size="sm"
+          disabled={isPending}
+          onClick={() =>
+            run(
+              () => requestListingReactivation(vendorId),
+              "Reactivation requested",
+            )
+          }
+        >
+          Request reactivation
+        </Button>
+      )}
       {status === "UNDER_REVIEW" && canApprove && (
         <Button
           size="sm"

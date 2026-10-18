@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ListingChangeList } from "@/components/vendors/listing-change-list";
+import { listListingChanges } from "@/server/actions/listing-changes.actions";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -70,6 +72,7 @@ export default async function VendorDetailPage({
   if (!vendor) notFound();
 
   const categorySlug = vendor.category.slug;
+  const changes = await listListingChanges(id);
   const canViewReviews = hasPermission(session, "review.read");
   const canViewSubscriptions = hasPermission(session, "subscription.read");
 
@@ -146,6 +149,11 @@ export default async function VendorDetailPage({
           <TabsTrigger value="facilities">Facilities</TabsTrigger>
           <TabsTrigger value="plans">Plans</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
+          <TabsTrigger value="changes">
+            Changes{" "}
+            {changes.filter((change) => change.status === "PENDING").length ||
+              ""}
+          </TabsTrigger>
           {occupancy && <TabsTrigger value="occupancy">Occupancy</TabsTrigger>}
           <TabsTrigger value="bookings">Bookings</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
@@ -211,7 +219,10 @@ export default async function VendorDetailPage({
             )}
           </div>
           {categorySlug !== "library" && (
-            <VendorCapacityCard vendorId={vendor.id} capacity={vendor.capacity} />
+            <VendorCapacityCard
+              vendorId={vendor.id}
+              capacity={vendor.capacity}
+            />
           )}
           {hasPermission(session, "vendorAccount.create") &&
             vendor.partner.users.length > 0 && (
@@ -246,6 +257,9 @@ export default async function VendorDetailPage({
 
         <TabsContent value="plans">
           <PlanList vendorId={vendor.id} plans={plans} />
+        </TabsContent>
+        <TabsContent value="changes">
+          <ListingChangeList changes={changes} />
         </TabsContent>
 
         <TabsContent value="schedule">

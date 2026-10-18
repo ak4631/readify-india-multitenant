@@ -30,7 +30,11 @@ import {
 } from "@/lib/validations/partner.schema";
 import { updatePartnerUser } from "@/server/actions/partners.actions";
 
-export function PartnerUserEditDialog({ user }: { user: User }) {
+export function PartnerUserEditDialog({
+  user,
+}: {
+  user: Pick<User, "id" | "name" | "email">;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
