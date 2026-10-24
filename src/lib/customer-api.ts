@@ -19,6 +19,16 @@ export async function requireCustomer(request: Request) {
   return z.object({ id: z.uuid() }).parse(await response.json());
 }
 
+// Business-rule messages are safe to show: RAISE EXCEPTION (SQLSTATE P0001)
+// text written in our migrations, and errors thrown deliberately with a plain
+// Error. Prisma/driver errors use their own classes and stay hidden.
+function customerFacingReason(error: unknown) {
+  if (!(error instanceof Error)) return null;
+  if (error.constructor === Error) return error.message;
+  const raised = /Code: `P0001`\. Message: `([^`]+)`/.exec(error.message);
+  return raised?.[1] ?? null;
+}
+
 export function apiFailure(error: unknown) {
   if (error instanceof z.ZodError)
     return Response.json({ error: "Invalid request" }, { status: 400 });
@@ -28,6 +38,8 @@ export function apiFailure(error: unknown) {
   // Logged server-side only, so configuration and database failures are
   // diagnosable from deployment logs.
   console.error("Customer API request failed", error);
+  const reason = customerFacingReason(error);
+  if (reason) return Response.json({ error: reason }, { status: 409 });
   // Do not serialize Prisma errors or database connection details.
   return Response.json(
     {

@@ -79,7 +79,9 @@ export async function createCheckout(
   await expireCheckouts();
   const order = await prisma.$transaction(async (tx) => {
     // Serialize a customer's retries and competing subscription checkouts.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
+    // $executeRaw: pg_advisory_xact_lock returns void, which the pg driver
+    // adapter cannot deserialize through $queryRaw.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
     const existing = await tx.paymentOrder.findUnique({
       where: { userId_idempotencyKey: { userId, idempotencyKey } },
     });
