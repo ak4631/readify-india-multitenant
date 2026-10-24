@@ -1,4 +1,6 @@
 import { PageHeader } from "@/components/layout/page-header";
+import { ListPagination } from "@/components/layout/list-pagination";
+import { parsePage } from "@/lib/pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -13,17 +15,20 @@ import { listAuditLogs } from "@/server/actions/audit-logs.actions";
 export default async function AuditLogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ entityType?: string }>;
+  searchParams: Promise<{ entityType?: string; page?: string }>;
 }) {
-  const { entityType } = await searchParams;
-  const logs = await listAuditLogs({ entityType });
+  const params = await searchParams;
+  const logs = await listAuditLogs({
+    entityType: params.entityType,
+    page: parsePage(params.page),
+  });
 
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Security"
         title="Audit logs"
-        description={`Most recent ${logs.length} admin actions.`}
+        description={`${logs.total} admin actions, newest first.`}
       />
       <Card>
         <CardContent>
@@ -37,7 +42,7 @@ export default async function AuditLogsPage({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {logs.map((log) => (
+          {logs.items.map((log) => (
             <TableRow key={log.id}>
               <TableCell className="whitespace-nowrap">
                 {log.createdAt.toLocaleString()}
@@ -52,6 +57,12 @@ export default async function AuditLogsPage({
           ))}
         </TableBody>
       </Table>
+          <ListPagination
+            page={logs}
+            path="/audit-logs"
+            params={params}
+            noun="actions"
+          />
         </CardContent>
       </Card>
     </div>

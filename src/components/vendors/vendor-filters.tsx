@@ -47,6 +47,7 @@ export function VendorFilters({
     } else {
       params.set(key, value);
     }
+    params.delete("page");
     router.push(`/vendors?${params.toString()}`);
   }
 

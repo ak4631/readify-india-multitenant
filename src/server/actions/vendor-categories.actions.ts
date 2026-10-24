@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
+import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac";
 import { slugify } from "@/lib/utils";
@@ -17,6 +18,21 @@ export async function listVendorCategories() {
     orderBy: { sortOrder: "asc" },
     include: { _count: { select: { vendors: true } } },
   });
+}
+
+export async function listVendorCategoriesPage(page = 1) {
+  await requirePermission("vendorCategory.read");
+  const window = pageWindow(page);
+  const [items, total] = await Promise.all([
+    prisma.vendorCategory.findMany({
+      orderBy: { sortOrder: "asc" },
+      include: { _count: { select: { vendors: true } } },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.vendorCategory.count(),
+  ]);
+  return toPage(items, total, window);
 }
 
 export async function createVendorCategory(input: VendorCategoryInput) {

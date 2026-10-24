@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 export function RegistrationForm({
   services,
 }: {
-  services: { id: string; name: string; enabled: boolean }[];
+  services: { id: string; name: string }[];
 }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -66,18 +66,13 @@ export function RegistrationForm({
               defaultValue="library"
             >
               {services.map((service) => (
-                <option
-                  key={service.id}
-                  value={service.id}
-                  disabled={!service.enabled}
-                >
+                <option key={service.id} value={service.id}>
                   {service.name}
-                  {!service.enabled ? " — Coming soon" : ""}
                 </option>
               ))}
             </select>
           </label>
-          <Button disabled={pending}>
+          <Button type="submit" disabled={pending}>
             {pending ? "Submitting…" : "Submit for approval"}
           </Button>
         </>

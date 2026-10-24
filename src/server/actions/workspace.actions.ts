@@ -1,5 +1,6 @@
 "use server";
 
+import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import {
   getAccessibleVendorIds,
@@ -94,19 +95,36 @@ export async function listWorkspaceAttendance() {
   return rows;
 }
 
-export async function listPaymentLedger() {
+export async function listPaymentLedger(page = 1) {
   const session = await requirePermission("subscription.read");
   const partnerId = await getSessionPartnerId(session);
+  const where = partnerId
+    ? {
+        vendorId: {
+          in: (
+            await prisma.vendor.findMany({
+              where: { partnerId },
+              select: { id: true },
+            })
+          ).map((vendor) => vendor.id),
+        },
+      }
+    : {};
+  const window = pageWindow(page);
+  const [orders, total] = await Promise.all([
+    prisma.paymentOrder.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.paymentOrder.count({ where }),
+  ]);
   const vendors = await prisma.vendor.findMany({
-    where: partnerId ? { partnerId } : {},
+    where: { id: { in: [...new Set(orders.map((order) => order.vendorId))] } },
     select: { id: true, name: true },
   });
-  const orders = await prisma.paymentOrder.findMany({
-    where: { vendorId: { in: vendors.map((v) => v.id) } },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
-  return orders.map((order) => ({
+  const items = orders.map((order) => ({
     id: order.id,
     vendorName: vendors.find((v) => v.id === order.vendorId)?.name ?? "Listing",
     kind: order.targetType,
@@ -116,4 +134,5 @@ export async function listPaymentLedger() {
     refundId: order.refundId,
     createdAt: order.createdAt,
   }));
+  return toPage(items, total, window);
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { writeAuditLog } from "@/lib/audit";
+import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import {
   getSessionPartnerId,
@@ -11,27 +12,36 @@ import {
   requireVendorAccess,
 } from "@/lib/rbac";
 
-export async function listReviews(filters: { vendorId?: string } = {}) {
+export async function listReviews(
+  filters: { vendorId?: string; page?: number; pageSize?: number } = {},
+) {
   const session = await requirePermission("review.read");
   if (filters.vendorId) {
     await requireVendorAccess(filters.vendorId, "vendor.read");
   }
 
   const partnerId = await getSessionPartnerId(session);
+  const where = {
+    vendorId: filters.vendorId,
+    vendor: partnerId ? { partnerId } : undefined,
+  };
+  const window = pageWindow(filters.page ?? 1, filters.pageSize);
 
-  const reviews = await prisma.review.findMany({
-    where: {
-      vendorId: filters.vendorId,
-      vendor: partnerId ? { partnerId } : undefined,
-    },
-    orderBy: { createdAt: "desc" },
-    include: { vendor: true },
-  });
+  const [reviews, total] = await Promise.all([
+    prisma.review.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: { vendor: true },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.review.count({ where }),
+  ]);
 
   // Decimal (Vendor.averageRating) is a class instance, not a plain object --
   // Next.js refuses to pass it from this Server Action to a Client Component
   // (ReviewTable receives this array as a prop).
-  return reviews.map((review) => ({
+  const items = reviews.map((review) => ({
     ...review,
     vendor: review.vendor
       ? {
@@ -42,9 +52,12 @@ export async function listReviews(filters: { vendorId?: string } = {}) {
         }
       : review.vendor,
   }));
+  return toPage(items, total, window);
 }
 
-export type ReviewRow = Awaited<ReturnType<typeof listReviews>>[number];
+export type ReviewRow = Awaited<
+  ReturnType<typeof listReviews>
+>["items"][number];
 
 async function setReviewStatus(
   reviewId: string,

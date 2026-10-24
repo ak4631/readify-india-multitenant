@@ -1,17 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/rbac";
 
-export async function listPortalNotifications() {
+export async function listPortalNotifications(page = 1) {
   const session = await getCurrentSession();
   if (!session?.user) throw new Error("Not authenticated");
-  return prisma.portalNotification.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const where = { userId: session.user.id };
+  const window = pageWindow(page);
+  const [items, total] = await Promise.all([
+    prisma.portalNotification.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.portalNotification.count({ where }),
+  ]);
+  return toPage(items, total, window);
 }
 
 export async function markPortalNotificationRead(id: string) {

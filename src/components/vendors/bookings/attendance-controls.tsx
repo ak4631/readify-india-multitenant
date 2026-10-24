@@ -56,7 +56,9 @@ export function AttendanceControls({
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
-          <Button disabled={pending || !code.trim()}>Check in</Button>
+          <Button type="submit" disabled={pending || !code.trim()}>
+            Check in
+          </Button>
         </form>
       )}
       <p className="text-sm font-medium">Checked in now: {visits.length}</p>

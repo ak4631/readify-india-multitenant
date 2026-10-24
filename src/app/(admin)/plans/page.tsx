@@ -1,13 +1,23 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
+import { ListPagination } from "@/components/layout/list-pagination";
+import { parsePage } from "@/lib/pagination";
 import { PlanList } from "@/components/vendors/plans/plan-list";
-import { listVendors } from "@/server/actions/vendors.actions";
+import { listVendorsPage } from "@/server/actions/vendors.actions";
 import { listMembershipPlans } from "@/server/actions/membership-plans.actions";
 
-export default async function PlansPage() {
-  const vendors = await listVendors();
+export default async function PlansPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const vendors = await listVendorsPage({
+    page: parsePage(params.page),
+    pageSize: 10,
+  });
   const groups = await Promise.all(
-    vendors.map(async (vendor) => ({
+    vendors.items.map(async (vendor) => ({
       id: vendor.id,
       name: vendor.name,
       plans: await listMembershipPlans(vendor.id),
@@ -28,7 +38,13 @@ export default async function PlansPage() {
           <PlanList vendorId={group.id} plans={group.plans} />
         </section>
       ))}
-      {!groups.length && <p>Add a Library listing to configure plans.</p>}
+      {!vendors.total && <p>Add a Library listing to configure plans.</p>}
+      <ListPagination
+        page={vendors}
+        path="/plans"
+        params={params}
+        noun="listings"
+      />
     </div>
   );
 }

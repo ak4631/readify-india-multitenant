@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
+import { ListPagination } from "@/components/layout/list-pagination";
+import { parsePage } from "@/lib/pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,15 +9,21 @@ import {
   markPortalNotificationRead,
 } from "@/server/actions/notifications.actions";
 
-export default async function NotificationsPage() {
-  const notifications = await listPortalNotifications();
+export default async function NotificationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const page = await listPortalNotifications(parsePage(params.page));
+  const notifications = page.items;
   return (
     <div className="space-y-6">
       <PageHeader
         title="Notifications"
-        description="Updates about your listings and account."
+        description="Updates about your listings, applications and account."
       />
-      {!notifications.length && <p>No notifications yet.</p>}
+      {!page.total && <p>No notifications yet.</p>}
       {notifications.map((item) => (
         <Card key={item.id}>
           <CardContent className="space-y-3 pt-6">
@@ -24,7 +32,7 @@ export default async function NotificationsPage() {
             <div className="flex items-center gap-4">
               {item.href && (
                 <Link href={item.href} className="text-primary underline">
-                  View listing
+                  Open
                 </Link>
               )}
               {!item.readAt && (
@@ -34,7 +42,7 @@ export default async function NotificationsPage() {
                     await markPortalNotificationRead(item.id);
                   }}
                 >
-                  <Button variant="outline" size="sm">
+                  <Button type="submit" variant="outline" size="sm">
                     Mark read
                   </Button>
                 </form>
@@ -43,6 +51,12 @@ export default async function NotificationsPage() {
           </CardContent>
         </Card>
       ))}
+      <ListPagination
+        page={page}
+        path="/notifications"
+        params={params}
+        noun="notifications"
+      />
     </div>
   );
 }

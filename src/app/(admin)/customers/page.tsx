@@ -1,29 +1,25 @@
+import { z } from "zod";
 import { PageHeader } from "@/components/layout/page-header";
+import { ListPagination } from "@/components/layout/list-pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { CustomerTable } from "@/components/customers/customer-table";
+import { parsePage } from "@/lib/pagination";
 import { listCustomers } from "@/server/actions/customers.actions";
 import { LiveRefresh } from "@/components/layout/live-refresh";
+
+const CUSTOMER_TYPES = ["all", "new", "active", "permanent", "flexible"] as const;
 
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; page?: string }>;
 }) {
-  const { scope, customers, asOf } = await listCustomers();
-  const { type = "all" } = await searchParams;
-  const filtered = customers.filter(
-    (customer) =>
-      type === "all" ||
-      (type === "permanent"
-        ? !!customer.activeSubscriptions
-        : type === "flexible"
-          ? !!customer.flexibleBookings
-          : type === "active"
-            ? !!customer.present
-            : type === "new"
-              ? customer.joinedAt.getTime() > asOf.getTime() - 7 * 86400000
-              : true),
-  );
+  const params = await searchParams;
+  const type = z.enum(CUSTOMER_TYPES).catch("all").parse(params.type ?? "all");
+  const { scope, customers } = await listCustomers({
+    page: parsePage(params.page),
+    type,
+  });
 
   return (
     <div className="space-y-8">
@@ -33,8 +29,8 @@ export default async function CustomersPage({
         title="Customers"
         description={
           scope === "partner"
-            ? `${customers.length} customer${customers.length === 1 ? "" : "s"} who have booked or subscribed across your listings.`
-            : `${customers.length} customers registered via the Vriddhora app.`
+            ? `${customers.total} customer${customers.total === 1 ? "" : "s"} who have booked or subscribed across your listings.`
+            : `${customers.total} customers registered via the Vriddhora app.`
         }
       />
       <Card>
@@ -47,16 +43,20 @@ export default async function CustomersPage({
                 defaultValue={type}
                 className="rounded border p-2"
               >
-                {["all", "new", "active", "permanent", "flexible"].map(
-                  (value) => (
-                    <option key={value}>{value}</option>
-                  ),
-                )}
+                {CUSTOMER_TYPES.map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
               </select>
               <button className="rounded border px-4">Filter</button>
             </form>
           )}
-          <CustomerTable customers={filtered} scope={scope} />
+          <CustomerTable customers={customers.items} scope={scope} />
+          <ListPagination
+            page={customers}
+            path="/customers"
+            params={params}
+            noun="customers"
+          />
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
@@ -45,11 +46,11 @@ export async function POST(request: Request) {
     const category = await prisma.vendorCategory.findUnique({
       where: { slug: data.service },
     });
-    if (!category?.launchEnabled || category.status !== "ACTIVE")
+    // Applications are accepted for every active category. Launch gating
+    // (launchEnabled) still controls listing onboarding and publication.
+    if (!category || category.status !== "ACTIVE")
       return Response.json(
-        {
-          error: "This service is coming soon. Library applications are open.",
-        },
+        { error: "This service is not available. Choose another service." },
         { status: 400 },
       );
     const passwordHash = await bcrypt.hash(data.password, 12);
@@ -81,6 +82,21 @@ export async function POST(request: Request) {
         where: { id: user.id },
         data: { partnerId: partner.id },
       });
+      const reviewers = await tx.user.findMany({
+        where: {
+          status: "ACTIVE",
+          roles: { some: { role: { name: "SUPER_ADMIN" } } },
+        },
+        select: { id: true },
+      });
+      await tx.portalNotification.createMany({
+        data: reviewers.map((reviewer) => ({
+          userId: reviewer.id,
+          title: "New partner application",
+          body: `${data.organization} applied to offer ${category.name}. Review the application to activate the organization.`,
+          href: `/partners/${partner.id}`,
+        })),
+      });
     });
     return Response.json({ submitted: true }, { status: 201 });
   } catch (error) {
@@ -89,12 +105,21 @@ export async function POST(request: Request) {
         { error: "Check all fields. Use a password of 12–72 characters." },
         { status: 400 },
       );
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    )
+      return Response.json(
+        {
+          error:
+            "An account with this email or phone number already exists. Sign in or contact support.",
+        },
+        { status: 409 },
+      );
+    console.error("Partner registration failed", error);
     return Response.json(
-      {
-        error:
-          "Could not submit. If you already have an account, sign in or contact support.",
-      },
-      { status: 409 },
+      { error: "Could not submit. Please try again later." },
+      { status: 500 },
     );
   }
 }

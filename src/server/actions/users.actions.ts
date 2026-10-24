@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
+import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/lib/rbac";
 import {
@@ -51,14 +52,23 @@ export async function createVendorAccount(input: VendorAccountInput) {
   return { id: user.id, email: user.email };
 }
 
-export async function listUsers() {
+export async function listUsers(page = 1) {
   await requireSuperAdmin();
-
-  return prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    omit: { passwordHash: true },
-    include: { roles: { include: { role: true } } },
-  });
+  const window = pageWindow(page);
+  const [items, total] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      omit: { passwordHash: true },
+      include: {
+        roles: { include: { role: true } },
+        partner: { select: { id: true, name: true } },
+      },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.user.count(),
+  ]);
+  return toPage(items, total, window);
 }
 
 export async function getUserById(userId: string) {

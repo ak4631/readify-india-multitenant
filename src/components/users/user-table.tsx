@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { usePermission } from "@/hooks/use-permission";
 
 type UserRow = Omit<User, "passwordHash"> & {
   roles: (UserRole & { role: Role })[];
+  partner: { id: string; name: string } | null;
 };
 
 export function UserTable({ users }: { users: UserRow[] }) {
@@ -47,6 +49,7 @@ export function UserTable({ users }: { users: UserRow[] }) {
         <TableRow>
           <TableHead>Name</TableHead>
           <TableHead>Email</TableHead>
+          <TableHead>Organization</TableHead>
           <TableHead>Roles</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="text-right">Action</TableHead>
@@ -57,6 +60,18 @@ export function UserTable({ users }: { users: UserRow[] }) {
           <TableRow key={user.id}>
             <TableCell className="font-medium">{user.name}</TableCell>
             <TableCell>{user.email}</TableCell>
+            <TableCell>
+              {user.partner ? (
+                <Link
+                  href={`/partners/${user.partner.id}`}
+                  className="text-primary hover:underline"
+                >
+                  {user.partner.name}
+                </Link>
+              ) : (
+                <span className="text-muted-foreground">Platform</span>
+              )}
+            </TableCell>
             <TableCell>
               {user.roles.map((r) => r.role.name).join(", ") || "—"}
             </TableCell>

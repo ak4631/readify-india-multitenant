@@ -15,7 +15,7 @@ export function TicketList({
   tickets,
   canRespond,
 }: {
-  tickets: Awaited<ReturnType<typeof listSupportTickets>>;
+  tickets: Awaited<ReturnType<typeof listSupportTickets>>["items"];
   canRespond: boolean;
 }) {
   const [subject, setSubject] = useState("");
@@ -68,7 +68,9 @@ export function TicketList({
           required
           minLength={10}
         />
-        <Button disabled={pending}>Submit ticket</Button>
+        <Button type="submit" disabled={pending}>
+          Submit ticket
+        </Button>
       </form>
       {tickets.map((ticket) => (
         <section key={ticket.id} className="space-y-3 rounded-xl border p-5">

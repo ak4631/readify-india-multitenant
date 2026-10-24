@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
+import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -16,6 +17,21 @@ export async function listFacilities() {
     orderBy: { name: "asc" },
     include: { _count: { select: { vendorFacilities: true } } },
   });
+}
+
+export async function listFacilitiesPage(page = 1) {
+  await requirePermission("facility.read");
+  const window = pageWindow(page);
+  const [items, total] = await Promise.all([
+    prisma.facility.findMany({
+      orderBy: { name: "asc" },
+      include: { _count: { select: { vendorFacilities: true } } },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.facility.count(),
+  ]);
+  return toPage(items, total, window);
 }
 
 export async function createFacility(input: FacilityInput) {

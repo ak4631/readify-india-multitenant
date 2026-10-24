@@ -3,12 +3,14 @@ import { ApplicationReview } from "@/components/partners/application-review";
 import { ArrowLeft, Plus, UserPlus } from "lucide-react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
+import { ListPagination } from "@/components/layout/list-pagination";
 import { PartnerFormDialog } from "@/components/partners/partner-form-dialog";
 import { PartnerTeamTable } from "@/components/partners/partner-team-table";
 import { PartnerUserDialog } from "@/components/partners/partner-user-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VendorTable } from "@/components/vendors/vendor-table";
+import { parsePage } from "@/lib/pagination";
 import { getCurrentSession, hasPermission } from "@/lib/rbac";
 import {
   getPartnerById,
@@ -17,15 +19,18 @@ import {
 
 export default async function PartnerDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
   const session = await getCurrentSession();
   const canViewTeam = hasPermission(session, "partnerUser.read");
   const [partner, users] = await Promise.all([
     getPartnerById(id),
-    canViewTeam ? listPartnerUsers(id) : Promise.resolve([]),
+    canViewTeam ? listPartnerUsers(id, parsePage(query.page)) : null,
   ]);
   if (!partner) notFound();
   const canCreateAdmin = hasPermission(session, "partnerUser.createAdmin");
@@ -71,7 +76,11 @@ export default async function PartnerDetailPage({
           </div>
         }
       />
-      {canViewTeam && (
+      {partner.approvalStatus === "PENDING" &&
+        hasPermission(session, "partner.status") && (
+          <ApplicationReview partnerId={partner.id} />
+        )}
+      {users && (
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -91,14 +100,16 @@ export default async function PartnerDetailPage({
             </div>
           </CardHeader>
           <CardContent>
-            <PartnerTeamTable users={users} />
+            <PartnerTeamTable users={users.items} />
+            <ListPagination
+              page={users}
+              path={`/partners/${partner.id}`}
+              params={query}
+              noun="team members"
+            />
           </CardContent>
         </Card>
       )}
-      {partner.approvalStatus === "PENDING" &&
-        hasPermission(session, "partner.status") && (
-          <ApplicationReview partnerId={partner.id} />
-        )}
       {partner.applicationReason && (
         <p>Application decision: {partner.applicationReason}</p>
       )}

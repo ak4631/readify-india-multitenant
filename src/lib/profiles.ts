@@ -17,19 +17,29 @@ export type CustomerProfile = {
 // next `prisma migrate dev`. Both repos share one physical Postgres instance
 // and this connection already has cross-schema rights (see the bridge
 // migrations), so read with raw SQL instead of a modeled table.
-export async function listCustomerProfiles(): Promise<CustomerProfile[]> {
-  return prisma.$queryRaw<CustomerProfile[]>`
-    SELECT
-      p."id"::text AS "id",
-      p."full_name" AS "fullName",
-      u."email" AS "email",
-      p."role" AS "role",
-      p."is_active" AS "isActive",
-      p."created_at" AS "createdAt"
-    FROM "public"."profiles" p
-    LEFT JOIN "auth"."users" u ON u."id" = p."id"
-    ORDER BY p."created_at" DESC
-  `;
+export async function listCustomerProfiles(window: {
+  skip: number;
+  take: number;
+}): Promise<{ items: CustomerProfile[]; total: number }> {
+  const [items, count] = await Promise.all([
+    prisma.$queryRaw<CustomerProfile[]>`
+      SELECT
+        p."id"::text AS "id",
+        p."full_name" AS "fullName",
+        u."email" AS "email",
+        p."role" AS "role",
+        p."is_active" AS "isActive",
+        p."created_at" AS "createdAt"
+      FROM "public"."profiles" p
+      LEFT JOIN "auth"."users" u ON u."id" = p."id"
+      ORDER BY p."created_at" DESC
+      LIMIT ${window.take} OFFSET ${window.skip}
+    `,
+    prisma.$queryRaw<{ total: bigint }[]>`
+      SELECT count(*) AS "total" FROM "public"."profiles"
+    `,
+  ]);
+  return { items, total: Number(count[0]?.total ?? 0) };
 }
 
 // Names/emails for a set of customer ids (booking.userId etc.), keyed by id.

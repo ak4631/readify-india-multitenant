@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
-import { listVendors } from "@/server/actions/vendors.actions";
+import { ListPagination } from "@/components/layout/list-pagination";
+import { parsePage } from "@/lib/pagination";
+import { listVendorsPage } from "@/server/actions/vendors.actions";
 
-export default async function SettingsPage() {
-  const vendors = await listVendors();
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const vendors = await listVendorsPage({ page: parsePage(params.page) });
   return (
     <div className="space-y-6">
       <PageHeader
@@ -29,7 +36,7 @@ export default async function SettingsPage() {
           Flex spans cannot include closed days.
         </p>
       </section>
-      {vendors.map((vendor) => (
+      {vendors.items.map((vendor) => (
         <section key={vendor.id} className="space-y-2 rounded-xl border p-5">
           <h2 className="font-semibold">{vendor.name}</h2>
           <div className="flex flex-wrap gap-4">
@@ -49,6 +56,12 @@ export default async function SettingsPage() {
           </div>
         </section>
       ))}
+      <ListPagination
+        page={vendors}
+        path="/settings"
+        params={params}
+        noun="listings"
+      />
     </div>
   );
 }

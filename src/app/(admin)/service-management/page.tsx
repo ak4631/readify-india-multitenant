@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
-import { listVendors } from "@/server/actions/vendors.actions";
+import { ListPagination } from "@/components/layout/list-pagination";
+import { parsePage } from "@/lib/pagination";
+import { listVendorsPage } from "@/server/actions/vendors.actions";
 import { getLibraryOccupancy } from "@/server/actions/library-occupancy.actions";
 import { LibraryOccupancyPanel } from "@/components/vendors/library/occupancy-panel";
 import { LiveRefresh } from "@/components/layout/live-refresh";
@@ -8,12 +10,15 @@ import { LiveRefresh } from "@/components/layout/live-refresh";
 export default async function ServiceManagementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; page?: string }>;
 }) {
-  const { date } = await searchParams;
-  const vendors = (await listVendors()).filter(
-    (v) => v.category.slug === "library",
-  );
+  const params = await searchParams;
+  const { date } = params;
+  const vendors = await listVendorsPage({
+    categorySlug: "library",
+    page: parsePage(params.page),
+    pageSize: 5,
+  });
   return (
     <div className="space-y-8">
       <LiveRefresh />
@@ -32,7 +37,7 @@ export default async function ServiceManagementPage({
         <button className="rounded border px-4">View date</button>
       </form>
       {await Promise.all(
-        vendors.map(async (vendor) => (
+        vendors.items.map(async (vendor) => (
           <section key={vendor.id} className="space-y-4">
             <h2 className="text-xl font-semibold">{vendor.name}</h2>
             <Link
@@ -54,7 +59,13 @@ export default async function ServiceManagementPage({
           </section>
         )),
       )}
-      {!vendors.length && <p>No Library listings yet.</p>}
+      {!vendors.total && <p>No Library listings yet.</p>}
+      <ListPagination
+        page={vendors}
+        path="/service-management"
+        params={params}
+        noun="listings"
+      />
     </div>
   );
 }

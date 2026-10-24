@@ -5,6 +5,7 @@ import { getRequiredDocuments } from "@/config/verification-requirements";
 import { launchPlansReady } from "@/lib/launch-plans";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
+import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import {
   getAccessibleVendorIds,
@@ -32,22 +33,48 @@ export interface VendorFilters {
   city?: string;
 }
 
-export async function listVendors(filters: VendorFilters = {}) {
+async function vendorWhere(filters: VendorFilters & { categorySlug?: string }) {
   const session = await requirePermission("vendor.read");
   const accessibleVendorIds = await getAccessibleVendorIds(session);
+  return {
+    id: accessibleVendorIds ? { in: accessibleVendorIds } : undefined,
+    categoryId: filters.categoryId || undefined,
+    category: filters.categorySlug ? { slug: filters.categorySlug } : undefined,
+    status: filters.status || undefined,
+    address: filters.city
+      ? { city: { equals: filters.city, mode: "insensitive" as const } }
+      : undefined,
+  };
+}
 
+export async function listVendors(filters: VendorFilters = {}) {
   return prisma.vendor.findMany({
-    where: {
-      id: accessibleVendorIds ? { in: accessibleVendorIds } : undefined,
-      categoryId: filters.categoryId,
-      status: filters.status,
-      address: filters.city
-        ? { city: { equals: filters.city, mode: "insensitive" } }
-        : undefined,
-    },
+    where: await vendorWhere(filters),
     orderBy: { createdAt: "desc" },
     include: { category: true, address: true },
   });
+}
+
+export async function listVendorsPage(
+  filters: VendorFilters & {
+    categorySlug?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
+) {
+  const where = await vendorWhere(filters);
+  const window = pageWindow(filters.page ?? 1, filters.pageSize);
+  const [items, total] = await Promise.all([
+    prisma.vendor.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: { category: true, address: true },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.vendor.count({ where }),
+  ]);
+  return toPage(items, total, window);
 }
 
 export async function getVendorById(vendorId: string) {

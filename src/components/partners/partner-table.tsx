@@ -54,11 +54,20 @@ export function PartnerTable({ partners }: { partners: PartnerRow[] }) {
         {partners.map((partner) => (
           <TableRow key={partner.id}>
             <TableCell>
-              <Link
-                href={`/partners/${partner.id}`}
-                className="text-primary underline"
-              >
-                {partner.approvalStatus}
+              <Link href={`/partners/${partner.id}`}>
+                <Badge
+                  variant={
+                    partner.approvalStatus === "PENDING"
+                      ? "default"
+                      : partner.approvalStatus === "REJECTED"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {partner.approvalStatus === "PENDING"
+                    ? "Pending review"
+                    : partner.approvalStatus}
+                </Badge>
               </Link>
             </TableCell>
             <TableCell>
@@ -96,6 +105,16 @@ export function PartnerTable({ partners }: { partners: PartnerRow[] }) {
             </TableCell>
           </TableRow>
         ))}
+        {!partners.length && (
+          <TableRow>
+            <TableCell
+              colSpan={6}
+              className="py-8 text-center text-muted-foreground"
+            >
+              No organizations found.
+            </TableCell>
+          </TableRow>
+        )}
       </TableBody>
     </Table>
   );

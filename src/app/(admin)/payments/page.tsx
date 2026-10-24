@@ -8,16 +8,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ListPagination } from "@/components/layout/list-pagination";
+import { parsePage } from "@/lib/pagination";
 import { listPaymentLedger } from "@/server/actions/workspace.actions";
 
-export default async function PaymentsPage() {
-  const rows = await listPaymentLedger();
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const ledger = await listPaymentLedger(parsePage(params.page));
+  const rows = ledger.items;
   return (
     <div className="space-y-6">
       <LiveRefresh />
       <PageHeader
         title="Payments & Revenue"
-        description="Latest 200 checkout transactions. Refund pending and refunded are separate states. Commission and payouts are awaiting business configuration."
+        description="Checkout transactions, newest first. Refund pending and refunded are separate states. Commission and payouts are awaiting business configuration."
       />
       <Table>
         <TableHeader>
@@ -42,6 +50,12 @@ export default async function PaymentsPage() {
         </TableBody>
       </Table>
       {!rows.length && <p>No checkout transactions yet.</p>}
+      <ListPagination
+        page={ledger}
+        path="/payments"
+        params={params}
+        noun="transactions"
+      />
     </div>
   );
 }

@@ -10,8 +10,10 @@ import {
   isSuperAdmin,
   requirePartnerAccess,
   requirePermission,
+  requirePlatformPermission,
   requireSuperAdmin,
 } from "@/lib/rbac";
+import { pageWindow, toPage } from "@/lib/pagination";
 import {
   partnerSchema,
   partnerUserSchema,
@@ -21,16 +23,27 @@ import {
   type PartnerUserUpdateInput,
 } from "@/lib/validations/partner.schema";
 
-export async function listPartners() {
+export async function listPartners(
+  options: { page?: number; approval?: "PENDING" } = {},
+) {
   const session = await requirePermission("partner.read");
-  const where = isSuperAdmin(session)
-    ? undefined
+  const scope = isSuperAdmin(session)
+    ? {}
     : { users: { some: { id: session.user.id } } };
-  return prisma.partner.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { users: true, vendors: true } } },
-  });
+  const where = { ...scope, approvalStatus: options.approval };
+  const window = pageWindow(options.page ?? 1);
+  const [items, total, pending] = await Promise.all([
+    prisma.partner.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: window.skip,
+      take: window.take,
+      include: { _count: { select: { users: true, vendors: true } } },
+    }),
+    prisma.partner.count({ where }),
+    prisma.partner.count({ where: { ...scope, approvalStatus: "PENDING" } }),
+  ]);
+  return { ...toPage(items, total, window), pending };
 }
 
 export async function getPartnerById(partnerId: string) {
@@ -46,14 +59,45 @@ export async function getPartnerById(partnerId: string) {
   });
 }
 
-export async function listPartnerUsers(partnerId: string) {
+export async function listPartnerUsers(partnerId: string, page = 1) {
   await requirePartnerAccess(partnerId, "partnerUser.read");
-  return prisma.user.findMany({
-    where: { partnerId },
-    omit: { passwordHash: true },
-    include: { roles: { include: { role: true } } },
-    orderBy: { name: "asc" },
-  });
+  const where = { partnerId };
+  const window = pageWindow(page);
+  const [items, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      omit: { passwordHash: true },
+      include: { roles: { include: { role: true } } },
+      orderBy: { name: "asc" },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.user.count({ where }),
+  ]);
+  return toPage(items, total, window);
+}
+
+// Platform view of the Team Members page: partner-side staff across every
+// organization. Platform accounts themselves are managed under Users.
+export async function listAllPartnerUsers(page = 1) {
+  await requirePlatformPermission("partnerUser.read");
+  const where = { partnerId: { not: null } };
+  const window = pageWindow(page);
+  const [items, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      omit: { passwordHash: true },
+      include: {
+        roles: { include: { role: true } },
+        partner: { select: { id: true, name: true } },
+      },
+      orderBy: [{ partner: { name: "asc" } }, { name: "asc" }],
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.user.count({ where }),
+  ]);
+  return toPage(items, total, window);
 }
 
 export async function createPartner(input: PartnerInput) {
@@ -263,6 +307,12 @@ export async function reviewPartnerApplication(
     });
     if (before.approvalStatus !== "PENDING")
       throw new Error("This application has already been reviewed");
+    const service = before.requestedServiceId
+      ? await tx.vendorCategory.findUnique({
+          where: { id: before.requestedServiceId },
+          select: { name: true },
+        })
+      : null;
     await tx.partner.update({
       where: { id: partnerId },
       data: {
@@ -278,7 +328,7 @@ export async function reviewPartnerApplication(
           ? "Partner application approved"
           : "Partner application rejected",
         body: approve
-          ? "Your organization is active. You can now onboard Library listings."
+          ? `Your organization is active. You can now onboard ${service?.name ?? "your"} listings.`
           : decisionReason!,
         href: "/vendors",
       },

@@ -6,7 +6,9 @@ import { VendorFilters } from "@/components/vendors/vendor-filters";
 import { VendorTable } from "@/components/vendors/vendor-table";
 import type { VendorStatus } from "@/generated/prisma/enums";
 import { listVendorCategories } from "@/server/actions/vendor-categories.actions";
-import { listVendors } from "@/server/actions/vendors.actions";
+import { listVendorsPage } from "@/server/actions/vendors.actions";
+import { ListPagination } from "@/components/layout/list-pagination";
+import { parsePage } from "@/lib/pagination";
 import { getCurrentSession, hasPermission, isSuperAdmin } from "@/lib/rbac";
 
 export default async function VendorsPage({
@@ -16,15 +18,17 @@ export default async function VendorsPage({
     categoryId?: string;
     status?: string;
     city?: string;
+    page?: string;
   }>;
 }) {
   const params = await searchParams;
   const session = await getCurrentSession();
   const [vendors, categories] = await Promise.all([
-    listVendors({
+    listVendorsPage({
       categoryId: params.categoryId,
       status: params.status as VendorStatus | undefined,
       city: params.city,
+      page: parsePage(params.page),
     }),
     listVendorCategories(),
   ]);
@@ -34,7 +38,7 @@ export default async function VendorsPage({
       <PageHeader
         eyebrow="Partners"
         title="Partner listings"
-        description={`${vendors.length} listings across Library, Gym, Co-working Space, and Exam Hub.`}
+        description={`${vendors.total} listings across Library, Gym, Co-working Space, and Exam Hub.`}
         actions={
           hasPermission(session, "vendor.create") && session ? (
             <Button
@@ -53,7 +57,13 @@ export default async function VendorsPage({
       <Card>
         <CardContent className="space-y-5">
           <VendorFilters categories={categories} />
-          <VendorTable vendors={vendors} />
+          <VendorTable vendors={vendors.items} />
+          <ListPagination
+            page={vendors}
+            path="/vendors"
+            params={params}
+            noun="listings"
+          />
         </CardContent>
       </Card>
     </div>

@@ -96,9 +96,13 @@ export default async function VendorDetailPage({
       where: { vendorId: id },
       orderBy: { sortOrder: "asc" },
     }),
-    canViewReviews ? listReviews({ vendorId: id }) : Promise.resolve([]),
+    canViewReviews
+      ? listReviews({ vendorId: id, pageSize: 100 }).then((page) => page.items)
+      : Promise.resolve([]),
     canViewSubscriptions
-      ? listSubscriptions({ vendorId: id })
+      ? listSubscriptions({ vendorId: id, pageSize: 100 }).then(
+          (page) => page.items,
+        )
       : Promise.resolve([]),
     listVendorBookings(id),
   ]);

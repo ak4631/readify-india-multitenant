@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentSession,
@@ -8,16 +9,23 @@ import {
   isPlatformStaff,
 } from "@/lib/rbac";
 
-export async function listSupportTickets() {
+export async function listSupportTickets(page = 1) {
   const session = await getCurrentSession();
   if (!session?.user) throw new Error("Not authenticated");
   const staff = isPlatformStaff(session);
   const partnerId = await getSessionPartnerId(session);
-  return prisma.supportTicket.findMany({
-    where: staff ? {} : { partnerId, userId: session.user.id },
-    orderBy: { updatedAt: "desc" },
-    take: 100,
-  });
+  const where = staff ? {} : { partnerId, userId: session.user.id };
+  const window = pageWindow(page);
+  const [items, total] = await Promise.all([
+    prisma.supportTicket.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      skip: window.skip,
+      take: window.take,
+    }),
+    prisma.supportTicket.count({ where }),
+  ]);
+  return toPage(items, total, window);
 }
 export async function createSupportTicket(input: {
   subject: string;

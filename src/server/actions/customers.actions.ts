@@ -1,5 +1,11 @@
 "use server";
 
+import {
+  pageWindow,
+  slicePage,
+  toPage,
+  type Page,
+} from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { getSessionPartnerId, requirePermission } from "@/lib/rbac";
 import { listCustomerProfiles, lookupCustomerProfiles } from "@/lib/profiles";
@@ -30,19 +36,26 @@ export type CustomerRow = {
 export type CustomersResult = {
   asOf: Date;
   scope: "platform" | "partner";
-  customers: CustomerRow[];
+  customers: Page<CustomerRow>;
 };
 
-export async function listCustomers(): Promise<CustomersResult> {
+export type CustomerType = "all" | "new" | "active" | "permanent" | "flexible";
+
+export async function listCustomers(
+  options: { page?: number; type?: CustomerType } = {},
+): Promise<CustomersResult> {
   const session = await requirePermission("customer.read");
   const partnerId = await getSessionPartnerId(session);
+  const window = pageWindow(options.page ?? 1);
+  const asOf = new Date();
 
   if (!partnerId) {
-    const profiles = await listCustomerProfiles();
+    const profiles = await listCustomerProfiles(window);
     return {
-      asOf: new Date(),
+      asOf,
       scope: "platform",
-      customers: profiles.map((p) => ({
+      customers: toPage(
+        profiles.items.map((p) => ({
         id: p.id,
         fullName: p.fullName,
         email: p.email,
@@ -53,14 +66,38 @@ export async function listCustomers(): Promise<CustomersResult> {
         totalSpent: null,
         lastActivityAt: null,
         joinedAt: p.createdAt,
-      })),
+        })),
+        profiles.total,
+        window,
+      ),
     };
   }
 
+  const type = options.type ?? "all";
+  const rows = (await listPartnerCustomers(partnerId)).filter(
+    (customer) =>
+      type === "all" ||
+      (type === "permanent"
+        ? !!customer.activeSubscriptions
+        : type === "flexible"
+          ? !!customer.flexibleBookings
+          : type === "active"
+            ? !!customer.present
+            : customer.joinedAt.getTime() > asOf.getTime() - 7 * 86400000),
+  );
+  const page = slicePage(rows, window.page);
+  const profiles = await lookupCustomerProfiles(page.items.map((row) => row.id));
   return {
-    asOf: new Date(),
+    asOf,
     scope: "partner",
-    customers: await listPartnerCustomers(partnerId),
+    customers: {
+      ...page,
+      items: page.items.map((row) => ({
+        ...row,
+        fullName: profiles.get(row.id)?.fullName ?? null,
+        email: profiles.get(row.id)?.email ?? null,
+      })),
+    },
   };
 }
 
@@ -175,13 +212,7 @@ async function listPartnerCustomers(partnerId: string): Promise<CustomerRow[]> {
     if (row) row.present = true;
   }
 
-  const profiles = await lookupCustomerProfiles([...byUser.keys()]);
-  for (const row of byUser.values()) {
-    const profile = profiles.get(row.id);
-    row.fullName = profile?.fullName ?? null;
-    row.email = profile?.email ?? null;
-  }
-
+  // Names/emails are filled in by the caller for the visible page only.
   return (
     [...byUser.values()]
       .sort(

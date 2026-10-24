@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,9 +20,16 @@ import { setPartnerUserActive } from "@/server/actions/partners.actions";
 
 type TeamUser = Omit<User, "passwordHash"> & {
   roles: (UserRole & { role: Role })[];
+  partner?: { id: string; name: string } | null;
 };
 
-export function PartnerTeamTable({ users }: { users: TeamUser[] }) {
+export function PartnerTeamTable({
+  users,
+  showOrganization = false,
+}: {
+  users: TeamUser[];
+  showOrganization?: boolean;
+}) {
   const [pending, startTransition] = useTransition();
   const canManage = usePermission("partnerUser.status");
   const canEdit = usePermission("partnerUser.update");
@@ -44,6 +52,7 @@ export function PartnerTeamTable({ users }: { users: TeamUser[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
+          {showOrganization && <TableHead>Organization</TableHead>}
           <TableHead>Email</TableHead>
           <TableHead>Role</TableHead>
           <TableHead>Status</TableHead>
@@ -54,6 +63,20 @@ export function PartnerTeamTable({ users }: { users: TeamUser[] }) {
         {users.map((user) => (
           <TableRow key={user.id}>
             <TableCell className="font-medium">{user.name}</TableCell>
+            {showOrganization && (
+              <TableCell>
+                {user.partner ? (
+                  <Link
+                    href={`/partners/${user.partner.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {user.partner.name}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </TableCell>
+            )}
             <TableCell>{user.email}</TableCell>
             <TableCell>
               {user.roles
@@ -81,6 +104,16 @@ export function PartnerTeamTable({ users }: { users: TeamUser[] }) {
             </TableCell>
           </TableRow>
         ))}
+        {!users.length && (
+          <TableRow>
+            <TableCell
+              colSpan={showOrganization ? 6 : 5}
+              className="py-8 text-center text-muted-foreground"
+            >
+              No team members yet.
+            </TableCell>
+          </TableRow>
+        )}
       </TableBody>
     </Table>
   );
