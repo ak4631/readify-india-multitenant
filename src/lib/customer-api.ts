@@ -25,6 +25,9 @@ export function apiFailure(error: unknown) {
   const message = error instanceof Error ? error.message : "Request failed";
   if (message === "Not authenticated")
     return Response.json({ error: message }, { status: 401 });
+  // Logged server-side only, so configuration and database failures are
+  // diagnosable from deployment logs.
+  console.error("Customer API request failed", error);
   // Do not serialize Prisma errors or database connection details.
   return Response.json(
     {
