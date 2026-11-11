@@ -26,7 +26,9 @@ export function TeachersList({
     startTransition(async () => {
       try {
         await deactivateTeacher(teacherId);
-        toast.success("Teacher deactivated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");

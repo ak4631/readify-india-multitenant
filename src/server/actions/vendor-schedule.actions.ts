@@ -1,5 +1,6 @@
 "use server";
 
+import { editorChanges } from "@/lib/listing-editor";
 import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
@@ -16,7 +17,19 @@ function toTime(hhmm: string): Date {
 
 export async function getVendorSchedule(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
-  return prisma.vendorSchedule.findMany({ where: { vendorId } });
+  const rows = await prisma.vendorSchedule.findMany({ where: { vendorId } });
+  const proposed = (await editorChanges(vendorId)).find(
+    (c) => c.kind === "SCHEDULE",
+  );
+  if (!proposed) return rows;
+  return vendorScheduleSchema.parse(proposed.payload).days.map((day) => ({
+    id: vendorId + day.dayOfWeek,
+    vendorId,
+    dayOfWeek: day.dayOfWeek,
+    isClosed: day.isClosed,
+    openTime: toTime(day.openTime),
+    closeTime: toTime(day.closeTime),
+  }));
 }
 
 export async function updateVendorSchedule(

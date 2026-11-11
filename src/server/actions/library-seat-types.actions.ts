@@ -1,5 +1,10 @@
 "use server";
 
+import {
+  editorChanges,
+  overlayRows,
+  proposedParent,
+} from "@/lib/listing-editor";
 import { randomUUID } from "node:crypto";
 import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
@@ -13,9 +18,14 @@ import {
 
 export async function listLibrarySeatTypes(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
-  return prisma.librarySeatType.findMany({
+  const rows = await prisma.librarySeatType.findMany({
     where: { vendorId },
     orderBy: { name: "asc" },
+  });
+  return overlayRows(rows, await editorChanges(vendorId), "SEAT", {
+    vendorId,
+    name: "",
+    totalCount: 1,
   });
 }
 
@@ -61,9 +71,9 @@ export async function updateLibrarySeatType(
   seatTypeId: string,
   input: LibrarySeatTypeInput,
 ) {
-  const seatTypeRecord = await prisma.librarySeatType.findUniqueOrThrow({
-    where: { id: seatTypeId },
-  });
+  const seatTypeRecord =
+    (await prisma.librarySeatType.findUnique({ where: { id: seatTypeId } })) ??
+    (await proposedParent(seatTypeId, "SEAT_CREATE"));
   const session = await requireVendorAccess(
     seatTypeRecord.vendorId,
     "vendor.update",
@@ -106,9 +116,9 @@ export async function updateLibrarySeatType(
 }
 
 export async function deleteLibrarySeatType(seatTypeId: string) {
-  const seatTypeRecord = await prisma.librarySeatType.findUniqueOrThrow({
-    where: { id: seatTypeId },
-  });
+  const seatTypeRecord =
+    (await prisma.librarySeatType.findUnique({ where: { id: seatTypeId } })) ??
+    (await proposedParent(seatTypeId, "SEAT_CREATE"));
   const session = await requireVendorAccess(
     seatTypeRecord.vendorId,
     "vendor.update",

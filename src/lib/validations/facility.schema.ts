@@ -7,3 +7,11 @@ export const facilitySchema = z.object({
 });
 
 export type FacilityInput = z.infer<typeof facilitySchema>;
+
+export const vendorFacilitiesSchema = z.object({
+  vendorId: z.string().trim().min(1).max(128),
+  facilityIds: z
+    .array(z.string().trim().min(1).max(128))
+    .max(200)
+    .transform((ids) => [...new Set(ids)]),
+});

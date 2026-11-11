@@ -15,7 +15,7 @@ export default async function DashboardPage() {
     return (
       <div className="space-y-6">
         <PageHeader
-          title="Library Dashboard"
+          title="Partner Dashboard"
           description="Your listings, bookings, physical attendance and verified payments."
         />
         <WorkspaceSummary data={await getWorkspaceSummary()} />
@@ -27,8 +27,8 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Admin Dashboard"
-        title="Welcome to Vriddhora"
+        eyebrow="Platform overview"
+        title="Platform status and pending actions"
         description="Manage partner onboarding, listing approvals, users, and reviews for the marketplace."
       />
       <DashboardContent initialData={metrics} />

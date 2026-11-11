@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { prisma } from "@/lib/prisma";
 import { RegistrationForm } from "./registration-form";
 export const dynamic = "force-dynamic";
@@ -9,7 +10,8 @@ export default async function RegistrationPage() {
   });
   return (
     <main className="mx-auto max-w-lg space-y-6 px-6 py-12">
-      <h1 className="text-3xl font-semibold">Partner with Vriddhora</h1>
+      <BrandLogo className="w-44" />
+      <h1 className="text-3xl font-semibold">Partner with ZEROTHAM</h1>
       <p>
         Choose the service your organization offers. Admin approval is required
         before you can sign in and onboard listings.

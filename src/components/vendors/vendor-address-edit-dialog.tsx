@@ -83,7 +83,9 @@ export function VendorAddressEditDialog({
     setIsSubmitting(true);
     try {
       await updateVendorAddress(vendorId, values);
-      toast.success("Address updated");
+      toast.success(
+        "Saved. Changes to approved listings must be submitted from Changes.",
+      );
       setOpen(false);
       router.refresh();
     } catch (error) {

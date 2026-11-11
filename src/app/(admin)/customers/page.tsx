@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import { z } from "zod";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListPagination } from "@/components/layout/list-pagination";
@@ -7,16 +8,26 @@ import { parsePage } from "@/lib/pagination";
 import { listCustomers } from "@/server/actions/customers.actions";
 import { LiveRefresh } from "@/components/layout/live-refresh";
 
-const CUSTOMER_TYPES = ["all", "new", "active", "permanent", "flexible"] as const;
+const CUSTOMER_TYPES = [
+  "all",
+  "new",
+  "active",
+  "permanent",
+  "flexible",
+] as const;
 
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; page?: string }>;
+  searchParams: Promise<{ partnerId?: string; type?: string; page?: string }>;
 }) {
   const params = await searchParams;
-  const type = z.enum(CUSTOMER_TYPES).catch("all").parse(params.type ?? "all");
+  const type = z
+    .enum(CUSTOMER_TYPES)
+    .catch("all")
+    .parse(params.type ?? "all");
   const { scope, customers } = await listCustomers({
+    partnerId: params.partnerId,
     page: parsePage(params.page),
     type,
   });
@@ -30,7 +41,7 @@ export default async function CustomersPage({
         description={
           scope === "partner"
             ? `${customers.total} customer${customers.total === 1 ? "" : "s"} who have booked or subscribed across your listings.`
-            : `${customers.total} customers registered via the Vriddhora app.`
+            : `${customers.total} customers registered via the ZEROTHAM app.`
         }
       />
       <Card>
@@ -53,7 +64,7 @@ export default async function CustomersPage({
           <CustomerTable customers={customers.items} scope={scope} />
           <ListPagination
             page={customers}
-            path="/customers"
+            path={partnerPath(params.partnerId, "customers")}
             params={params}
             noun="customers"
           />

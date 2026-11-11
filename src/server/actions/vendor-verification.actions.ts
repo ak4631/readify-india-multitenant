@@ -1,9 +1,11 @@
 "use server";
+import { randomUUID } from "node:crypto";
+import { queueListingChange } from "@/lib/listing-changes";
 
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { requirePermission, requireVendorAccess } from "@/lib/rbac";
+import { requireSuperAdminPermission, requireVendorAccess } from "@/lib/rbac";
 import { getSignedDocumentUrl, uploadVendorDocument } from "@/lib/imagekit";
 import {
   ALLOWED_DOCUMENT_TYPES,
@@ -41,6 +43,17 @@ export async function uploadVerificationDocument(formData: FormData) {
   );
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        input.vendorId,
+        session.user.id,
+        "DOCUMENT_CREATE",
+        randomUUID(),
+        { ...input, documentUrl },
+      )
+    )
+      return;
     const verification = await tx.vendorVerification.create({
       data: {
         vendorId: input.vendorId,
@@ -67,7 +80,7 @@ export async function reviewVerificationDocument(input: {
   decision: "VERIFIED" | "REJECTED";
   rejectionReason?: string;
 }) {
-  const session = await requirePermission("verification.review");
+  const session = await requireSuperAdminPermission("verification.review");
   const data = reviewVerificationDocumentSchema.parse(input);
 
   const vendorId = await prisma.$transaction(async (tx) => {

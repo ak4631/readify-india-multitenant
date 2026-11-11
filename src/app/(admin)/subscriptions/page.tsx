@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { SubscriptionTable } from "@/components/subscriptions/subscription-table";
@@ -8,10 +9,11 @@ import { listSubscriptions } from "@/server/actions/subscriptions.actions";
 export default async function SubscriptionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ partnerId?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const subscriptions = await listSubscriptions({
+    partnerId: params.partnerId,
     page: parsePage(params.page),
   });
 
@@ -31,7 +33,7 @@ export default async function SubscriptionsPage({
           />
           <ListPagination
             page={subscriptions}
-            path="/subscriptions"
+            path={partnerPath(params.partnerId, "subscriptions")}
             params={params}
             noun="subscriptions"
           />

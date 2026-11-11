@@ -1,5 +1,6 @@
 "use server";
 
+import { proposedParent } from "@/lib/listing-editor";
 import { randomUUID } from "node:crypto";
 import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
@@ -68,9 +69,9 @@ export async function uploadVendorMedia(formData: FormData) {
 }
 
 export async function deleteVendorMedia(mediaId: string) {
-  const mediaRecord = await prisma.vendorMedia.findUniqueOrThrow({
-    where: { id: mediaId },
-  });
+  const mediaRecord =
+    (await prisma.vendorMedia.findUnique({ where: { id: mediaId } })) ??
+    (await proposedParent(mediaId, "MEDIA_CREATE"));
   const session = await requireVendorAccess(
     mediaRecord.vendorId,
     "vendor.update",
@@ -112,9 +113,9 @@ export async function deleteVendorMedia(mediaId: string) {
 }
 
 export async function setPrimaryVendorMedia(mediaId: string) {
-  const mediaRecord = await prisma.vendorMedia.findUniqueOrThrow({
-    where: { id: mediaId },
-  });
+  const mediaRecord =
+    (await prisma.vendorMedia.findUnique({ where: { id: mediaId } })) ??
+    (await proposedParent(mediaId, "MEDIA_CREATE"));
   const session = await requireVendorAccess(
     mediaRecord.vendorId,
     "vendor.update",

@@ -1,6 +1,10 @@
 import { cn } from "@/lib/utils";
 
-const STEPS = ["Basic Information", "Contact & Location", "Verification"];
+const STEPS = [
+  "Basic Information",
+  "Contact & Location",
+  "Complete listing setup",
+];
 
 export function WizardProgress({ currentStep }: { currentStep: number }) {
   return (
@@ -29,7 +33,14 @@ export function WizardProgress({ currentStep }: { currentStep: number }) {
             >
               {String(step).padStart(2, "0")}
             </span>
-            <span className={cn("text-sm", isActive ? "font-semibold text-foreground" : "text-muted-foreground")}>
+            <span
+              className={cn(
+                "text-sm",
+                isActive
+                  ? "font-semibold text-foreground"
+                  : "text-muted-foreground",
+              )}
+            >
               {label}
             </span>
           </li>

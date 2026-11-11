@@ -33,7 +33,9 @@ export function MenuEditor({
     startTransition(async () => {
       try {
         await createMenuCategory(vendorId, { name: newCategoryName.trim() });
-        toast.success("Category added");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         setNewCategoryName("");
         router.refresh();
       } catch (error) {
@@ -46,7 +48,9 @@ export function MenuEditor({
     startTransition(async () => {
       try {
         await deleteMenuCategory(categoryId);
-        toast.success("Category removed");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");
@@ -58,7 +62,9 @@ export function MenuEditor({
     startTransition(async () => {
       try {
         await deleteMenuItem(vendorId, itemId);
-        toast.success("Item removed");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");

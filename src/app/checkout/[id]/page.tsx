@@ -6,7 +6,7 @@ import { HostedCheckout } from "./checkout";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
-  title: "Vriddhora checkout",
+  title: "ZEROTHAM checkout",
   referrer: "no-referrer",
   robots: { index: false, follow: false },
 };

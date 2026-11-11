@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListPagination } from "@/components/layout/list-pagination";
@@ -9,10 +10,11 @@ import { listMembershipPlans } from "@/server/actions/membership-plans.actions";
 export default async function PlansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ partnerId?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const vendors = await listVendorsPage({
+    partnerId: params.partnerId,
     page: parsePage(params.page),
     pageSize: 10,
   });
@@ -29,7 +31,10 @@ export default async function PlansPage({
         title="Plans & Subscriptions"
         description="Manage Flex rates and monthly, quarterly or yearly subscriptions. Material changes require Admin approval."
       />
-      <Link href="/subscriptions" className="text-primary underline">
+      <Link
+        href={partnerPath(params.partnerId, "subscriptions")}
+        className="text-primary underline"
+      >
         View customer subscriptions
       </Link>
       {groups.map((group) => (
@@ -41,7 +46,7 @@ export default async function PlansPage({
       {!vendors.total && <p>Add a Library listing to configure plans.</p>}
       <ListPagination
         page={vendors}
-        path="/plans"
+        path={partnerPath(params.partnerId, "plans")}
         params={params}
         noun="listings"
       />

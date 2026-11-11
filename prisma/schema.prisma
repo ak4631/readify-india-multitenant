@@ -225,6 +225,7 @@ model User {
 }
 
 model Partner {
+  applicationVersion Int @default(1) @map("application_version")
   id          String        @id @default(cuid())
   name        String
   email       String?
@@ -366,6 +367,8 @@ model Vendor {
   seatTypes        LibrarySeatType[]
   seats            LibrarySeat[]
   members        VendorMember[]
+  contentVersion Int @default(0) @map("content_version")
+  submissionVersion Int @default(0) @map("submission_version")
   assignments      ListingAssignment[]
 
   @@index([partnerId])
@@ -933,6 +936,7 @@ model Lecture {
 // ---------------------------------------------------------------------------
 
 model AuditLog {
+  partnerId String? @map("partner_id")
   id         String   @id @default(cuid())
   userId     String?  @map("user_id")
   action     String
@@ -946,6 +950,7 @@ model AuditLog {
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  @@index([partnerId, createdAt])
   @@index([entityType, entityId])
   @@index([userId])
   @@index([createdAt])
@@ -957,6 +962,8 @@ model AuditLog {
 model ListingChange {
   id           String   @id @default(cuid())
   vendorId     String   @map("vendor_id")
+  revisionId   String? @map("revision_id")
+  revision     ListingRevision? @relation(fields: [revisionId], references: [id])
   kind         String
   targetId     String   @map("target_id")
   payload      Json
@@ -1131,4 +1138,39 @@ model PartnerPayout {
   @@index([partnerId, status])
   @@map("partner_payouts")
   @@schema("admin")
+}
+
+model ListingRevision {
+  id String @id @default(cuid())
+  vendorId String @map("vendor_id")
+  baseVersion Int @map("base_version")
+  baseSnapshot Json? @map("base_snapshot")
+  status String @default("DRAFT")
+  requestedBy String @map("requested_by")
+  submittedAt DateTime? @map("submitted_at")
+  reviewedAt DateTime? @map("reviewed_at")
+  reviewedBy String? @map("reviewed_by")
+  reason String?
+  createdAt DateTime @default(now()) @map("created_at")
+  changes ListingChange[]
+  @@index([vendorId, status])
+  @@schema("admin")
+  @@map("listing_revisions")
+}
+model ListingSubmission {
+  id String @id @default(cuid())
+  vendorId String @map("vendor_id")
+  version Int
+  snapshot Json
+  digest String
+  status String @default("PENDING")
+  requestedBy String @map("requested_by")
+  reviewedBy String? @map("reviewed_by")
+  reason String?
+  createdAt DateTime @default(now()) @map("created_at")
+  reviewedAt DateTime? @map("reviewed_at")
+  @@unique([vendorId, version])
+  @@index([status, createdAt])
+  @@schema("admin")
+  @@map("listing_submissions")
 }

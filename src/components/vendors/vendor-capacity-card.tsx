@@ -35,7 +35,9 @@ export function VendorCapacityCard({
     startTransition(async () => {
       try {
         await updateVendorCapacity(vendorId, { capacity: parsed });
-        toast.success("Capacity updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Update failed");
@@ -49,8 +51,8 @@ export function VendorCapacityCard({
         <div>
           <p className="text-sm font-semibold">Capacity</p>
           <p className="text-sm text-muted-foreground">
-            How many customers can hold an active booking or subscription at the same
-            time. Leave blank to use the default of {DEFAULT_CAPACITY}.
+            How many customers can hold an active booking or subscription at the
+            same time. Leave blank to use the default of {DEFAULT_CAPACITY}.
           </p>
         </div>
         {canEdit ? (
@@ -66,7 +68,11 @@ export function VendorCapacityCard({
                 onChange={(e) => setValue(e.target.value)}
               />
             </div>
-            <Button onClick={handleSave} disabled={isPending} aria-busy={isPending}>
+            <Button
+              onClick={handleSave}
+              disabled={isPending}
+              aria-busy={isPending}
+            >
               {isPending ? "Saving..." : "Save"}
             </Button>
           </div>

@@ -58,30 +58,89 @@ export async function POST(request: Request) {
       const role = await tx.role.findUniqueOrThrow({
         where: { name: "PARTNER_ADMIN" },
       });
-      const user = await tx.user.create({
-        data: {
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          passwordHash,
-          roles: { create: { roleId: role.id } },
-        },
+      const existing = await tx.user.findUnique({
+        where: { email: data.email },
+        include: { partner: true, roles: { include: { role: true } } },
       });
-      const partner = await tx.partner.create({
-        data: {
-          name: data.organization,
-          email: data.email,
-          phone: data.phone,
-          status: "INACTIVE",
-          approvalStatus: "PENDING",
-          requestedServiceId: category.id,
-          createdById: user.id,
-        },
-      });
-      await tx.user.update({
-        where: { id: user.id },
-        data: { partnerId: partner.id },
-      });
+      let partner;
+      if (existing) {
+        if (
+          existing.status !== "ACTIVE" ||
+          !existing.partnerId ||
+          existing.partner?.approvalStatus !== "REJECTED" ||
+          !existing.roles.some((r) => r.role.name === "PARTNER_ADMIN") ||
+          existing.roles.some((r) => r.role.name === "SUPER_ADMIN") ||
+          !(await bcrypt.compare(data.password, existing.passwordHash))
+        )
+          throw new Error("APPLICATION_CONFLICT");
+        await tx.$queryRaw`SELECT id FROM admin.partners WHERE id=${existing.partnerId} FOR UPDATE`;
+        const current = await tx.partner.findUniqueOrThrow({
+          where: { id: existing.partnerId },
+        });
+        if (current.approvalStatus !== "REJECTED")
+          throw new Error("APPLICATION_CONFLICT");
+        partner = await tx.partner.update({
+          where: { id: current.id },
+          data: {
+            name: data.organization,
+            email: data.email,
+            phone: data.phone,
+            status: "INACTIVE",
+            approvalStatus: "PENDING",
+            applicationReason: null,
+            requestedServiceId: category.id,
+            applicationVersion: { increment: 1 },
+          },
+        });
+        await tx.user.update({
+          where: { id: existing.id },
+          data: { name: data.name, phone: data.phone },
+        });
+        await tx.auditLog.create({
+          data: {
+            userId: existing.id,
+            partnerId: partner.id,
+            action: "RESUBMIT_PARTNER_APPLICATION",
+            entityType: "partner",
+            entityId: partner.id,
+            oldValue: {
+              version: current.applicationVersion,
+              status: current.approvalStatus,
+              reason: current.applicationReason,
+            },
+            newValue: {
+              version: partner.applicationVersion,
+              name: data.organization,
+              service: category.id,
+            },
+          },
+        });
+      } else {
+        const user = await tx.user.create({
+          data: {
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            passwordHash,
+            roles: { create: { roleId: role.id } },
+          },
+        });
+        partner = await tx.partner.create({
+          data: {
+            name: data.organization,
+            email: data.email,
+            phone: data.phone,
+            status: "INACTIVE",
+            approvalStatus: "PENDING",
+            requestedServiceId: category.id,
+            createdById: user.id,
+          },
+        });
+        await tx.user.update({
+          where: { id: user.id },
+          data: { partnerId: partner.id },
+        });
+      }
       const reviewers = await tx.user.findMany({
         where: {
           status: "ACTIVE",
@@ -100,6 +159,14 @@ export async function POST(request: Request) {
     });
     return Response.json({ submitted: true }, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === "APPLICATION_CONFLICT")
+      return Response.json(
+        {
+          error:
+            "An account already exists. Rejected applicants can resubmit with their existing email and password; otherwise sign in or contact support.",
+        },
+        { status: 409 },
+      );
     if (error instanceof z.ZodError)
       return Response.json(
         { error: "Check all fields. Use a password of 12–72 characters." },

@@ -1,10 +1,11 @@
 "use server";
 
+import { LIVE_LISTING_WHERE } from "@/lib/live-listing";
 import { prisma } from "@/lib/prisma";
-import { requirePermission } from "@/lib/rbac";
+import { requirePlatformPermission } from "@/lib/rbac";
 
 export async function getDashboardMetrics() {
-  await requirePermission("dashboard.read");
+  await requirePlatformPermission("dashboard.read");
 
   const [
     totalVendors,
@@ -15,21 +16,44 @@ export async function getDashboardMetrics() {
     totalBookings,
     categoryDistribution,
     recentVendors,
+    activePartners,
+    pendingPartners,
+    pendingRevisions,
+    pendingDocuments,
+    openSupport,
+    pendingRefunds,
+    suspendedVendors,
   ] = await Promise.all([
     prisma.vendor.count(),
-    prisma.vendor.count({ where: { status: "PUBLISHED" } }),
+    prisma.vendor.count({ where: LIVE_LISTING_WHERE }),
     prisma.vendor.count({
-      where: { status: { in: ["SUBMITTED", "UNDER_REVIEW"] } },
+      where: { status: { in: ["SUBMITTED", "UNDER_REVIEW", "APPROVED"] } },
     }),
     prisma.vendor.count({ where: { status: "REJECTED" } }),
     prisma.user.count(),
     prisma.booking.count(),
-    prisma.vendor.groupBy({ by: ["categoryId"], _count: { _all: true } }),
+    prisma.vendor.groupBy({
+      where: LIVE_LISTING_WHERE,
+      by: ["categoryId"],
+      _count: { _all: true },
+    }),
     prisma.vendor.findMany({
       orderBy: { createdAt: "desc" },
       take: 5,
       include: { category: true },
     }),
+    prisma.partner.count({ where: { vendors: { some: LIVE_LISTING_WHERE } } }),
+    prisma.partner.count({ where: { approvalStatus: "PENDING" } }),
+    prisma.listingRevision.count({ where: { status: "PENDING" } }),
+    prisma.vendorVerification.count({
+      where: {
+        status: "PENDING",
+        vendor: { status: { in: ["SUBMITTED", "UNDER_REVIEW"] } },
+      },
+    }),
+    prisma.supportTicket.count({ where: { status: "OPEN" } }),
+    prisma.paymentOrder.count({ where: { status: "REFUND_PENDING" } }),
+    prisma.vendor.count({ where: { status: "SUSPENDED" } }),
   ]);
 
   const categories = await prisma.vendorCategory.findMany();
@@ -42,6 +66,13 @@ export async function getDashboardMetrics() {
     rejectedVendors,
     totalUsers,
     totalBookings,
+    activePartners,
+    pendingPartners,
+    pendingRevisions,
+    pendingDocuments,
+    openSupport,
+    pendingRefunds,
+    suspendedVendors,
     categoryDistribution: categoryDistribution.map((row) => ({
       category: categoryMap.get(row.categoryId) ?? "Unknown",
       count: row._count._all,

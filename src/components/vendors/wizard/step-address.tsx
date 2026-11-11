@@ -15,6 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import type { VendorDetail } from "@/server/actions/vendors.actions";
 import { updateVendorAddress } from "@/server/actions/vendors.actions";
 import {
   vendorAddressSchema,
@@ -23,20 +24,26 @@ import {
 import { AddressMapPicker } from "./address-map-picker";
 import type { GeocodeResult } from "@/lib/geocoding";
 
-export function StepAddress({ vendorId }: { vendorId: string }) {
+export function StepAddress({
+  vendorId,
+  address,
+}: {
+  vendorId: string;
+  address?: VendorDetail["address"];
+}) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<VendorAddressInput>({
     resolver: zodResolver(vendorAddressSchema),
     defaultValues: {
-      addressLine1: "",
-      addressLine2: "",
-      city: "",
-      state: "",
-      pincode: "",
-      latitude: undefined,
-      longitude: undefined,
+      addressLine1: address?.addressLine1 ?? "",
+      addressLine2: address?.addressLine2 ?? "",
+      city: address?.city ?? "",
+      state: address?.state ?? "",
+      pincode: address?.pincode ?? "",
+      latitude: address?.latitude ?? undefined,
+      longitude: address?.longitude ?? undefined,
     },
   });
 

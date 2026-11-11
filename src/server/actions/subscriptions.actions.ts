@@ -12,14 +12,19 @@ import {
 } from "@/lib/rbac";
 
 export async function listSubscriptions(
-  filters: { vendorId?: string; page?: number; pageSize?: number } = {},
+  filters: {
+    partnerId?: string;
+    vendorId?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
 ) {
   const session = await requirePermission("subscription.read");
   if (filters.vendorId) {
     await requireVendorAccess(filters.vendorId, "vendor.read");
   }
 
-  const partnerId = await getSessionPartnerId(session);
+  const partnerId = await getSessionPartnerId(session, filters.partnerId);
   const where = {
     vendorId: filters.vendorId,
     vendor: partnerId ? { partnerId } : undefined,

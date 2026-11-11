@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import { PageHeader } from "@/components/layout/page-header";
 import { LiveRefresh } from "@/components/layout/live-refresh";
 import {
@@ -15,10 +16,13 @@ import { listPaymentLedger } from "@/server/actions/workspace.actions";
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ partnerId?: string; page?: string }>;
 }) {
   const params = await searchParams;
-  const ledger = await listPaymentLedger(parsePage(params.page));
+  const ledger = await listPaymentLedger(
+    parsePage(params.page),
+    params.partnerId,
+  );
   const rows = ledger.items;
   return (
     <div className="space-y-6">
@@ -52,7 +56,7 @@ export default async function PaymentsPage({
       {!rows.length && <p>No checkout transactions yet.</p>}
       <ListPagination
         page={ledger}
-        path="/payments"
+        path={partnerPath(params.partnerId, "payments")}
         params={params}
         noun="transactions"
       />

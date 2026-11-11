@@ -160,6 +160,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[] | "*"> = {
 // happen in Server Actions via requirePermission().
 export const ROUTE_PERMISSIONS: Record<string, PermissionKey> = {
   "/partners": "partner.read",
+  "/approvals": "vendor.read",
   "/dashboard": "dashboard.read",
   "/users": "user.read",
   "/vendor-categories": "vendorCategory.read",

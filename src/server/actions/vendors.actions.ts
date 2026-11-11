@@ -1,8 +1,9 @@
 "use server";
 
+import { editorChanges, changeData } from "@/lib/listing-editor";
 import { lockListing, queueListingChange } from "@/lib/listing-changes";
-import { getRequiredDocuments } from "@/config/verification-requirements";
-import { launchPlansReady } from "@/lib/launch-plans";
+import { assertReady, getReadiness } from "@/lib/listing-readiness";
+import { listingSnapshot, snapshotDigest } from "@/lib/listing-snapshot";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { pageWindow, toPage } from "@/lib/pagination";
@@ -11,6 +12,7 @@ import {
   getAccessibleVendorIds,
   isSuperAdmin,
   requirePermission,
+  requireSuperAdminPermission,
   requireVendorAccess,
 } from "@/lib/rbac";
 import { slugify } from "@/lib/utils";
@@ -28,6 +30,7 @@ import {
 import type { VendorStatus } from "@/generated/prisma/enums";
 
 export interface VendorFilters {
+  partnerId?: string;
   categoryId?: string;
   status?: VendorStatus;
   city?: string;
@@ -35,7 +38,10 @@ export interface VendorFilters {
 
 async function vendorWhere(filters: VendorFilters & { categorySlug?: string }) {
   const session = await requirePermission("vendor.read");
-  const accessibleVendorIds = await getAccessibleVendorIds(session);
+  const accessibleVendorIds = await getAccessibleVendorIds(
+    session,
+    filters.partnerId,
+  );
   return {
     id: accessibleVendorIds ? { in: accessibleVendorIds } : undefined,
     categoryId: filters.categoryId || undefined,
@@ -97,6 +103,22 @@ export async function getVendorById(vendorId: string) {
   });
   if (!vendor) return null;
 
+  const proposals = await editorChanges(vendorId);
+  for (const change of proposals) {
+    const data = changeData(change);
+    if (change.kind === "PROFILE")
+      Object.assign(vendor, {
+        name: data.name,
+        description: data.description ?? null,
+        phone: data.phone,
+        email: data.email ?? null,
+        website: data.website ?? null,
+      });
+    if (change.kind === "CAPACITY")
+      vendor.capacity = data.capacity as number | null;
+    if (change.kind === "ADDRESS")
+      vendor.address = { ...vendor.address, ...data } as typeof vendor.address;
+  }
   // Decimal (averageRating, address.latitude/longitude) is a class instance,
   // not a plain object -- Next.js refuses to pass it from this Server Action
   // to the many Client Components on the vendor detail page.
@@ -106,12 +128,16 @@ export async function getVendorById(vendorId: string) {
     address: vendor.address
       ? {
           ...vendor.address,
-          latitude: vendor.address.latitude
-            ? Number(vendor.address.latitude)
-            : null,
-          longitude: vendor.address.longitude
-            ? Number(vendor.address.longitude)
-            : null,
+          latitude:
+            vendor.address.latitude !== null &&
+            vendor.address.latitude !== undefined
+              ? Number(vendor.address.latitude)
+              : null,
+          longitude:
+            vendor.address.longitude !== null &&
+            vendor.address.longitude !== undefined
+              ? Number(vendor.address.longitude)
+              : null,
         }
       : vendor.address,
   };
@@ -329,71 +355,66 @@ async function transitionVendor(
     approvedById?: string;
     rejectionReason?: string | null;
     publishedAt?: Date;
+    expectedVersion?: number;
   },
 ) {
   await prisma.$transaction(async (tx) => {
     const vendor = await lockListing(tx, vendorId);
     assertTransition(vendor.status, to);
-    if (to === "APPROVED" || to === "PUBLISHED") {
-      const category = await tx.vendorCategory.findUniqueOrThrow({
-        where: { id: vendor.categoryId },
-      });
-      const partner = await tx.partner.findUniqueOrThrow({
-        where: { id: vendor.partnerId },
-      });
+    if (["APPROVED", "REJECTED", "PUBLISHED"].includes(to)) {
       if (
-        !category.launchEnabled ||
-        category.status !== "ACTIVE" ||
-        partner.status !== "ACTIVE"
-      )
-        throw new Error("This partner or service is not active");
-      const documents = await tx.vendorVerification.findMany({
-        where: { vendorId, status: "VERIFIED" },
-      });
-      if (
-        getRequiredDocuments(category.slug).some(
-          (type) =>
-            !documents.some((document) => document.documentType === type),
-        )
+        extra?.expectedVersion !== vendor.submissionVersion ||
+        (!vendor.submissionVersion && to !== "PUBLISHED")
       )
         throw new Error(
-          "Verify all required documents before approving this listing",
+          "Reload this listing before reviewing its current submission.",
         );
-      if (to === "PUBLISHED") {
-        const [address, seats, schedules, plans] = await Promise.all([
-          tx.vendorAddress.findUnique({ where: { vendorId } }),
-          tx.librarySeat.count({ where: { vendorId, isActive: true } }),
-          tx.vendorSchedule.count({ where: { vendorId, isClosed: false } }),
-          tx.membershipPlan.findMany({ where: { vendorId, status: "ACTIVE" } }),
-        ]);
-        if (
-          !address ||
-          address.latitude === null ||
-          address.longitude === null ||
-          !seats ||
-          !schedules ||
-          !launchPlansReady(plans)
-        )
-          throw new Error(
-            "Configure a mapped address, seats, opening hours, Flex, monthly, quarterly and yearly plans before publishing",
-          );
-        for (const plan of plans.filter(
-          (plan) => !plan.isFlexible && plan.dailyStart && plan.dailyHours,
-        )) {
-          const fit = await tx.$queryRaw<
-            { fits: boolean }[]
-          >`SELECT admin.slot_fits_schedule(${vendorId},(now() AT TIME ZONE ${vendor.timeZone})::date,${plan.dailyStart}::time,${plan.dailyHours}::int,${vendor.timeZone}) AS fits`;
-          if (!fit[0]?.fits)
+      if (vendor.submissionVersion > 0) {
+        const submission = await tx.listingSubmission.findUniqueOrThrow({
+          where: {
+            vendorId_version: { vendorId, version: vendor.submissionVersion },
+          },
+        });
+        if (to !== "PUBLISHED") {
+          if (submission.status !== "PENDING")
+            throw new Error("This submission has already been decided");
+          if (
+            submission.digest !==
+            snapshotDigest(await listingSnapshot(tx, vendorId))
+          )
             throw new Error(
-              `The daily window for ${plan.name} is outside your opening hours`,
+              "Submitted content has changed. Request a new submission before approving.",
             );
-        }
+          await tx.listingSubmission.update({
+            where: { id: submission.id },
+            data: {
+              status: to,
+              reviewedBy: actorId,
+              reviewedAt: new Date(),
+              reason: extra?.rejectionReason ?? null,
+            },
+          });
+        } else if (submission.status !== "APPROVED")
+          throw new Error("An approved submission is required");
       }
+    }
+    if (to === "APPROVED" || to === "PUBLISHED") {
+      assertReady(await getReadiness(tx, vendorId, true));
+      if (
+        to === "PUBLISHED" &&
+        (await tx.listingRevision.count({
+          where: { vendorId, status: { in: ["DRAFT", "PENDING"] } },
+        }))
+      )
+        throw new Error(
+          "Finish or withdraw pending changes before first publication",
+        );
     }
 
     const updated = await tx.vendor.update({
       where: { id: vendorId },
       data: {
+        contentVersion: to === "APPROVED" ? { increment: 1 } : undefined,
         status: to,
         verificationStatus: to === "APPROVED" ? "VERIFIED" : undefined,
         approvedById: extra?.approvedById,
@@ -433,11 +454,27 @@ export async function submitVendorForReview(vendorId: string) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   await prisma.$transaction(async (tx) => {
     const vendor = await lockListing(tx, vendorId);
-    assertTransition(vendor.status, "SUBMITTED");
+    if (!["DRAFT", "SUSPENDED", "UNDER_REVIEW"].includes(vendor.status))
+      throw new Error(
+        "This listing cannot be submitted from its current state",
+      );
+    if (vendor.status === "UNDER_REVIEW" && vendor.submissionVersion > 0)
+      throw new Error("This listing is already under review");
+    assertReady(await getReadiness(tx, vendorId));
+    const snapshot = await listingSnapshot(tx, vendorId);
+    await tx.listingSubmission.create({
+      data: {
+        vendorId,
+        version: vendor.submissionVersion + 1,
+        snapshot,
+        digest: snapshotDigest(snapshot),
+        requestedBy: session.user.id,
+      },
+    });
     assertTransition("SUBMITTED", "UNDER_REVIEW");
     await tx.vendor.update({
       where: { id: vendorId },
-      data: { status: "UNDER_REVIEW" },
+      data: { status: "UNDER_REVIEW", submissionVersion: { increment: 1 } },
     });
     for (const [from, to] of [
       [vendor.status, "SUBMITTED"],
@@ -472,8 +509,8 @@ export async function submitVendorForReview(vendorId: string) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function approveVendor(vendorId: string) {
-  const session = await requirePermission("vendor.approve");
+export async function approveVendor(vendorId: string, expectedVersion: number) {
+  const session = await requireSuperAdminPermission("vendor.approve");
   await transitionVendor(
     vendorId,
     "APPROVED",
@@ -481,25 +518,38 @@ export async function approveVendor(vendorId: string) {
     "APPROVE_VENDOR",
     {
       approvedById: session.user.id,
+      expectedVersion,
     },
   );
 }
 
-export async function rejectVendor(vendorId: string, reason: string) {
-  const session = await requirePermission("vendor.reject");
+export async function rejectVendor(
+  vendorId: string,
+  reason: string,
+  expectedVersion: number,
+) {
+  const session = await requireSuperAdminPermission("vendor.reject");
   await transitionVendor(
     vendorId,
     "REJECTED",
     session.user.id,
     "REJECT_VENDOR",
     {
-      rejectionReason: reason,
+      rejectionReason:
+        reason.trim().length >= 3
+          ? reason.trim()
+          : (() => {
+              throw new Error(
+                "Provide a rejection reason of at least 3 characters",
+              );
+            })(),
+      expectedVersion,
     },
   );
 }
 
-export async function publishVendor(vendorId: string) {
-  const session = await requirePermission("vendor.publish");
+export async function publishVendor(vendorId: string, expectedVersion: number) {
+  const session = await requireSuperAdminPermission("vendor.publish");
   await transitionVendor(
     vendorId,
     "PUBLISHED",
@@ -507,12 +557,13 @@ export async function publishVendor(vendorId: string) {
     "PUBLISH_VENDOR",
     {
       publishedAt: new Date(),
+      expectedVersion,
     },
   );
 }
 
 export async function suspendVendor(vendorId: string) {
-  const session = await requirePermission("vendor.suspend");
+  const session = await requireSuperAdminPermission("vendor.suspend");
   await transitionVendor(
     vendorId,
     "SUSPENDED",
@@ -533,11 +584,37 @@ export async function reviseRejectedVendor(vendorId: string) {
 }
 
 export async function requestListingReactivation(vendorId: string) {
-  const session = await requireVendorAccess(vendorId, "vendor.update");
-  await transitionVendor(
-    vendorId,
-    "UNDER_REVIEW",
-    session.user.id,
-    "SUBMIT_VENDOR_FOR_REVIEW",
-  );
+  await submitVendorForReview(vendorId);
+}
+export async function getListingReadiness(vendorId: string) {
+  await requireVendorAccess(vendorId, "vendor.read");
+  return getReadiness(prisma, vendorId);
+}
+
+export async function reopenLegacyListing(vendorId: string) {
+  const session = await requireSuperAdminPermission("vendor.reject");
+  await prisma.$transaction(async (tx) => {
+    const vendor = await lockListing(tx, vendorId);
+    if (
+      !["SUBMITTED", "UNDER_REVIEW"].includes(vendor.status) ||
+      vendor.submissionVersion !== 0
+    )
+      throw new Error("This action is only for legacy unversioned reviews");
+    await tx.vendor.update({
+      where: { id: vendorId },
+      data: { status: "DRAFT" },
+    });
+    await writeAuditLog(tx, {
+      userId: session.user.id,
+      action: "REJECT_VENDOR",
+      entityType: "vendor",
+      entityId: vendorId,
+      newValue: {
+        status: "DRAFT",
+        reason: "Legacy review returned for complete versioned setup",
+      },
+    });
+  });
+  revalidatePath(`/vendors/${vendorId}`);
+  revalidatePath("/dashboard");
 }

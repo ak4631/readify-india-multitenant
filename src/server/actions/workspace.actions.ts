@@ -38,7 +38,12 @@ async function summary(vendorIds: string[] | null) {
       where: { ...where, status: "REFUNDED" },
       _sum: { amountPaise: true },
     }),
-    prisma.listingChange.count({ where: { ...where, status: "PENDING" } }),
+    prisma.listingRevision.count({
+      where: {
+        ...(vendorIds ? { vendorId: { in: vendorIds } } : {}),
+        status: "PENDING",
+      },
+    }),
     prisma.$queryRaw<
       { bookings: number; arrivals: number; departures: number }[]
     >`
@@ -70,9 +75,9 @@ async function summary(vendorIds: string[] | null) {
   };
 }
 
-export async function getWorkspaceSummary() {
+export async function getWorkspaceSummary(selectedPartnerId?: string) {
   const session = await requirePermission("vendor.read");
-  return summary(await getAccessibleVendorIds(session));
+  return summary(await getAccessibleVendorIds(session, selectedPartnerId));
 }
 
 export async function getOwnerControlPanel() {
@@ -84,9 +89,9 @@ export async function getOwnerControlPanel() {
   return summary(vendors.map((vendor) => vendor.id));
 }
 
-export async function listWorkspaceAttendance() {
+export async function listWorkspaceAttendance(selectedPartnerId?: string) {
   const session = await requirePermission("vendor.read");
-  const ids = await getAccessibleVendorIds(session);
+  const ids = await getAccessibleVendorIds(session, selectedPartnerId);
   const rows = await prisma.attendanceVisit.findMany({
     where: { ...(ids ? { vendorId: { in: ids } } : {}), checkedOutAt: null },
     orderBy: { checkedInAt: "desc" },
@@ -95,9 +100,9 @@ export async function listWorkspaceAttendance() {
   return rows;
 }
 
-export async function listPaymentLedger(page = 1) {
+export async function listPaymentLedger(page = 1, selectedPartnerId?: string) {
   const session = await requirePermission("subscription.read");
-  const partnerId = await getSessionPartnerId(session);
+  const partnerId = await getSessionPartnerId(session, selectedPartnerId);
   const where = partnerId
     ? {
         vendorId: {

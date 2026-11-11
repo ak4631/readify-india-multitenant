@@ -5,10 +5,12 @@ import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { visibleNavigation } from "@/config/nav";
+import { getWorkspaceIdentity } from "@/config/workspace-identity";
 import type { PermissionKey } from "@/config/permissions";
 import { cn } from "@/lib/utils";
-import { Building2, LogOut } from "lucide-react";
+import { Building2, LogOut, ShieldCheck, UserRound } from "lucide-react";
 
 export function Topbar({
   name,
@@ -24,73 +26,84 @@ export function Topbar({
   organizationName?: string | null;
 }) {
   const pathname = usePathname();
+  const identity = getWorkspaceIdentity(roles);
+  const RoleIcon = identity.tone === "user" ? UserRound : ShieldCheck;
   const initials = name
     .split(" ")
+    .filter(Boolean)
     .map((part) => part[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
   const visibleItems = visibleNavigation(permissions, roles);
-
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-card/90 shadow-[0_10px_28px_oklch(0.25_0.03_170_/_0.04)] backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-4 px-4 py-3 md:px-8">
-        <div className="flex items-center gap-3 md:hidden">
-          <span
-            aria-hidden="true"
-            className="grid size-10 place-items-center rounded-lg bg-primary text-xl font-bold text-primary-foreground"
-          >
-            V
-          </span>
+    <header
+      className="workspace-header sticky top-0 z-20 border-b"
+      data-workspace-role={identity.tone}
+      aria-label={`${identity.label} workspace header`}
+    >
+      <div className="flex min-h-20 items-center justify-between gap-3 px-4 py-3 md:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <BrandLogo className="w-24 p-1 md:hidden" />
           <div className="min-w-0">
-            <p className="text-base font-semibold tracking-tight">Vriddhora</p>
-            <p className="max-w-36 truncate text-xs font-medium text-muted-foreground">
-              {organizationName ?? "Management Portal"}
+            <div className="flex items-center gap-2 font-heading text-sm font-bold sm:text-base">
+              <RoleIcon
+                className="hidden size-4 shrink-0 sm:block"
+                aria-hidden="true"
+              />
+              <span>{identity.label}</span>
+            </div>
+            <p className="mt-1 flex items-center gap-1 text-xs">
+              {organizationName && (
+                <Building2
+                  className="hidden size-3 shrink-0 sm:block"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="max-w-32 truncate sm:max-w-56">
+                {organizationName ?? "ZEROTHAM Workspace"}
+              </span>
             </p>
           </div>
         </div>
-        <div className="hidden md:block" />
-        <div className="flex items-center gap-3">
-          <div className="hidden text-right text-sm sm:block">
-            {organizationName && (
-              <div className="mb-0.5 flex items-center justify-end gap-1 text-xs font-semibold text-primary">
-                <Building2 className="size-3" aria-hidden="true" />
-                <span className="max-w-56 truncate">{organizationName}</span>
-              </div>
-            )}
-            <div className="font-semibold text-foreground">{name}</div>
-            <div className="text-muted-foreground">{email}</div>
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="hidden text-right text-sm lg:block">
+            <div className="font-semibold">{name}</div>
+            <div className="max-w-64 truncate text-xs">{email}</div>
           </div>
-          <Avatar>
-            <AvatarFallback className="bg-secondary text-secondary-foreground">
+          <Avatar className="hidden sm:flex">
+            <AvatarFallback className="workspace-avatar">
               {initials}
             </AvatarFallback>
           </Avatar>
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className="workspace-sign-out gap-1.5"
+            aria-label="Sign out"
             onClick={() => signOut({ callbackUrl: "/login" })}
           >
-            <LogOut className="size-3.5" aria-hidden="true" />
-            Sign out
+            <LogOut className="size-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Sign out</span>
           </Button>
         </div>
       </div>
-      <nav className="flex gap-1 overflow-x-auto border-t border-border px-4 py-2 md:hidden">
+      <nav
+        aria-label="Workspace navigation"
+        className="workspace-mobile-nav flex gap-1 overflow-x-auto border-t px-4 py-2 md:hidden"
+      >
         {visibleItems.map((item) => {
-          const isActive =
+          const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors",
-                isActive
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                "workspace-nav-link inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap",
+                active && "workspace-nav-active",
               )}
             >
               <Icon className="size-3.5" aria-hidden="true" />

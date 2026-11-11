@@ -31,7 +31,9 @@ export function VendorMediaGallery({
     setIsUploading(true);
     try {
       await uploadVendorMedia(formData);
-      toast.success("Photo uploaded");
+      toast.success(
+        "Saved. Changes to approved listings must be submitted from Changes.",
+      );
       formRef.current?.reset();
       router.refresh();
     } catch (error) {
@@ -45,7 +47,9 @@ export function VendorMediaGallery({
     startTransition(async () => {
       try {
         await deleteVendorMedia(mediaId);
-        toast.success("Photo deleted");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Delete failed");
@@ -57,7 +61,9 @@ export function VendorMediaGallery({
     startTransition(async () => {
       try {
         await setPrimaryVendorMedia(mediaId);
-        toast.success("Cover photo updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");

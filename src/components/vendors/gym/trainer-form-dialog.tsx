@@ -61,10 +61,14 @@ export function TrainerFormDialog({
     try {
       if (trainer) {
         await updateTrainer(trainer.id, values);
-        toast.success("Trainer updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       } else {
         await createTrainer(vendorId, values);
-        toast.success("Trainer added");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       }
       setOpen(false);
       form.reset();

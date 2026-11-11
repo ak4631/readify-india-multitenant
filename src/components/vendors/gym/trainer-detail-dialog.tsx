@@ -80,7 +80,9 @@ export function TrainerDetailDialog({
     startTransition(async () => {
       try {
         await setTrainerSpecializations(trainer.id, Array.from(selectedSpecs));
-        toast.success("Specializations updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Update failed");
@@ -96,7 +98,9 @@ export function TrainerDetailDialog({
           durationValue: Number(priceForm.durationValue),
           durationUnit: priceForm.durationUnit,
         });
-        toast.success("Pricing added");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         setPriceForm({ price: "", durationValue: "1", durationUnit: "MONTHS" });
         router.refresh();
       } catch (error) {
@@ -109,7 +113,9 @@ export function TrainerDetailDialog({
     startTransition(async () => {
       try {
         await deleteTrainerPricing(pricingId);
-        toast.success("Pricing removed");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");
@@ -138,7 +144,9 @@ export function TrainerDetailDialog({
     startTransition(async () => {
       try {
         await setTrainerAvailability(trainer.id, slots);
-        toast.success("Availability updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Update failed");

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { visibleNavigation } from "@/config/nav";
 import type { PermissionKey } from "@/config/permissions";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { cn } from "@/lib/utils";
 
 export function Sidebar({
@@ -25,24 +26,16 @@ export function Sidebar({
           }
           className="flex items-center gap-3"
         >
-          <span
-            aria-hidden="true"
-            className="grid size-10 place-items-center rounded-lg bg-primary text-xl font-bold text-primary-foreground"
-          >
-            V
-          </span>
-          <span>
-            <span className="block text-lg font-semibold tracking-tight text-sidebar-foreground">
-              Vriddhora
-            </span>
-            <span className="mt-0.5 block text-xs font-medium text-sidebar-foreground/60">
+          <span className="block w-full">
+            <BrandLogo className="w-full" />
+            <span className="mt-3 block text-center text-xs font-medium text-sidebar-foreground">
               Management Portal
             </span>
           </span>
         </Link>
       </div>
       <div className="flex-1 p-4">
-        <p className="mb-3 px-3 text-xs font-semibold tracking-[0.08em] text-sidebar-foreground/45 uppercase">
+        <p className="mb-3 px-3 text-xs font-semibold tracking-[0.08em] text-sidebar-foreground/80 uppercase">
           Workspace
         </p>
         <nav className="space-y-1.5">
@@ -57,8 +50,8 @@ export function Sidebar({
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                   isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-                    : "text-sidebar-foreground/62 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground",
+                    ? "bg-[var(--brand-lime)] text-[var(--brand-forest)] shadow-sm"
+                    : "text-sidebar-foreground/85 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground",
                 )}
               >
                 <Icon className="size-4" aria-hidden="true" />

@@ -1,126 +1,41 @@
 import Link from "next/link";
-import { ApplicationReview } from "@/components/partners/application-review";
-import { ArrowLeft, Plus, UserPlus } from "lucide-react";
-import { notFound } from "next/navigation";
-import { PageHeader } from "@/components/layout/page-header";
-import { ListPagination } from "@/components/layout/list-pagination";
-import { PartnerFormDialog } from "@/components/partners/partner-form-dialog";
-import { PartnerTeamTable } from "@/components/partners/partner-team-table";
-import { PartnerUserDialog } from "@/components/partners/partner-user-dialog";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { VendorTable } from "@/components/vendors/vendor-table";
-import { parsePage } from "@/lib/pagination";
-import { getCurrentSession, hasPermission } from "@/lib/rbac";
-import {
-  getPartnerById,
-  listPartnerUsers,
-} from "@/server/actions/partners.actions";
+import { requirePartnerAccess } from "@/lib/rbac";
+import { prisma } from "@/lib/prisma";
+import { getWorkspaceSummary } from "@/server/actions/workspace.actions";
+import { WorkspaceSummary } from "@/components/dashboard/workspace-summary";
 
-export default async function PartnerDetailPage({
+export default async function PartnerOverview({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ page?: string }>;
 }) {
   const { id } = await params;
-  const query = await searchParams;
-  const session = await getCurrentSession();
-  const canViewTeam = hasPermission(session, "partnerUser.read");
-  const [partner, users] = await Promise.all([
-    getPartnerById(id),
-    canViewTeam ? listPartnerUsers(id, parsePage(query.page)) : null,
+  await requirePartnerAccess(id, "partner.read");
+  const [summary, services] = await Promise.all([
+    getWorkspaceSummary(id),
+    prisma.vendor.findMany({
+      where: { partnerId: id },
+      select: { category: { select: { name: true } } },
+      distinct: ["categoryId"],
+    }),
   ]);
-  if (!partner) notFound();
-  const canCreateAdmin = hasPermission(session, "partnerUser.createAdmin");
-  const canCreateEmployee = hasPermission(
-    session,
-    "partnerUser.createEmployee",
-  );
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold">Organization overview</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Services:{" "}
+          {services.map((s) => s.category.name).join(", ") || "No listings yet"}
+          . Open a module above to manage this organization.
+        </p>
+      </div>
+      <WorkspaceSummary data={summary} />
       <Link
-        href="/partners"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary"
+        href={`/partners/${id}/approvals`}
+        className="text-primary underline"
       >
-        <ArrowLeft className="size-4" />
-        Back to partners
+        Review this partner’s pending actions
       </Link>
-      <PageHeader
-        eyebrow="Partner organization"
-        title={partner.name}
-        description={
-          [partner.email, partner.phone].filter(Boolean).join(" · ") ||
-          "No contact details added."
-        }
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {hasPermission(session, "partner.update") && (
-              <PartnerFormDialog
-                partner={partner}
-                trigger={<Button variant="outline">Edit partner</Button>}
-              />
-            )}
-            {hasPermission(session, "vendor.create") && (
-              <Button
-                nativeButton={false}
-                render={
-                  <Link href={`/vendors/new?partnerId=${partner.id}`}>
-                    <Plus className="size-4" />
-                    Add listing
-                  </Link>
-                }
-              />
-            )}
-          </div>
-        }
-      />
-      {partner.approvalStatus === "PENDING" &&
-        hasPermission(session, "partner.status") && (
-          <ApplicationReview partnerId={partner.id} />
-        )}
-      {users && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle>Team</CardTitle>
-              {(canCreateAdmin || canCreateEmployee) && (
-                <PartnerUserDialog
-                  partnerId={partner.id}
-                  allowAdmin={canCreateAdmin}
-                  trigger={
-                    <Button size="sm">
-                      <UserPlus className="size-4" />
-                      Add team member
-                    </Button>
-                  }
-                />
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <PartnerTeamTable users={users.items} />
-            <ListPagination
-              page={users}
-              path={`/partners/${partner.id}`}
-              params={query}
-              noun="team members"
-            />
-          </CardContent>
-        </Card>
-      )}
-      {partner.applicationReason && (
-        <p>Application decision: {partner.applicationReason}</p>
-      )}
-      <Card>
-        <CardHeader>
-          <CardTitle>Listings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VendorTable vendors={partner.vendors} />
-        </CardContent>
-      </Card>
     </div>
   );
 }

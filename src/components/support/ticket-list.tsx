@@ -14,9 +14,11 @@ import {
 export function TicketList({
   tickets,
   canRespond,
+  partnerId,
 }: {
   tickets: Awaited<ReturnType<typeof listSupportTickets>>["items"];
   canRespond: boolean;
+  partnerId?: string;
 }) {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -43,7 +45,7 @@ export function TicketList({
         onSubmit={(event) => {
           event.preventDefault();
           run(async () => {
-            await createSupportTicket({ subject, message });
+            await createSupportTicket({ subject, message, partnerId });
             setSubject("");
             setMessage("");
           });

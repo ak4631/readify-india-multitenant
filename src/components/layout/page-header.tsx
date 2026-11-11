@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 export function PageHeader({
-  eyebrow = "Admin Portal",
+  eyebrow = "ZEROTHAM Workspace",
   title,
   description,
   actions,

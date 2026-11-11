@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { lockListing } from "@/lib/listing-changes";
-import { requirePlatformPermission, requireVendorAccess } from "@/lib/rbac";
+import { requireSuperAdminPermission, requireVendorAccess } from "@/lib/rbac";
 import { writeAuditLog } from "@/lib/audit";
 import { membershipPlanSchema } from "@/lib/validations/membership-plan.schema";
 import {
@@ -15,208 +15,443 @@ import { vendorScheduleSchema } from "@/lib/validations/vendor-schedule.schema";
 import { vendorCapacitySchema } from "@/lib/validations/vendor-capacity.schema";
 import { librarySeatTypeSchema } from "@/lib/validations/library-seat-type.schema";
 
+import { randomUUID } from "node:crypto";
+import { applyCategoryChange } from "@/lib/category-changes";
+import { listingSnapshot, snapshotDigest } from "@/lib/listing-snapshot";
+import { assertReady, getReadiness } from "@/lib/listing-readiness";
+
 export async function listListingChanges(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   return prisma.listingChange.findMany({
+    where: { vendorId, status: { in: ["DRAFT", "PENDING"] } },
+    orderBy: { createdAt: "asc" },
+  });
+}
+export async function listListingRevisions(vendorId: string) {
+  await requireVendorAccess(vendorId, "vendor.read");
+  const rows = await prisma.listingRevision.findMany({
     where: { vendorId },
+    include: { changes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
+  return rows.map(({ baseSnapshot, ...row }) => ({
+    ...row,
+    changes: row.changes.map((c) => ({
+      ...c,
+      approved: approvedValues(baseSnapshot, c.kind, c.targetId, c.payload),
+    })),
+    digest: snapshotDigest({
+      baseVersion: row.baseVersion,
+      changes: row.changes.map((c) => ({
+        id: c.id,
+        kind: c.kind,
+        targetId: c.targetId,
+        payload: c.payload,
+      })),
+    }),
+  }));
 }
-
-export async function reviewListingChange(
-  changeId: string,
+export async function submitListingRevision(revisionId: string) {
+  const ref = await prisma.listingRevision.findUniqueOrThrow({
+    where: { id: revisionId },
+  });
+  const session = await requireVendorAccess(ref.vendorId, "vendor.update");
+  await prisma.$transaction(async (tx) => {
+    const vendor = await lockListing(tx, ref.vendorId);
+    const revision = await tx.listingRevision.findUniqueOrThrow({
+      where: { id: revisionId },
+      include: { changes: true },
+    });
+    if (revision.status !== "DRAFT" || !revision.changes.length)
+      throw new Error("Only a nonempty draft revision can be submitted");
+    if (revision.baseVersion !== vendor.contentVersion)
+      throw new Error(
+        "Approved content has changed. Withdraw this revision and prepare a new one.",
+      );
+    await tx.listingChange.updateMany({
+      where: { revisionId },
+      data: { status: "PENDING" },
+    });
+    await tx.listingRevision.update({
+      where: { id: revisionId },
+      data: { status: "PENDING", submittedAt: new Date() },
+    });
+    const reviewers = await tx.user.findMany({
+      where: {
+        status: "ACTIVE",
+        roles: { some: { role: { name: "SUPER_ADMIN" } } },
+      },
+      select: { id: true },
+    });
+    if (reviewers.length)
+      await tx.portalNotification.createMany({
+        data: reviewers.map((u) => ({
+          userId: u.id,
+          title: "Listing changes awaiting approval",
+          body: vendor.name,
+          href: `/vendors/${vendor.id}?tab=changes`,
+        })),
+      });
+    await writeAuditLog(tx, {
+      userId: session.user.id,
+      action: "REQUEST_LISTING_CHANGE",
+      entityType: "listing_change",
+      entityId: revisionId,
+      newValue: { status: "PENDING" },
+    });
+  });
+  revalidatePath(`/vendors/${ref.vendorId}`);
+  revalidatePath("/dashboard");
+}
+export async function withdrawListingRevision(revisionId: string) {
+  const ref = await prisma.listingRevision.findUniqueOrThrow({
+    where: { id: revisionId },
+  });
+  const session = await requireVendorAccess(ref.vendorId, "vendor.update");
+  await prisma.$transaction(async (tx) => {
+    await lockListing(tx, ref.vendorId);
+    const current = await tx.listingRevision.findUniqueOrThrow({
+      where: { id: revisionId },
+    });
+    if (!["DRAFT", "PENDING"].includes(current.status))
+      throw new Error("This revision has already been decided");
+    await tx.listingChange.updateMany({
+      where: { revisionId },
+      data: { status: "WITHDRAWN" },
+    });
+    await tx.listingRevision.update({
+      where: { id: revisionId },
+      data: { status: "WITHDRAWN" },
+    });
+    await writeAuditLog(tx, {
+      userId: session.user.id,
+      action: "REQUEST_LISTING_CHANGE",
+      entityType: "listing_change",
+      entityId: revisionId,
+      newValue: { status: "WITHDRAWN" },
+    });
+  });
+  revalidatePath(`/vendors/${ref.vendorId}`);
+}
+export async function reviseListingRevision(revisionId: string) {
+  const ref = await prisma.listingRevision.findUniqueOrThrow({
+    where: { id: revisionId },
+  });
+  const session = await requireVendorAccess(ref.vendorId, "vendor.update");
+  await prisma.$transaction(async (tx) => {
+    const vendor = await lockListing(tx, ref.vendorId);
+    const original = await tx.listingRevision.findUniqueOrThrow({
+      where: { id: revisionId },
+      include: { changes: true },
+    });
+    if (!["REJECTED", "WITHDRAWN"].includes(original.status))
+      throw new Error(
+        "Only rejected or withdrawn revisions can be copied for correction",
+      );
+    if (
+      await tx.listingRevision.findFirst({
+        where: { vendorId: ref.vendorId, status: { in: ["DRAFT", "PENDING"] } },
+      })
+    )
+      throw new Error("Finish the current revision first");
+    const copy = await tx.listingRevision.create({
+      data: {
+        vendorId: ref.vendorId,
+        baseVersion: vendor.contentVersion,
+        baseSnapshot: await listingSnapshot(tx, ref.vendorId),
+        requestedBy: session.user.id,
+      },
+    });
+    const ids = new Map(
+      original.changes
+        .filter((c) => c.kind.endsWith("_CREATE"))
+        .map((c) => [c.targetId, randomUUID()]),
+    );
+    const remap = (value: unknown): unknown =>
+      typeof value === "string"
+        ? (ids.get(value) ?? value)
+        : Array.isArray(value)
+          ? value.map(remap)
+          : value && typeof value === "object"
+            ? Object.fromEntries(
+                Object.entries(value).map(([k, v]) => [k, remap(v)]),
+              )
+            : value;
+    await tx.listingChange.createMany({
+      data: original.changes.map((c) => ({
+        id: randomUUID(),
+        vendorId: c.vendorId,
+        revisionId: copy.id,
+        kind: c.kind,
+        targetId: ids.get(c.targetId) ?? c.targetId,
+        payload: remap(c.payload) as object,
+        status: "DRAFT",
+        requestedBy: session.user.id,
+      })),
+    });
+    await writeAuditLog(tx, {
+      userId: session.user.id,
+      action: "REQUEST_LISTING_CHANGE",
+      entityType: "listing_change",
+      entityId: copy.id,
+      newValue: { copiedFrom: original.id },
+    });
+  });
+  revalidatePath(`/vendors/${ref.vendorId}`);
+}
+export async function reviewListingRevision(
+  revisionId: string,
+  expectedDigest: string,
   approve: boolean,
   reason?: string,
 ) {
-  const session = await requirePlatformPermission(
+  const session = await requireSuperAdminPermission(
     approve ? "vendor.approve" : "vendor.reject",
   );
   const rejectionReason = approve
     ? null
     : z.string().trim().min(3).max(1000).parse(reason);
-  const reference = await prisma.listingChange.findUniqueOrThrow({
-    where: { id: changeId },
+  const reference = await prisma.listingRevision.findUniqueOrThrow({
+    where: { id: revisionId },
   });
   await prisma.$transaction(async (tx) => {
     const vendor = await lockListing(tx, reference.vendorId);
-    const change = await tx.listingChange.findUniqueOrThrow({
-      where: { id: changeId },
+    const revision = await tx.listingRevision.findUniqueOrThrow({
+      where: { id: revisionId },
+      include: { changes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
     });
-    if (change.status !== "PENDING")
-      throw new Error("This change has already been reviewed.");
-    if (
-      approve &&
-      !["PUBLISHED", "APPROVED", "SUSPENDED"].includes(vendor.status)
-    ) {
-      throw new Error(
-        "Review the listing's current status before applying changes.",
-      );
-    }
+    if (revision.status !== "PENDING")
+      throw new Error("This revision is not awaiting review");
+    const digest = snapshotDigest({
+      baseVersion: revision.baseVersion,
+      changes: revision.changes.map((c) => ({
+        id: c.id,
+        kind: c.kind,
+        targetId: c.targetId,
+        payload: c.payload,
+      })),
+    });
+    if (!expectedDigest || digest !== expectedDigest)
+      throw new Error("The revision has changed. Reload before deciding.");
     if (approve) {
-      const target = { id: change.targetId, vendorId: change.vendorId };
-      switch (change.kind) {
-        case "PROFILE": {
-          const { partnerId: _partnerId, ...data } =
-            vendorBasicInfoSchema.parse(change.payload);
-          void _partnerId;
-          await tx.vendor.update({ where: { id: change.vendorId }, data });
-          break;
-        }
-        case "ADDRESS": {
-          const data = vendorAddressSchema.parse(change.payload);
-          await tx.vendorAddress.upsert({
-            where: { vendorId: change.vendorId },
-            create: { ...data, vendorId: change.vendorId },
-            update: data,
-          });
-          break;
-        }
-        case "CAPACITY":
-          await tx.vendor.update({
-            where: { id: change.vendorId },
-            data: vendorCapacitySchema.parse(change.payload),
-          });
-          break;
-        case "SCHEDULE":
-          for (const day of vendorScheduleSchema.parse(change.payload).days) {
-            const data = {
-              isClosed: day.isClosed,
-              openTime: new Date(`1970-01-01T${day.openTime}:00Z`),
-              closeTime: new Date(`1970-01-01T${day.closeTime}:00Z`),
-            };
-            await tx.vendorSchedule.upsert({
-              where: {
-                vendorId_dayOfWeek: {
+      if (revision.baseVersion !== vendor.contentVersion)
+        throw new Error(
+          "This proposal is based on an older approved version. Reject it and request a corrected revision.",
+        );
+      if (!["PUBLISHED", "APPROVED", "SUSPENDED"].includes(vendor.status))
+        throw new Error("Review the listing's current status first");
+      // Parent creates precede dependent child operations, regardless of save order.
+      const priority = (kind: string) =>
+        kind.endsWith("CREATE")
+          ? kind === "TRAINER_CREATE" ||
+            kind === "TEACHER_CREATE" ||
+            kind === "MENU_CATEGORY_CREATE"
+            ? 0
+            : kind === "COURSE_CREATE"
+              ? 1
+              : 2
+          : kind === "MENU_CATEGORY_DELETE"
+            ? 6
+            : kind.endsWith("DELETE")
+              ? 5
+              : 3;
+      for (const change of [...revision.changes].sort(
+        (a, b) => priority(a.kind) - priority(b.kind),
+      )) {
+        const target = { id: change.targetId, vendorId: change.vendorId };
+        switch (change.kind) {
+          case "PROFILE": {
+            const { partnerId: _partnerId, ...data } =
+              vendorBasicInfoSchema.parse(change.payload);
+            void _partnerId;
+            if (data.categoryId !== vendor.categoryId)
+              throw new Error("A listing service cannot be changed");
+            await tx.vendor.update({ where: { id: change.vendorId }, data });
+            break;
+          }
+          case "ADDRESS": {
+            const data = vendorAddressSchema.parse(change.payload);
+            await tx.vendorAddress.upsert({
+              where: { vendorId: change.vendorId },
+              create: { ...data, vendorId: change.vendorId },
+              update: data,
+            });
+            break;
+          }
+          case "CAPACITY":
+            await tx.vendor.update({
+              where: { id: change.vendorId },
+              data: vendorCapacitySchema.parse(change.payload),
+            });
+            break;
+          case "SCHEDULE":
+            for (const day of vendorScheduleSchema.parse(change.payload).days) {
+              const data = {
+                isClosed: day.isClosed,
+                openTime: new Date(`1970-01-01T${day.openTime}:00Z`),
+                closeTime: new Date(`1970-01-01T${day.closeTime}:00Z`),
+              };
+              await tx.vendorSchedule.upsert({
+                where: {
+                  vendorId_dayOfWeek: {
+                    vendorId: change.vendorId,
+                    dayOfWeek: day.dayOfWeek,
+                  },
+                },
+                create: {
+                  ...data,
                   vendorId: change.vendorId,
                   dayOfWeek: day.dayOfWeek,
                 },
+                update: data,
+              });
+            }
+            {
+              const check = await tx.$queryRaw<
+                { fits: boolean }[]
+              >`SELECT admin.reservations_fit_schedule(${change.vendorId}) AS fits`;
+              if (!check[0]?.fits)
+                throw new Error(
+                  "These hours conflict with existing reservations. Cancel and refund affected purchases before changing the schedule.",
+                );
+            }
+            break;
+          case "FACILITIES": {
+            const ids = [
+              ...new Set(
+                z.array(z.string().min(1)).max(200).parse(change.payload),
+              ),
+            ];
+            if (
+              (await tx.facility.count({
+                where: { id: { in: ids }, status: "ACTIVE" },
+              })) !== ids.length
+            )
+              throw new Error("Some facilities are no longer active");
+            await tx.vendorFacility.deleteMany({
+              where: { vendorId: change.vendorId },
+            });
+            if (ids.length)
+              await tx.vendorFacility.createMany({
+                data: ids.map((facilityId) => ({
+                  vendorId: change.vendorId,
+                  facilityId,
+                })),
+                skipDuplicates: true,
+              });
+            break;
+          }
+          case "PLAN_CREATE":
+            await tx.membershipPlan.create({
+              data: {
+                ...membershipPlanSchema.parse(change.payload),
+                id: change.targetId,
+                vendorId: change.vendorId,
               },
-              create: {
+            });
+            break;
+          case "PLAN_UPDATE":
+            await tx.membershipPlan.update({
+              where: target,
+              data: membershipPlanSchema.parse(change.payload),
+            });
+            break;
+          case "PLAN_ARCHIVE":
+            await tx.membershipPlan.update({
+              where: target,
+              data: { status: "ARCHIVED" },
+            });
+            break;
+          case "SEAT_CREATE":
+            await tx.librarySeatType.create({
+              data: {
+                ...librarySeatTypeSchema.parse(change.payload),
+                id: change.targetId,
+                vendorId: change.vendorId,
+              },
+            });
+            break;
+          case "SEAT_UPDATE":
+            await tx.librarySeatType.update({
+              where: target,
+              data: librarySeatTypeSchema.parse(change.payload),
+            });
+            break;
+          case "SEAT_DELETE":
+            await tx.librarySeatType.delete({ where: target });
+            break;
+          case "MEDIA_CREATE": {
+            const data = z
+              .object({ mediaUrl: z.url(), externalId: z.string().min(1) })
+              .parse(change.payload);
+            const count = await tx.vendorMedia.count({
+              where: { vendorId: change.vendorId },
+            });
+            await tx.vendorMedia.create({
+              data: {
                 ...data,
-                vendorId: change.vendorId,
-                dayOfWeek: day.dayOfWeek,
+                ...target,
+                isPrimary: count === 0,
+                sortOrder: count,
               },
-              update: data,
             });
+            break;
           }
-          {
-            const check = await tx.$queryRaw<
-              { fits: boolean }[]
-            >`SELECT admin.reservations_fit_schedule(${change.vendorId}) AS fits`;
-            if (!check[0]?.fits)
-              throw new Error(
-                "These hours conflict with existing reservations. Cancel and refund affected purchases before changing the schedule.",
-              );
-          }
-          break;
-        case "FACILITIES": {
-          const ids = z.array(z.string().min(1)).max(100).parse(change.payload);
-          await tx.vendorFacility.deleteMany({
-            where: { vendorId: change.vendorId },
-          });
-          if (ids.length)
-            await tx.vendorFacility.createMany({
-              data: ids.map((facilityId) => ({
-                vendorId: change.vendorId,
-                facilityId,
-              })),
-              skipDuplicates: true,
+          case "MEDIA_DELETE":
+            await tx.vendorMedia.delete({ where: target });
+            break;
+          case "MEDIA_PRIMARY":
+            await tx.vendorMedia.findUniqueOrThrow({ where: target });
+            await tx.vendorMedia.updateMany({
+              where: { vendorId: change.vendorId },
+              data: { isPrimary: false },
             });
-          break;
-        }
-        case "PLAN_CREATE":
-          await tx.membershipPlan.create({
-            data: {
-              ...membershipPlanSchema.parse(change.payload),
-              id: change.targetId,
-              vendorId: change.vendorId,
-            },
-          });
-          break;
-        case "PLAN_UPDATE":
-          await tx.membershipPlan.update({
-            where: target,
-            data: membershipPlanSchema.parse(change.payload),
-          });
-          break;
-        case "PLAN_ARCHIVE":
-          await tx.membershipPlan.update({
-            where: target,
-            data: { status: "ARCHIVED" },
-          });
-          break;
-        case "SEAT_CREATE":
-          await tx.librarySeatType.create({
-            data: {
-              ...librarySeatTypeSchema.parse(change.payload),
-              id: change.targetId,
-              vendorId: change.vendorId,
-            },
-          });
-          break;
-        case "SEAT_UPDATE":
-          await tx.librarySeatType.update({
-            where: target,
-            data: librarySeatTypeSchema.parse(change.payload),
-          });
-          break;
-        case "SEAT_DELETE":
-          await tx.librarySeatType.delete({ where: target });
-          break;
-        case "MEDIA_CREATE": {
-          const data = z
-            .object({ mediaUrl: z.url(), externalId: z.string().min(1) })
-            .parse(change.payload);
-          const count = await tx.vendorMedia.count({
-            where: { vendorId: change.vendorId },
-          });
-          await tx.vendorMedia.create({
-            data: {
-              ...data,
-              ...target,
-              isPrimary: count === 0,
-              sortOrder: count,
-            },
-          });
-          break;
-        }
-        case "MEDIA_DELETE":
-          await tx.vendorMedia.delete({ where: target });
-          break;
-        case "MEDIA_PRIMARY":
-          await tx.vendorMedia.findUniqueOrThrow({ where: target });
-          await tx.vendorMedia.updateMany({
-            where: { vendorId: change.vendorId },
-            data: { isPrimary: false },
-          });
-          await tx.vendorMedia.update({
-            where: target,
-            data: { isPrimary: true },
-          });
-          break;
-        case "SEAT_ACTIVE": {
-          const data = z
-            .object({ isActive: z.boolean() })
-            .parse(change.payload);
-          if (!data.isActive) {
-            const occupied = await tx.$queryRaw<
-              { busy: boolean }[]
-            >`SELECT EXISTS(SELECT 1 FROM admin.seat_busy_intervals(${change.targetId}, now(), now() + interval '100 years')) AS busy`;
-            if (occupied[0]?.busy)
-              throw new Error(
-                "This seat has reservations. Cancel them before deactivating it.",
-              );
+            await tx.vendorMedia.update({
+              where: target,
+              data: { isPrimary: true },
+            });
+            break;
+          case "SEAT_ACTIVE": {
+            const data = z
+              .object({ isActive: z.boolean() })
+              .parse(change.payload);
+            if (!data.isActive) {
+              const occupied = await tx.$queryRaw<
+                { busy: boolean }[]
+              >`SELECT EXISTS(SELECT 1 FROM admin.seat_busy_intervals(${change.targetId}, now(), now() + interval '100 years')) AS busy`;
+              if (occupied[0]?.busy)
+                throw new Error(
+                  "This seat has reservations. Cancel them before deactivating it.",
+                );
+            }
+            await tx.librarySeat.update({ where: target, data });
+            break;
           }
-          await tx.librarySeat.update({ where: target, data });
-          break;
+          default:
+            if (!(await applyCategoryChange(tx, change)))
+              throw new Error(
+                "Unsupported change type. No changes were applied.",
+              );
         }
-        default:
-          throw new Error("Unsupported change type. No changes were applied.");
       }
+      assertReady(await getReadiness(tx, vendor.id, true));
+      await tx.vendor.update({
+        where: { id: vendor.id },
+        data: { contentVersion: { increment: 1 } },
+      });
     }
-    await tx.listingChange.update({
-      where: { id: change.id },
+    await tx.listingChange.updateMany({
+      where: { revisionId },
+      data: {
+        status: approve ? "APPROVED" : "REJECTED",
+        reviewedBy: session.user.id,
+        reviewedAt: new Date(),
+        reason: rejectionReason,
+      },
+    });
+    await tx.listingRevision.update({
+      where: { id: revisionId },
       data: {
         status: approve ? "APPROVED" : "REJECTED",
         reviewedBy: session.user.id,
@@ -226,18 +461,21 @@ export async function reviewListingChange(
     });
     await tx.portalNotification.create({
       data: {
-        userId: change.requestedBy,
-        title: approve ? "Listing change approved" : "Listing change rejected",
-        body: `${vendor.name}: ${change.kind.toLowerCase().replaceAll("_", " ")}${rejectionReason ? `. ${rejectionReason}` : ""}`,
-        href: `/vendors/${change.vendorId}?tab=changes`,
+        userId: revision.requestedBy,
+        title: approve
+          ? "Listing changes approved"
+          : "Listing changes rejected",
+        body: vendor.name + (rejectionReason ? `: ${rejectionReason}` : ""),
+        href: `/vendors/${vendor.id}?tab=changes`,
       },
     });
     await writeAuditLog(tx, {
       userId: session.user.id,
       action: approve ? "APPROVE_LISTING_CHANGE" : "REJECT_LISTING_CHANGE",
       entityType: "listing_change",
-      entityId: change.id,
+      entityId: revisionId,
       newValue: {
+        digest,
         status: approve ? "APPROVED" : "REJECTED",
         reason: rejectionReason,
       },
@@ -245,5 +483,121 @@ export async function reviewListingChange(
   });
   revalidatePath(`/vendors/${reference.vendorId}`);
   revalidatePath("/vendors");
+  revalidatePath("/dashboard");
   revalidatePath("/notifications");
+}
+
+function approvedValues(
+  snapshot: unknown,
+  kind: string,
+  targetId: string,
+  payload: unknown,
+): unknown {
+  if (!snapshot || typeof snapshot !== "object")
+    return "Legacy approved snapshot unavailable";
+  if (kind.endsWith("_CREATE")) return null;
+  const root = snapshot as Record<string, unknown>;
+  if (kind === "FACILITIES")
+    return Array.isArray(root.facilities)
+      ? root.facilities.map((f) => (f as { facilityId: string }).facilityId)
+      : [];
+  if (kind === "CAPACITY") return { capacity: root.capacity };
+  if (kind === "PROFILE")
+    return Object.fromEntries(
+      ["name", "description", "phone", "email", "website"].map((k) => [
+        k,
+        root[k],
+      ]),
+    );
+  if (kind === "ADDRESS") return root.address;
+  if (kind === "SCHEDULE") return root.schedules;
+  function find(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== "object") return null;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const r = find(item);
+        if (r) return r;
+      }
+      return null;
+    }
+    const record = value as Record<string, unknown>;
+    if (record.id === targetId) return record;
+    for (const v of Object.values(record)) {
+      const r = find(v);
+      if (r) return r;
+    }
+    return null;
+  }
+  const old = find(root);
+  if (!old) return null;
+  if (
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    Object.keys(payload).length
+  )
+    return Object.fromEntries(
+      Object.keys(payload)
+        .filter((k) => k !== "documentUrl")
+        .map((k) => [k, old[k] ?? null]),
+    );
+  return Object.fromEntries(
+    Object.entries(old).filter(
+      ([k, v]) =>
+        !["documentUrl", "meetingUrl", "recordingUrl"].includes(k) &&
+        typeof v !== "object",
+    ),
+  );
+}
+
+export async function discardDraftChange(changeId: string) {
+  const ref = await prisma.listingChange.findUniqueOrThrow({
+    where: { id: changeId },
+  });
+  const session = await requireVendorAccess(ref.vendorId, "vendor.update");
+  await prisma.$transaction(async (tx) => {
+    await lockListing(tx, ref.vendorId);
+    const current = await tx.listingChange.findUniqueOrThrow({
+      where: { id: changeId },
+      include: { revision: true },
+    });
+    if (current.status !== "DRAFT" || current.revision?.status !== "DRAFT")
+      throw new Error("Only an editable draft change can be removed");
+    const all = await tx.listingChange.findMany({
+      where: { revisionId: current.revisionId },
+    });
+    const removed = new Set([changeId]);
+    const targets = new Set<string>();
+    if (current.kind.endsWith("_CREATE")) targets.add(current.targetId);
+    const references = (value: unknown): boolean =>
+      typeof value === "string"
+        ? targets.has(value)
+        : Array.isArray(value)
+          ? value.some(references)
+          : !!value && typeof value === "object"
+            ? Object.values(value).some(references)
+            : false;
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const c of all)
+        if (
+          !removed.has(c.id) &&
+          (targets.has(c.targetId) || references(c.payload))
+        ) {
+          removed.add(c.id);
+          if (c.kind.endsWith("_CREATE")) targets.add(c.targetId);
+          changed = true;
+        }
+    }
+    await tx.listingChange.deleteMany({ where: { id: { in: [...removed] } } });
+    await writeAuditLog(tx, {
+      userId: session.user.id,
+      action: "REQUEST_LISTING_CHANGE",
+      entityType: "listing_change",
+      entityId: current.revisionId!,
+      newValue: { removedChanges: [...removed], vendorId: ref.vendorId },
+    });
+  });
+  revalidatePath(`/vendors/${ref.vendorId}`);
 }

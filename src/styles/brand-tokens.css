@@ -1,0 +1,18 @@
+/* Generated from brand-kit/tokens.json by scripts/sync-brand-kit.js. */
+:root {
+  --brand-lime: #b7d335;
+  --brand-leaf: #5e8f1f;
+  --brand-yellow: #f6d949;
+  --brand-ivory: #f7faee;
+  --brand-forest: #1f3a1e;
+  --brand-ink: #18251a;
+  --brand-muted: #66735e;
+  --brand-surface: #fffdf8;
+  --brand-line: #dfe5d6;
+  --brand-subtle: #edf1e5;
+  --brand-soft-green: #e9efda;
+  --brand-light-ink: #d4ddc8;
+  --brand-dark-green: #172f19;
+  --brand-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --brand-duration: 200ms;
+}

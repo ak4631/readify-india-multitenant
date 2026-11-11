@@ -3,6 +3,8 @@ import type { Prisma } from "@/generated/prisma/client";
 
 export const AUDIT_ACTIONS = [
   "REVIEW_PARTNER_APPLICATION",
+  "SUPPORT_CREATE",
+  "SUPPORT_RESOLVE",
   "CHECK_IN",
   "CHECK_OUT",
   "REQUEST_LISTING_CHANGE",
@@ -82,6 +84,7 @@ export const AUDIT_ACTIONS = [
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export type AuditEntityType =
+  | "support"
   | "attendance"
   | "listing_change"
   | "partner"
@@ -108,6 +111,7 @@ export type AuditEntityType =
   | "library_seat";
 
 interface AuditLogEntry {
+  partnerId?: string;
   userId: string | null;
   action: AuditAction;
   entityType: AuditEntityType;
@@ -132,8 +136,120 @@ export async function writeAuditLog(
     // headers() is unavailable outside a request scope (e.g. seed scripts) — leave null.
   }
 
+  const old =
+    entry.oldValue && typeof entry.oldValue === "object"
+      ? (entry.oldValue as Record<string, unknown>)
+      : {};
+  const current =
+    entry.newValue && typeof entry.newValue === "object"
+      ? (entry.newValue as Record<string, unknown>)
+      : {};
+  let partnerId = entry.partnerId ?? null;
+  let vendorId =
+    typeof current.vendorId === "string"
+      ? current.vendorId
+      : typeof old.vendorId === "string"
+        ? old.vendorId
+        : null;
+  if (entry.entityType === "partner") partnerId = entry.entityId ?? null;
+  if (entry.entityType === "vendor") vendorId = entry.entityId ?? null;
+  const lookups: Partial<
+    Record<
+      AuditEntityType,
+      (id: string) => Promise<{ vendorId: string } | null>
+    >
+  > = {
+    trainer: (id) =>
+      tx.trainer.findUnique({ where: { id }, select: { vendorId: true } }),
+    teacher: (id) =>
+      tx.teacher.findUnique({ where: { id }, select: { vendorId: true } }),
+    course: (id) =>
+      tx.course.findUnique({ where: { id }, select: { vendorId: true } }),
+    membership_plan: (id) =>
+      tx.membershipPlan.findUnique({
+        where: { id },
+        select: { vendorId: true },
+      }),
+    library_seat_type: (id) =>
+      tx.librarySeatType.findUnique({
+        where: { id },
+        select: { vendorId: true },
+      }),
+    library_seat: (id) =>
+      tx.librarySeat.findUnique({ where: { id }, select: { vendorId: true } }),
+    vendor_media: (id) =>
+      tx.vendorMedia.findUnique({ where: { id }, select: { vendorId: true } }),
+    vendor_verification: (id) =>
+      tx.vendorVerification.findUnique({
+        where: { id },
+        select: { vendorId: true },
+      }),
+    booking: (id) =>
+      tx.booking.findUnique({ where: { id }, select: { vendorId: true } }),
+    subscription: (id) =>
+      tx.subscription.findUnique({ where: { id }, select: { vendorId: true } }),
+    review: (id) =>
+      tx.review.findUnique({ where: { id }, select: { vendorId: true } }),
+    attendance: (id) =>
+      tx.attendanceVisit.findUnique({
+        where: { id },
+        select: { vendorId: true },
+      }),
+    listing_change: async (id) =>
+      (await tx.listingRevision.findUnique({
+        where: { id },
+        select: { vendorId: true },
+      })) ??
+      tx.listingChange.findUnique({
+        where: { id },
+        select: { vendorId: true },
+      }),
+    menu_category: (id) =>
+      tx.menuCategory.findUnique({ where: { id }, select: { vendorId: true } }),
+    menu_item: async (id) => {
+      const r = await tx.menuItem.findUnique({
+        where: { id },
+        select: { category: { select: { vendorId: true } } },
+      });
+      return r?.category ?? null;
+    },
+    trainer_pricing: async (id) => {
+      const r = await tx.trainerPricing.findUnique({
+        where: { id },
+        select: { trainer: { select: { vendorId: true } } },
+      });
+      return r?.trainer ?? null;
+    },
+    lecture: async (id) => {
+      const r = await tx.lecture.findUnique({
+        where: { id },
+        select: { course: { select: { vendorId: true } } },
+      });
+      return r?.course ?? null;
+    },
+  };
+  if (!vendorId && !partnerId && entry.entityId && lookups[entry.entityType])
+    vendorId =
+      (await lookups[entry.entityType]!(entry.entityId))?.vendorId ?? null;
+  if (!partnerId && vendorId)
+    partnerId =
+      (
+        await tx.vendor.findUnique({
+          where: { id: vendorId },
+          select: { partnerId: true },
+        })
+      )?.partnerId ?? null;
+  if (!partnerId && entry.entityType === "user" && entry.entityId)
+    partnerId =
+      (
+        await tx.user.findUnique({
+          where: { id: entry.entityId },
+          select: { partnerId: true },
+        })
+      )?.partnerId ?? null;
   await tx.auditLog.create({
     data: {
+      partnerId,
       userId: entry.userId,
       action: entry.action,
       entityType: entry.entityType,

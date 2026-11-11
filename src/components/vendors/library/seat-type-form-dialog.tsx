@@ -59,10 +59,14 @@ export function SeatTypeFormDialog({
     try {
       if (seatType) {
         await updateLibrarySeatType(seatType.id, values);
-        toast.success("Seat type updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       } else {
         await createLibrarySeatType(vendorId, values);
-        toast.success("Seat type added");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       }
       setOpen(false);
       form.reset();

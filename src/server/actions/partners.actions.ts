@@ -7,7 +7,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentSession,
-  isSuperAdmin,
+  isPlatformStaff,
   requirePartnerAccess,
   requirePermission,
   requirePlatformPermission,
@@ -27,7 +27,7 @@ export async function listPartners(
   options: { page?: number; approval?: "PENDING" } = {},
 ) {
   const session = await requirePermission("partner.read");
-  const scope = isSuperAdmin(session)
+  const scope = isPlatformStaff(session)
     ? {}
     : { users: { some: { id: session.user.id } } };
   const where = { ...scope, approvalStatus: options.approval };
@@ -159,6 +159,8 @@ export async function setPartnerActive(partnerId: string, active: boolean) {
     const before = await tx.partner.findUniqueOrThrow({
       where: { id: partnerId },
     });
+    if (active && before.approvalStatus !== "APPROVED")
+      throw new Error("Approve this application before activating the partner");
     const after = await tx.partner.update({
       where: { id: partnerId },
       data: { status: active ? "ACTIVE" : "INACTIVE" },
@@ -237,6 +239,21 @@ export async function setPartnerUserActive(userId: string, active: boolean) {
     "partnerUser.status",
   );
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM admin.partners WHERE id=${target.partnerId} FOR UPDATE`;
+    if (!active && target.roles.some((r) => r.role.name === "PARTNER_ADMIN")) {
+      const owners = await tx.user.count({
+        where: {
+          partnerId: target.partnerId,
+          status: "ACTIVE",
+          id: { not: userId },
+          roles: { some: { role: { name: "PARTNER_ADMIN" } } },
+        },
+      });
+      if (!owners)
+        throw new Error(
+          "Add another active owner before deactivating the last partner owner",
+        );
+    }
     const before = await tx.user.findUniqueOrThrow({ where: { id: userId } });
     const after = await tx.user.update({
       where: { id: userId },
@@ -295,6 +312,7 @@ export async function reviewPartnerApplication(
   partnerId: string,
   approve: boolean,
   reason?: string,
+  expectedVersion?: number,
 ) {
   const session = await requireSuperAdmin();
   const decisionReason = approve
@@ -305,6 +323,8 @@ export async function reviewPartnerApplication(
     const before = await tx.partner.findUniqueOrThrow({
       where: { id: partnerId },
     });
+    if (expectedVersion !== before.applicationVersion)
+      throw new Error("This application has changed. Reload before deciding.");
     if (before.approvalStatus !== "PENDING")
       throw new Error("This application has already been reviewed");
     const service = before.requestedServiceId
@@ -338,7 +358,11 @@ export async function reviewPartnerApplication(
       action: "REVIEW_PARTNER_APPLICATION",
       entityType: "partner",
       entityId: partnerId,
-      newValue: { approved: approve, reason: decisionReason },
+      newValue: {
+        version: before.applicationVersion,
+        approved: approve,
+        reason: decisionReason,
+      },
     });
   });
   revalidatePath("/partners");

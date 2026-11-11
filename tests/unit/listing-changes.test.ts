@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Prisma } from "@/generated/prisma/client";
 import { queueListingChange } from "@/lib/listing-changes";
 vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn() }));
+vi.mock("@/lib/listing-snapshot", () => ({
+  listingSnapshot: vi.fn(async () => ({ name: "Library" })),
+}));
 
 describe("approved listing isolation", () => {
   const tx = {
     $queryRaw: vi.fn(),
     vendor: { findUniqueOrThrow: vi.fn() },
-    listingChange: { findFirst: vi.fn(), create: vi.fn() },
+    listingChange: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    listingRevision: { findFirst: vi.fn(), create: vi.fn() },
   };
   const transaction = tx as unknown as Prisma.TransactionClient;
   beforeEach(() => {
@@ -15,6 +19,12 @@ describe("approved listing isolation", () => {
     tx.vendor.findUniqueOrThrow.mockResolvedValue({
       id: "vendor",
       status: "PUBLISHED",
+      contentVersion: 2,
+    });
+    tx.listingRevision.findFirst.mockResolvedValue(null);
+    tx.listingRevision.create.mockResolvedValue({
+      id: "revision",
+      status: "DRAFT",
     });
     tx.listingChange.findFirst.mockResolvedValue(null);
     tx.listingChange.create.mockResolvedValue({ id: "change" });
@@ -55,7 +65,10 @@ describe("approved listing isolation", () => {
     expect(tx.listingChange.create).not.toHaveBeenCalled();
   });
   it("does not overwrite an earlier pending edit", async () => {
-    tx.listingChange.findFirst.mockResolvedValue({ id: "pending" });
+    tx.listingRevision.findFirst.mockResolvedValue({
+      id: "pending",
+      status: "PENDING",
+    });
     await expect(
       queueListingChange(
         transaction,
@@ -65,7 +78,28 @@ describe("approved listing isolation", () => {
         "plan",
         {},
       ),
-    ).rejects.toThrow("already awaiting");
+    ).rejects.toThrow("awaiting Super Admin");
+    expect(tx.listingChange.create).not.toHaveBeenCalled();
+  });
+  it("updates an editable proposal without overwriting approved content", async () => {
+    tx.listingRevision.findFirst.mockResolvedValue({
+      id: "revision",
+      status: "DRAFT",
+    });
+    tx.listingChange.findFirst.mockResolvedValue({ id: "change" });
+    tx.listingChange.update.mockResolvedValue({ id: "change" });
+    await queueListingChange(
+      transaction,
+      "vendor",
+      "owner",
+      "PLAN_UPDATE",
+      "plan",
+      { price: 300 },
+    );
+    expect(tx.listingChange.update).toHaveBeenCalledWith({
+      where: { id: "change" },
+      data: { payload: { price: 300 }, requestedBy: "owner" },
+    });
     expect(tx.listingChange.create).not.toHaveBeenCalled();
   });
   it("allows draft setup without falsely queueing it as published content", async () => {

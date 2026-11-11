@@ -1,5 +1,14 @@
 "use server";
 
+import {
+  editorChanges,
+  overlayRows,
+  proposedParent,
+  changeData,
+} from "@/lib/listing-editor";
+import { randomUUID } from "node:crypto";
+import { queueListingChange } from "@/lib/listing-changes";
+
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -22,9 +31,36 @@ export async function listMenu(vendorId: string) {
   // Decimal (MenuItem.price) is a class instance, not a plain object --
   // Next.js refuses to pass it from this Server Action to a Client Component
   // (MenuEditor receives this array as a prop).
-  return categories.map((category) => ({
+  const changes = await editorChanges(vendorId);
+  const proposed = overlayRows(categories, changes, "MENU_CATEGORY", {
+    vendorId,
+    name: "",
+    sortOrder: 0,
+    items: [],
+  });
+  for (const cat of proposed)
+    for (const c of changes) {
+      const d = changeData(c);
+      if (c.kind === "MENU_ITEM_CREATE" && d.categoryId === cat.id)
+        cat.items.push({
+          ...(d.input as object),
+          id: c.targetId,
+          categoryId: cat.id,
+          imageUrl: null,
+        } as (typeof cat.items)[number]);
+      if (c.kind === "MENU_ITEM_UPDATE")
+        cat.items = cat.items.map((i) =>
+          i.id === c.targetId ? { ...i, ...d } : i,
+        );
+      if (c.kind === "MENU_ITEM_DELETE")
+        cat.items = cat.items.filter((i) => i.id !== c.targetId);
+    }
+  return proposed.map((category) => ({
     ...category,
-    items: category.items.map((item) => ({ ...item, price: Number(item.price) })),
+    items: category.items.map((item) => ({
+      ...item,
+      price: Number(item.price),
+    })),
   }));
 }
 
@@ -38,6 +74,17 @@ export async function createMenuCategory(
   const data = menuCategorySchema.parse(input);
 
   const category = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "MENU_CATEGORY_CREATE",
+        randomUUID(),
+        data,
+      )
+    )
+      return;
     const count = await tx.menuCategory.count({ where: { vendorId } });
     const created = await tx.menuCategory.create({
       data: { ...data, vendorId, sortOrder: count },
@@ -59,12 +106,23 @@ export async function createMenuCategory(
 }
 
 export async function deleteMenuCategory(categoryId: string) {
-  const record = await prisma.menuCategory.findUniqueOrThrow({
-    where: { id: categoryId },
-  });
+  const record =
+    (await prisma.menuCategory.findUnique({ where: { id: categoryId } })) ??
+    (await proposedParent(categoryId, "MENU_CATEGORY_CREATE"));
   const session = await requireVendorAccess(record.vendorId, "vendor.update");
 
   const vendorId = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        record.vendorId,
+        session.user.id,
+        "MENU_CATEGORY_DELETE",
+        categoryId,
+        {},
+      )
+    )
+      return record.vendorId;
     const before = await tx.menuCategory.findUniqueOrThrow({
       where: { id: categoryId },
     });
@@ -91,13 +149,27 @@ export async function createMenuItem(
 ) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   const data = menuItemSchema.parse(input);
-  const category = await prisma.menuCategory.findFirst({
-    where: { id: categoryId, vendorId },
-  });
+  const category =
+    (await prisma.menuCategory.findFirst({
+      where: { id: categoryId, vendorId },
+    })) ?? (await proposedParent(categoryId, "MENU_CATEGORY_CREATE"));
+  if (category.vendorId !== vendorId)
+    throw new Error("Category does not belong to this listing");
   if (!category)
     throw new Error("Menu category does not belong to this vendor");
 
   const item = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "MENU_ITEM_CREATE",
+        randomUUID(),
+        { categoryId, input: data },
+      )
+    )
+      return;
     const created = await tx.menuItem.create({ data: { ...data, categoryId } });
 
     await writeAuditLog(tx, {
@@ -114,7 +186,7 @@ export async function createMenuItem(
   revalidatePath(`/vendors/${vendorId}`);
   // Same Decimal-serialization reasoning as listMenu above -- this return
   // value is also consumed directly by the client caller.
-  return { ...item, price: Number(item.price) };
+  return item ? { ...item, price: Number(item.price) } : undefined;
 }
 
 export async function updateMenuItem(
@@ -124,12 +196,26 @@ export async function updateMenuItem(
 ) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   const data = menuItemSchema.parse(input);
-  const item = await prisma.menuItem.findFirst({
-    where: { id: itemId, category: { vendorId } },
-  });
+  const item =
+    (await prisma.menuItem.findFirst({
+      where: { id: itemId, category: { vendorId } },
+    })) ?? (await proposedParent(itemId, "MENU_ITEM_CREATE"));
+  if ("vendorId" in item && item.vendorId !== vendorId)
+    throw new Error("Item does not belong to this listing");
   if (!item) throw new Error("Menu item does not belong to this vendor");
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "MENU_ITEM_UPDATE",
+        itemId,
+        data,
+      )
+    )
+      return;
     const before = await tx.menuItem.findUniqueOrThrow({
       where: { id: itemId },
     });
@@ -150,12 +236,26 @@ export async function updateMenuItem(
 
 export async function deleteMenuItem(vendorId: string, itemId: string) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
-  const item = await prisma.menuItem.findFirst({
-    where: { id: itemId, category: { vendorId } },
-  });
+  const item =
+    (await prisma.menuItem.findFirst({
+      where: { id: itemId, category: { vendorId } },
+    })) ?? (await proposedParent(itemId, "MENU_ITEM_CREATE"));
+  if ("vendorId" in item && item.vendorId !== vendorId)
+    throw new Error("Item does not belong to this listing");
   if (!item) throw new Error("Menu item does not belong to this vendor");
 
   await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "MENU_ITEM_DELETE",
+        itemId,
+        {},
+      )
+    )
+      return;
     const before = await tx.menuItem.findUniqueOrThrow({
       where: { id: itemId },
     });

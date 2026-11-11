@@ -25,6 +25,13 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   {
+    label: "Approvals & Actions",
+    href: "/approvals",
+    requiredPermission: "vendor.read",
+    icon: ClipboardCheck,
+    platformOnly: true,
+  },
+  {
     label: "Bookings",
     href: "/bookings",
     requiredPermission: "vendor.read",
@@ -178,6 +185,22 @@ export function visibleNavigation(
           !roles.includes("PARTNER_EMPLOYEE"))) &&
       !(partner && item.platformOnly),
   );
+  if (!partner && roles.includes("SUPER_ADMIN")) {
+    const order = [
+      "/dashboard",
+      "/partners",
+      "/approvals",
+      "/support",
+      "/users",
+      "/vendor-categories",
+      "/facilities",
+      "/reviews",
+      "/audit-logs",
+    ];
+    return items
+      .filter((item) => order.includes(item.href))
+      .sort((a, b) => order.indexOf(a.href) - order.indexOf(b.href));
+  }
   return partner
     ? items.sort(
         (a, b) =>

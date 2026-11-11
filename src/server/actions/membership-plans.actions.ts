@@ -1,5 +1,11 @@
 "use server";
 
+import { Prisma } from "@/generated/prisma/client";
+import {
+  editorChanges,
+  overlayRows,
+  proposedParent,
+} from "@/lib/listing-editor";
 import { randomUUID } from "node:crypto";
 import { queueListingChange } from "@/lib/listing-changes";
 import { revalidatePath } from "next/cache";
@@ -21,7 +27,21 @@ export async function listMembershipPlans(vendorId: string) {
   // Prisma's Decimal is a class instance, not a plain object -- Next.js
   // refuses to pass it from this Server Action to a Client Component
   // (PlanList/PlanFormDialog receive this array as props).
-  return plans.map((plan) => ({ ...plan, price: Number(plan.price) }));
+  return overlayRows(plans, await editorChanges(vendorId), "PLAN", {
+    vendorId,
+    name: "",
+    description: null,
+    price: new Prisma.Decimal(0),
+    currency: "INR",
+    durationValue: 1,
+    durationUnit: "MONTHS",
+    dailyHours: null,
+    dailyStart: null,
+    isFlexible: false,
+    status: "ACTIVE",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }).map((plan) => ({ ...plan, price: Number(plan.price) }));
 }
 
 export type PlanRow = Awaited<ReturnType<typeof listMembershipPlans>>[number];
@@ -68,9 +88,9 @@ export async function updateMembershipPlan(
   planId: string,
   input: MembershipPlanInput,
 ) {
-  const planRecord = await prisma.membershipPlan.findUniqueOrThrow({
-    where: { id: planId },
-  });
+  const planRecord =
+    (await prisma.membershipPlan.findUnique({ where: { id: planId } })) ??
+    (await proposedParent(planId, "PLAN_CREATE"));
   const session = await requireVendorAccess(
     planRecord.vendorId,
     "vendor.update",
@@ -113,9 +133,9 @@ export async function updateMembershipPlan(
 }
 
 export async function archiveMembershipPlan(planId: string) {
-  const planRecord = await prisma.membershipPlan.findUniqueOrThrow({
-    where: { id: planId },
-  });
+  const planRecord =
+    (await prisma.membershipPlan.findUnique({ where: { id: planId } })) ??
+    (await proposedParent(planId, "PLAN_CREATE"));
   const session = await requireVendorAccess(
     planRecord.vendorId,
     "vendor.update",

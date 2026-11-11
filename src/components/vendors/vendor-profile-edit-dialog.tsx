@@ -68,7 +68,9 @@ export function VendorProfileEditDialog({
     setIsSubmitting(true);
     try {
       await updateVendorProfile(vendor.id, values);
-      toast.success("Profile updated");
+      toast.success(
+        "Saved. Changes to approved listings must be submitted from Changes.",
+      );
       setOpen(false);
       router.refresh();
     } catch (error) {

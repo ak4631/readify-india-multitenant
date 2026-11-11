@@ -10,7 +10,10 @@ import { TrainerDetailDialog } from "@/components/vendors/gym/trainer-detail-dia
 import { TrainerFormDialog } from "@/components/vendors/gym/trainer-form-dialog";
 import type { TrainerSpecialization } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { deactivateTrainer, type TrainerRow } from "@/server/actions/trainers.actions";
+import {
+  deactivateTrainer,
+  type TrainerRow,
+} from "@/server/actions/trainers.actions";
 
 export function TrainersList({
   vendorId,
@@ -29,7 +32,9 @@ export function TrainersList({
     startTransition(async () => {
       try {
         await deactivateTrainer(trainerId);
-        toast.success("Trainer deactivated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");

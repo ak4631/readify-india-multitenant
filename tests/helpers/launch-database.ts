@@ -3,7 +3,9 @@ import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
 
-export async function launchDatabase() {
+export async function launchDatabase(
+  beforeMigration?: (db: PGlite, name: string) => Promise<void>,
+) {
   const db = new PGlite({ extensions: { btree_gist } });
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated;
@@ -29,6 +31,7 @@ export async function launchDatabase() {
       "",
     );
     try {
+      await beforeMigration?.(db, name);
       await db.exec(sql);
     } catch (error) {
       await db.close();

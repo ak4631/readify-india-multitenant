@@ -36,7 +36,7 @@ export function HostedCheckout({
       order_id: gatewayOrderId,
       amount,
       currency: "INR",
-      name: "Vriddhora",
+      name: "ZEROTHAM",
       handler: async (result: Result) => {
         setMessage("Verifying your payment…");
         try {
@@ -47,7 +47,7 @@ export function HostedCheckout({
           });
           setMessage(
             response.ok
-              ? "Payment verified. Return to the Vriddhora app to see your booking."
+              ? "Payment verified. Return to the ZEROTHAM app to see your booking."
               : "Verification is pending. Return to the app to check the latest status. Do not pay again.",
           );
         } catch {
@@ -74,7 +74,7 @@ export function HostedCheckout({
           setMessage("Could not load secure checkout. Please retry.")
         }
       />
-      <h1 className="text-2xl font-semibold">Vriddhora checkout</h1>
+      <h1 className="text-2xl font-semibold">ZEROTHAM checkout</h1>
       <p>Total: ₹{(amount / 100).toFixed(2)}</p>
       <p>
         Your seat is held for up to 15 minutes. Access is confirmed after

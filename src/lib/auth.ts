@@ -39,13 +39,17 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
-          include: { partner: { select: { status: true } } },
+          include: {
+            partner: { select: { status: true, approvalStatus: true } },
+          },
         });
 
         if (
           !user ||
           user.status !== "ACTIVE" ||
-          (user.partnerId && user.partner?.status !== "ACTIVE")
+          (user.partnerId &&
+            (user.partner?.status !== "ACTIVE" ||
+              user.partner.approvalStatus !== "APPROVED"))
         )
           return null;
 
@@ -56,6 +60,13 @@ export const authOptions: NextAuthOptions = {
         if (!isValid) return null;
 
         const { roles, permissions } = await loadRolesAndPermissions(user.id);
+        if (
+          roles.some((r) =>
+            ["PARTNER_ADMIN", "PARTNER_EMPLOYEE"].includes(r),
+          ) &&
+          !user.partnerId
+        )
+          return null;
 
         return {
           id: user.id,
@@ -82,17 +93,28 @@ export const authOptions: NextAuthOptions = {
       if (token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id },
-          include: { partner: { select: { status: true } } },
+          include: {
+            partner: { select: { status: true, approvalStatus: true } },
+          },
         });
         if (
           !dbUser ||
           dbUser.status !== "ACTIVE" ||
-          (dbUser.partnerId && dbUser.partner?.status !== "ACTIVE")
+          (dbUser.partnerId &&
+            (dbUser.partner?.status !== "ACTIVE" ||
+              dbUser.partner.approvalStatus !== "APPROVED"))
         ) {
           // Force sign-out: an empty/invalid token gets rejected by the session callback.
           return { ...token, id: "", roles: [], permissions: [] };
         }
         const { roles, permissions } = await loadRolesAndPermissions(dbUser.id);
+        if (
+          roles.some((r) =>
+            ["PARTNER_ADMIN", "PARTNER_EMPLOYEE"].includes(r),
+          ) &&
+          !dbUser.partnerId
+        )
+          return { ...token, id: "", roles: [], permissions: [] };
         token.roles = roles;
         token.permissions = permissions;
       }

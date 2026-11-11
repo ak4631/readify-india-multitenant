@@ -29,7 +29,7 @@ describe("live session revocation", () => {
       id: "employee",
       status: "ACTIVE",
       partnerId: "partner",
-      partner: { status: "ACTIVE" },
+      partner: { status: "ACTIVE", approvalStatus: "APPROVED" },
     });
     mocks.roles.mockResolvedValue([]);
     const token = await authOptions.callbacks!.jwt!({

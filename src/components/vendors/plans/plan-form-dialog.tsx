@@ -91,10 +91,14 @@ export function PlanFormDialog({
     try {
       if (plan) {
         await updateMembershipPlan(plan.id, values);
-        toast.success("Plan saved. Approved listings require Admin review.");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       } else {
         await createMembershipPlan(vendorId, values);
-        toast.success("Plan saved. Approved listings require Admin review.");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       }
       setOpen(false);
       form.reset();

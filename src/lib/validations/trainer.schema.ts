@@ -26,11 +26,35 @@ const DAYS_OF_WEEK = [
   "SUNDAY",
 ] as const;
 
-export const trainerAvailabilitySlotSchema = z.object({
-  dayOfWeek: z.enum(DAYS_OF_WEEK),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM"),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM"),
-});
+export const trainerAvailabilitySlotSchema = z
+  .object({
+    dayOfWeek: z.enum(DAYS_OF_WEEK),
+    startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM"),
+    endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM"),
+  })
+  .refine((v) => v.endTime > v.startTime, {
+    path: ["endTime"],
+    message: "Trainer hours must end after they start on the same day",
+  });
 
-export type TrainerAvailabilitySlotInput = z.infer<typeof trainerAvailabilitySlotSchema>;
+export type TrainerAvailabilitySlotInput = z.infer<
+  typeof trainerAvailabilitySlotSchema
+>;
 export { DAYS_OF_WEEK as TRAINER_DAYS_OF_WEEK };
+
+export const trainerAvailabilitySchema = z
+  .array(trainerAvailabilitySlotSchema)
+  .max(100)
+  .superRefine((slots, ctx) => {
+    for (const day of DAYS_OF_WEEK) {
+      const list = slots
+        .filter((s) => s.dayOfWeek === day)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      for (let i = 1; i < list.length; i++)
+        if (list[i].startTime < list[i - 1].endTime)
+          ctx.addIssue({
+            code: "custom",
+            message: "Trainer availability windows must not overlap",
+          });
+    }
+  });

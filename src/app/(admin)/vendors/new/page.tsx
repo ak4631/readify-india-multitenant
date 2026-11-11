@@ -2,9 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { StepAddress } from "@/components/vendors/wizard/step-address";
 import { StepBasicInfo } from "@/components/vendors/wizard/step-basic-info";
-import { StepVerification } from "@/components/vendors/wizard/step-verification";
 import { WizardProgress } from "@/components/vendors/wizard/wizard-progress";
-import { getRequiredDocuments } from "@/config/verification-requirements";
 import { listVendorCategories } from "@/server/actions/vendor-categories.actions";
 import { getVendorById } from "@/server/actions/vendors.actions";
 import { isSuperAdmin, requirePermissionOrRedirect } from "@/lib/rbac";
@@ -23,6 +21,7 @@ export default async function NewVendorPage({
   if (isSuperAdmin(session) && !partnerId && !vendorId) redirect("/partners");
   const step = Number(stepParam ?? "1");
 
+  if (vendorId && step === 1) redirect(`/vendors/${vendorId}?tab=overview`);
   const categories = await listVendorCategories();
 
   let stepContent: React.ReactNode;
@@ -36,15 +35,11 @@ export default async function NewVendorPage({
     if (!vendor) notFound();
 
     if (step === 2) {
-      stepContent = <StepAddress vendorId={vendor.id} />;
-    } else {
       stepContent = (
-        <StepVerification
-          vendorId={vendor.id}
-          requiredDocuments={getRequiredDocuments(vendor.category.slug)}
-          verifications={vendor.verifications}
-        />
+        <StepAddress vendorId={vendor.id} address={vendor.address} />
       );
+    } else {
+      redirect(`/vendors/${vendor.id}?tab=verification`);
     }
   }
 

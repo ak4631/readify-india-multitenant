@@ -18,6 +18,11 @@ export const partnerUserSchema = z.object({
   password: z
     .string()
     .min(10, "Use at least 10 characters")
+    .max(72, "Use at most 72 characters")
+    .refine(
+      (v) => new TextEncoder().encode(v).length <= 72,
+      "Password must fit within 72 UTF-8 bytes",
+    )
     .regex(/[A-Z]/, "Include an uppercase letter")
     .regex(/[a-z]/, "Include a lowercase letter")
     .regex(/[0-9]/, "Include a number"),

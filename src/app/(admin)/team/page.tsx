@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListPagination } from "@/components/layout/list-pagination";
 import { PartnerTeamTable } from "@/components/partners/partner-team-table";
@@ -18,12 +19,12 @@ import {
 export default async function TeamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ partnerId?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const page = parsePage(params.page);
   const session = await requirePermission("partnerUser.read");
-  const partnerId = await getSessionPartnerId(session);
+  const partnerId = await getSessionPartnerId(session, params.partnerId);
   if (!partnerId) {
     const users = await listAllPartnerUsers(page);
     return (
@@ -37,7 +38,7 @@ export default async function TeamPage({
             <PartnerTeamTable users={users.items} showOrganization />
             <ListPagination
               page={users}
-              path="/team"
+              path={partnerPath(params.partnerId, "team")}
               params={params}
               noun="team members"
             />
@@ -67,7 +68,7 @@ export default async function TeamPage({
           <PartnerTeamTable users={users.items} />
           <ListPagination
             page={users}
-            path="/team"
+            path={partnerPath(params.partnerId, "team")}
             params={params}
             noun="team members"
           />

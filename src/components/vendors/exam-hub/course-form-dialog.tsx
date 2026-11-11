@@ -78,10 +78,14 @@ export function CourseFormDialog({
     try {
       if (course) {
         await updateCourse(course.id, values);
-        toast.success("Course updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       } else {
         await createCourse(vendorId, values);
-        toast.success("Course created");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       }
       setOpen(false);
       form.reset();

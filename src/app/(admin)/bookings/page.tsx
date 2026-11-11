@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListPagination } from "@/components/layout/list-pagination";
@@ -16,7 +17,7 @@ const ROWS_PER_LISTING = 20;
 export default async function BookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string }>;
+  searchParams: Promise<{ partnerId?: string; status?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const filter = z
@@ -24,6 +25,7 @@ export default async function BookingsPage({
     .catch("all")
     .parse(params.status ?? "all");
   const vendors = await listVendorsPage({
+    partnerId: params.partnerId,
     page: parsePage(params.page),
     pageSize: LISTINGS_PER_PAGE,
   });
@@ -45,7 +47,7 @@ export default async function BookingsPage({
       return { id: vendor.id, name: vendor.name, rows };
     }),
   );
-  const visits = await listWorkspaceAttendance();
+  const visits = await listWorkspaceAttendance(params.partnerId);
   return (
     <div className="space-y-6">
       <LiveRefresh />
@@ -78,15 +80,15 @@ export default async function BookingsPage({
               href={`/vendors/${group.id}?tab=bookings`}
               className="text-sm text-primary underline"
             >
-              Showing the latest {ROWS_PER_LISTING} of {group.rows.length}.
-              View all bookings for {group.name}
+              Showing the latest {ROWS_PER_LISTING} of {group.rows.length}. View
+              all bookings for {group.name}
             </Link>
           )}
         </section>
       ))}
       <ListPagination
         page={vendors}
-        path="/bookings"
+        path={partnerPath(params.partnerId, "bookings")}
         params={params}
         noun="listings"
       />

@@ -1,3 +1,4 @@
+import { listingSnapshot } from "@/lib/listing-snapshot";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/lib/audit";
@@ -17,7 +18,10 @@ export type ListingChangeKind =
   | "SEAT_CREATE"
   | "SEAT_UPDATE"
   | "SEAT_DELETE"
-  | "SEAT_ACTIVE";
+  | "SEAT_ACTIVE"
+  | import("@/lib/category-changes").CategoryChangeKind;
+
+export class ListingChangeConflict extends Error {}
 
 export async function lockListing(
   tx: Prisma.TransactionClient,
@@ -39,32 +43,52 @@ export async function queueListingChange(
 ): Promise<boolean> {
   const vendor = await lockListing(tx, vendorId);
   if (["SUBMITTED", "UNDER_REVIEW"].includes(vendor.status)) {
-    throw new Error(
+    throw new ListingChangeConflict(
       "This listing is under review. Wait for a decision before editing it.",
     );
   }
   if (!["PUBLISHED", "APPROVED", "SUSPENDED"].includes(vendor.status))
     return false;
-  const pending = await tx.listingChange.findFirst({
-    where: {
-      vendorId,
-      targetId,
-      kind: { startsWith: kind.split("_")[0] },
-      status: "PENDING",
-    },
+  let revision = await tx.listingRevision.findFirst({
+    where: { vendorId, status: { in: ["DRAFT", "PENDING"] } },
   });
-  if (pending)
-    throw new Error("A change to this item is already awaiting Admin review.");
-  const change = await tx.listingChange.create({
-    data: {
-      id: randomUUID(),
-      vendorId,
-      kind,
-      targetId,
-      requestedBy: userId,
-      payload: JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue,
-    },
+  if (revision?.status === "PENDING")
+    throw new ListingChangeConflict(
+      "Your submitted revision is awaiting Super Admin review. Wait for a decision or withdraw it before editing.",
+    );
+  if (!revision)
+    revision = await tx.listingRevision.create({
+      data: {
+        id: randomUUID(),
+        vendorId,
+        baseVersion: vendor.contentVersion,
+        baseSnapshot: await listingSnapshot(tx, vendorId),
+        requestedBy: userId,
+      },
+    });
+  const previous = await tx.listingChange.findFirst({
+    where: { revisionId: revision.id, targetId, kind },
   });
+  const serialized = JSON.parse(
+    JSON.stringify(payload),
+  ) as Prisma.InputJsonValue;
+  const change = previous
+    ? await tx.listingChange.update({
+        where: { id: previous.id },
+        data: { payload: serialized, requestedBy: userId },
+      })
+    : await tx.listingChange.create({
+        data: {
+          id: randomUUID(),
+          vendorId,
+          revisionId: revision.id,
+          kind,
+          targetId,
+          requestedBy: userId,
+          status: "DRAFT",
+          payload: serialized,
+        },
+      });
   await writeAuditLog(tx, {
     userId,
     action: "REQUEST_LISTING_CHANGE",

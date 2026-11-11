@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlanFormDialog } from "@/components/vendors/plans/plan-form-dialog";
 import { usePermission } from "@/hooks/use-permission";
-import { archiveMembershipPlan, type PlanRow } from "@/server/actions/membership-plans.actions";
+import {
+  archiveMembershipPlan,
+  type PlanRow,
+} from "@/server/actions/membership-plans.actions";
 
 export function PlanList({
   vendorId,
@@ -25,7 +28,9 @@ export function PlanList({
     startTransition(async () => {
       try {
         await archiveMembershipPlan(planId);
-        toast.success("Plan archived");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");
@@ -50,13 +55,13 @@ export function PlanList({
                 <p className="text-muted-foreground text-sm">
                   {plan.isFlexible ? (
                     <>
-                      ₹{Number(plan.price).toLocaleString()}/hr · {plan.dailyHours}h/day · customer
-                      picks 1-14 days
+                      ₹{Number(plan.price).toLocaleString()}/hr ·{" "}
+                      {plan.dailyHours}h/day · customer picks 1-14 days
                     </>
                   ) : (
                     <>
-                      ₹{Number(plan.price).toLocaleString()} / {plan.durationValue}{" "}
-                      {plan.durationUnit.toLowerCase()}
+                      ₹{Number(plan.price).toLocaleString()} /{" "}
+                      {plan.durationValue} {plan.durationUnit.toLowerCase()}
                       {plan.dailyHours ? ` · ${plan.dailyHours}h/day` : ""}
                     </>
                   )}

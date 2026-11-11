@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -28,6 +28,7 @@ export function VendorFilters({
   categories: VendorCategory[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectedCategoryId = searchParams.get("categoryId") ?? ALL;
   const selectedStatus = (searchParams.get("status") ?? ALL) as
@@ -48,7 +49,7 @@ export function VendorFilters({
       params.set(key, value);
     }
     params.delete("page");
-    router.push(`/vendors?${params.toString()}`);
+    router.push(`${pathname}?${params.toString()}`);
   }
 
   return (

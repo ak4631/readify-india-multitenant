@@ -1,5 +1,13 @@
 "use server";
 
+import {
+  editorChanges,
+  overlayRows,
+  proposedParent,
+} from "@/lib/listing-editor";
+import { randomUUID } from "node:crypto";
+import { queueListingChange } from "@/lib/listing-changes";
+
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -11,9 +19,17 @@ import {
 
 export async function listTeachers(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
-  return prisma.teacher.findMany({
+  const rows = await prisma.teacher.findMany({
     where: { vendorId },
     orderBy: { name: "asc" },
+  });
+  return overlayRows(rows, await editorChanges(vendorId), "TEACHER", {
+    vendorId,
+    name: "",
+    bio: null,
+    experienceYears: null,
+    profilePhotoUrl: null,
+    status: "ACTIVE",
   });
 }
 
@@ -22,6 +38,17 @@ export async function createTeacher(vendorId: string, input: TeacherInput) {
   const data = teacherSchema.parse(input);
 
   const teacher = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        vendorId,
+        session.user.id,
+        "TEACHER_CREATE",
+        randomUUID(),
+        data,
+      )
+    )
+      return;
     const created = await tx.teacher.create({ data: { ...data, vendorId } });
 
     await writeAuditLog(tx, {
@@ -40,13 +67,24 @@ export async function createTeacher(vendorId: string, input: TeacherInput) {
 }
 
 export async function updateTeacher(teacherId: string, input: TeacherInput) {
-  const record = await prisma.teacher.findUniqueOrThrow({
-    where: { id: teacherId },
-  });
+  const record =
+    (await prisma.teacher.findUnique({ where: { id: teacherId } })) ??
+    (await proposedParent(teacherId, "TEACHER_CREATE"));
   const session = await requireVendorAccess(record.vendorId, "vendor.update");
   const data = teacherSchema.parse(input);
 
   const vendorId = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        record.vendorId,
+        session.user.id,
+        "TEACHER_UPDATE",
+        teacherId,
+        data,
+      )
+    )
+      return record.vendorId;
     const before = await tx.teacher.findUniqueOrThrow({
       where: { id: teacherId },
     });
@@ -68,12 +106,23 @@ export async function updateTeacher(teacherId: string, input: TeacherInput) {
 }
 
 export async function deactivateTeacher(teacherId: string) {
-  const record = await prisma.teacher.findUniqueOrThrow({
-    where: { id: teacherId },
-  });
+  const record =
+    (await prisma.teacher.findUnique({ where: { id: teacherId } })) ??
+    (await proposedParent(teacherId, "TEACHER_CREATE"));
   const session = await requireVendorAccess(record.vendorId, "vendor.update");
 
   const vendorId = await prisma.$transaction(async (tx) => {
+    if (
+      await queueListingChange(
+        tx,
+        record.vendorId,
+        session.user.id,
+        "TEACHER_DEACTIVATE",
+        teacherId,
+        {},
+      )
+    )
+      return record.vendorId;
     const before = await tx.teacher.findUniqueOrThrow({
       where: { id: teacherId },
     });

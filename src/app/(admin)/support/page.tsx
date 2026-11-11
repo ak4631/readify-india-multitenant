@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListPagination } from "@/components/layout/list-pagination";
 import { parsePage } from "@/lib/pagination";
@@ -8,10 +9,13 @@ import { getCurrentSession, isPlatformStaff } from "@/lib/rbac";
 export default async function SupportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ partnerId?: string; page?: string }>;
 }) {
   const params = await searchParams;
-  const tickets = await listSupportTickets(parsePage(params.page));
+  const tickets = await listSupportTickets(
+    parsePage(params.page),
+    params.partnerId,
+  );
   const session = await getCurrentSession();
   const canRespond =
     !!session &&
@@ -45,10 +49,14 @@ export default async function SupportPage({
           Revenue.
         </p>
       </details>
-      <TicketList tickets={tickets.items} canRespond={canRespond} />
+      <TicketList
+        tickets={tickets.items}
+        canRespond={canRespond}
+        partnerId={params.partnerId}
+      />
       <ListPagination
         page={tickets}
-        path="/support"
+        path={partnerPath(params.partnerId, "support")}
         params={params}
         noun="tickets"
       />

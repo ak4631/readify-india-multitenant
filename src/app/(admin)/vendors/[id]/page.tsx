@@ -1,63 +1,59 @@
 import Link from "next/link";
-import { ListingChangeList } from "@/components/vendors/listing-change-list";
-import { listListingChanges } from "@/server/actions/listing-changes.actions";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ReviewTable } from "@/components/reviews/review-table";
-import { AcademicsPanel } from "@/components/vendors/exam-hub/academics-panel";
-import { VendorFacilitiesEditor } from "@/components/vendors/facilities/vendor-facilities-editor";
-import { TrainersList } from "@/components/vendors/gym/trainers-list";
-import { BookingTable } from "@/components/vendors/bookings/booking-table";
-import { LibraryOccupancyPanel } from "@/components/vendors/library/occupancy-panel";
-import { SeatConfiguration } from "@/components/vendors/library/seat-configuration";
-import { VendorMediaGallery } from "@/components/vendors/media/vendor-media-gallery";
-import { PlanList } from "@/components/vendors/plans/plan-list";
-import { SubscriptionTable } from "@/components/subscriptions/subscription-table";
-import { VendorScheduleEditor } from "@/components/vendors/schedule/vendor-schedule-editor";
-import { MenuEditor } from "@/components/vendors/co-working-space/menu-editor";
-import { VendorAddressEditDialog } from "@/components/vendors/vendor-address-edit-dialog";
-import { DocumentList } from "@/components/vendors/verification/document-list";
-import { UploadForm } from "@/components/vendors/verification/upload-form";
-import { VendorLifecycleActions } from "@/components/vendors/vendor-lifecycle-actions";
-import { VendorProfileEditDialog } from "@/components/vendors/vendor-profile-edit-dialog";
-import { VendorAccountDialog } from "@/components/vendors/vendor-account-dialog";
-import { VendorCapacityCard } from "@/components/vendors/vendor-capacity-card";
-import {
-  VendorStatusBadge,
-  VerificationStatusBadge,
-} from "@/components/vendors/vendor-status-badge";
-import { getRequiredDocuments } from "@/config/verification-requirements";
 import { prisma } from "@/lib/prisma";
-import { listCourses, listSubjects } from "@/server/actions/courses.actions";
-import { listFacilities } from "@/server/actions/facilities.actions";
-import { listVendorBookings } from "@/server/actions/bookings.actions";
-import { getLibraryOccupancy } from "@/server/actions/library-occupancy.actions";
-import { listLibrarySeatTypes } from "@/server/actions/library-seat-types.actions";
-import { listMembershipPlans } from "@/server/actions/membership-plans.actions";
-import { listMenu } from "@/server/actions/menu.actions";
-import { listReviews } from "@/server/actions/reviews.actions";
-import { listSubscriptions } from "@/server/actions/subscriptions.actions";
-import { listTeachers } from "@/server/actions/teachers.actions";
-import {
-  listTrainerSpecializations,
-  listTrainers,
-} from "@/server/actions/trainers.actions";
-import { listVendorCategories } from "@/server/actions/vendor-categories.actions";
-import { getVendorSchedule } from "@/server/actions/vendor-schedule.actions";
-import { getVendorById } from "@/server/actions/vendors.actions";
 import { getCurrentSession, hasPermission } from "@/lib/rbac";
+import { proposalLabels, overlayRows } from "@/lib/listing-editor";
+import { SETUP_STEPS } from "@/lib/listing-readiness";
+import {
+  getVendorById,
+  getListingReadiness,
+} from "@/server/actions/vendors.actions";
+import {
+  listListingChanges,
+  listListingRevisions,
+} from "@/server/actions/listing-changes.actions";
+import { PageHeader } from "@/components/layout/page-header";
+import { VendorLifecycleActions } from "@/components/vendors/vendor-lifecycle-actions";
+import { VendorStatusBadge } from "@/components/vendors/vendor-status-badge";
+import { VendorProfileEditDialog } from "@/components/vendors/vendor-profile-edit-dialog";
+import { VendorAddressEditDialog } from "@/components/vendors/vendor-address-edit-dialog";
+import { VendorCapacityCard } from "@/components/vendors/vendor-capacity-card";
+import { VendorAccountDialog } from "@/components/vendors/vendor-account-dialog";
+import { VendorFacilitiesEditor } from "@/components/vendors/facilities/vendor-facilities-editor";
+import { PlanList } from "@/components/vendors/plans/plan-list";
+import { VendorScheduleEditor } from "@/components/vendors/schedule/vendor-schedule-editor";
+import { VendorMediaGallery } from "@/components/vendors/media/vendor-media-gallery";
+import { ListingChangeList } from "@/components/vendors/listing-change-list";
+import { SetupReview } from "@/components/vendors/setup-review";
+import { UploadForm } from "@/components/vendors/verification/upload-form";
+import { DocumentList } from "@/components/vendors/verification/document-list";
+import { getRequiredDocuments } from "@/config/verification-requirements";
+import { listVendorCategories } from "@/server/actions/vendor-categories.actions";
+import { listFacilities } from "@/server/actions/facilities.actions";
+import { listMembershipPlans } from "@/server/actions/membership-plans.actions";
+import { getVendorSchedule } from "@/server/actions/vendor-schedule.actions";
+import { listLibrarySeatTypes } from "@/server/actions/library-seat-types.actions";
+import { getLibraryOccupancy } from "@/server/actions/library-occupancy.actions";
+import { listVendorBookings } from "@/server/actions/bookings.actions";
+import { listSubscriptions } from "@/server/actions/subscriptions.actions";
+import { listReviews } from "@/server/actions/reviews.actions";
+import {
+  listTrainers,
+  listTrainerSpecializations,
+} from "@/server/actions/trainers.actions";
+import { listTeachers } from "@/server/actions/teachers.actions";
+import { listCourses, listSubjects } from "@/server/actions/courses.actions";
+import { listMenu } from "@/server/actions/menu.actions";
+import { SeatConfiguration } from "@/components/vendors/library/seat-configuration";
+import { LibraryOccupancyPanel } from "@/components/vendors/library/occupancy-panel";
+import { BookingTable } from "@/components/vendors/bookings/booking-table";
+import { SubscriptionTable } from "@/components/subscriptions/subscription-table";
+import { ReviewTable } from "@/components/reviews/review-table";
+import { TrainersList } from "@/components/vendors/gym/trainers-list";
+import { AcademicsPanel } from "@/components/vendors/exam-hub/academics-panel";
+import { MenuEditor } from "@/components/vendors/co-working-space/menu-editor";
 
-const CATEGORY_TAB_LABEL: Record<string, string> = {
-  library: "Seats",
-  gym: "Trainers",
-  "co-working-space": "Menu",
-  "exam-hub": "Academics",
-};
-
-export default async function VendorDetailPage({
+export default async function VendorDetail({
   params,
   searchParams,
 }: {
@@ -65,306 +61,328 @@ export default async function VendorDetailPage({
   searchParams: Promise<{ tab?: string; date?: string }>;
 }) {
   const { id } = await params;
-  const { tab, date } = await searchParams;
+  const query = await searchParams;
   const vendor = await getVendorById(id);
-  const session = await getCurrentSession();
-
   if (!vendor) notFound();
-
-  const categorySlug = vendor.category.slug;
+  const session = await getCurrentSession();
+  const tabs: [string, string][] = [
+    ...SETUP_STEPS.map(([k, v]) => [k, v] as [string, string]),
+    ["changes", "Changes"],
+    ["bookings", "Bookings"],
+  ];
+  if (vendor.category.slug === "library") tabs.push(["occupancy", "Occupancy"]);
+  if (hasPermission(session, "subscription.read"))
+    tabs.push(["subscriptions", "Subscriptions"]);
+  if (hasPermission(session, "review.read")) tabs.push(["reviews", "Reviews"]);
+  const tab = tabs.some(([key]) => key === query.tab) ? query.tab! : "overview";
+  const editable =
+    hasPermission(session, "vendor.update") &&
+    !["SUBMITTED", "UNDER_REVIEW"].includes(vendor.status);
   const changes = await listListingChanges(id);
-  const canViewReviews = hasPermission(session, "review.read");
-  const canViewSubscriptions = hasPermission(session, "subscription.read");
-
-  const [
-    categories,
-    facilities,
-    vendorFacilities,
-    plans,
-    schedules,
-    media,
-    reviews,
-    subscriptions,
-    bookings,
-  ] = await Promise.all([
-    listVendorCategories(),
-    listFacilities(),
-    prisma.vendorFacility.findMany({ where: { vendorId: id } }),
-    listMembershipPlans(id),
-    getVendorSchedule(id),
-    prisma.vendorMedia.findMany({
-      where: { vendorId: id },
-      orderBy: { sortOrder: "asc" },
-    }),
-    canViewReviews
-      ? listReviews({ vendorId: id, pageSize: 100 }).then((page) => page.items)
-      : Promise.resolve([]),
-    canViewSubscriptions
-      ? listSubscriptions({ vendorId: id, pageSize: 100 }).then(
-          (page) => page.items,
-        )
-      : Promise.resolve([]),
-    listVendorBookings(id),
-  ]);
-
-  const categoryTabLabel = CATEGORY_TAB_LABEL[categorySlug];
-
-  // Library occupancy is computed for a day in the vendor's own timezone.
-  let occupancy: Awaited<ReturnType<typeof getLibraryOccupancy>> | null = null;
-  if (categorySlug === "library") {
-    const selectedDate =
-      date && /^\d{4}-\d{2}-\d{2}$/.test(date)
-        ? date
-        : new Date().toLocaleDateString("en-CA", { timeZone: vendor.timeZone });
-    occupancy = await getLibraryOccupancy(id, selectedDate);
+  const frozen = changes.some((c) => c.status === "PENDING");
+  let content: React.ReactNode;
+  switch (tab) {
+    case "overview":
+      content = (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Basic listing details</h2>
+          <p>{vendor.description ?? "Add a description of your space."}</p>
+          <p className="text-sm">
+            {vendor.phone} · {vendor.email ?? "No email"} ·{" "}
+            {vendor.category.name}
+          </p>
+          {editable && !frozen && (
+            <VendorProfileEditDialog
+              key={vendor.id + vendor.contentVersion}
+              vendor={vendor}
+              categories={await listVendorCategories()}
+            />
+          )}{" "}
+          {hasPermission(session, "vendorAccount.create") && (
+            <VendorAccountDialog vendorId={id} />
+          )}
+        </div>
+      );
+      break;
+    case "address":
+      content = (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Contact and location</h2>
+          <p>
+            {vendor.address
+              ? [
+                  vendor.address.addressLine1,
+                  vendor.address.city,
+                  vendor.address.state,
+                  vendor.address.pincode,
+                ]
+                  .filter(Boolean)
+                  .join(", ")
+              : "No address saved yet."}
+          </p>
+          {editable && !frozen && (
+            <VendorAddressEditDialog vendorId={id} address={vendor.address} />
+          )}
+        </div>
+      );
+      break;
+    case "verification":
+      content = (
+        <div className="space-y-5">
+          {editable &&
+            !frozen &&
+            hasPermission(session, "verification.upload") && (
+              <UploadForm
+                vendorId={id}
+                requiredDocuments={getRequiredDocuments(vendor.category.slug)}
+              />
+            )}
+          <DocumentList verifications={vendor.verifications} />
+        </div>
+      );
+      break;
+    case "facilities": {
+      const [facilities, selected] = await Promise.all([
+        listFacilities(),
+        prisma.vendorFacility.findMany({ where: { vendorId: id } }),
+      ]);
+      const proposal = changes.find(
+        (c) =>
+          c.kind === "FACILITIES" && ["DRAFT", "PENDING"].includes(c.status),
+      );
+      const ids =
+        proposal && Array.isArray(proposal.payload)
+          ? proposal.payload.map(String)
+          : selected.map((f) => f.facilityId);
+      content = (
+        <VendorFacilitiesEditor
+          key={id}
+          vendorId={id}
+          allFacilities={facilities.filter((f) => f.status === "ACTIVE")}
+          selectedFacilityIds={ids}
+          readOnly={!editable || frozen}
+        />
+      );
+      break;
+    }
+    case "plans":
+      content = (
+        <PlanList vendorId={id} plans={await listMembershipPlans(id)} />
+      );
+      break;
+    case "schedule":
+      content = (
+        <VendorScheduleEditor
+          vendorId={id}
+          schedules={await getVendorSchedule(id)}
+        />
+      );
+      break;
+    case "photos": {
+      const rows = await prisma.vendorMedia.findMany({
+        where: { vendorId: id },
+        orderBy: { sortOrder: "asc" },
+      });
+      const media = overlayRows(
+        rows,
+        changes.filter((c) => ["DRAFT", "PENDING"].includes(c.status)),
+        "MEDIA",
+        {
+          vendorId: id,
+          mediaUrl: "",
+          mediaType: "IMAGE",
+          externalId: null,
+          isPrimary: false,
+          sortOrder: 0,
+          createdAt: new Date(),
+        },
+      );
+      for (const c of changes.filter(
+        (c) =>
+          c.kind === "MEDIA_PRIMARY" && ["DRAFT", "PENDING"].includes(c.status),
+      ))
+        for (const m of media) m.isPrimary = m.id === c.targetId;
+      content = <VendorMediaGallery vendorId={id} media={media} />;
+      break;
+    }
+    case "category": {
+      let details: React.ReactNode;
+      switch (vendor.category.slug) {
+        case "library":
+          details = (
+            <SeatConfiguration
+              vendorId={id}
+              seatTypes={await listLibrarySeatTypes(id)}
+            />
+          );
+          break;
+        case "gym":
+          details = (
+            <TrainersList
+              vendorId={id}
+              trainers={await listTrainers(id)}
+              allSpecializations={await listTrainerSpecializations()}
+            />
+          );
+          break;
+        case "co-working-space":
+          details = (
+            <MenuEditor vendorId={id} categories={await listMenu(id)} />
+          );
+          break;
+        case "exam-hub":
+          details = (
+            <AcademicsPanel
+              vendorId={id}
+              teachers={await listTeachers(id)}
+              courses={await listCourses(id)}
+              subjects={await listSubjects()}
+            />
+          );
+          break;
+        default:
+          details = <p>This service is not supported yet.</p>;
+      }
+      content = (
+        <div className="space-y-6">
+          {vendor.category.slug !== "library" && (
+            <VendorCapacityCard vendorId={id} capacity={vendor.capacity} />
+          )}{" "}
+          {details}
+        </div>
+      );
+      break;
+    }
+    case "review":
+      content = (
+        <SetupReview
+          vendorId={id}
+          {...await getListingReadiness(id)}
+          status={vendor.status}
+        />
+      );
+      break;
+    case "changes":
+      content = (
+        <ListingChangeList
+          revisions={await listListingRevisions(id)}
+          labels={await proposalLabels(id)}
+        />
+      );
+      break;
+    case "occupancy":
+      content = (
+        <LibraryOccupancyPanel
+          data={await getLibraryOccupancy(
+            id,
+            query.date && /^\d{4}-\d{2}-\d{2}$/.test(query.date)
+              ? query.date
+              : new Date().toLocaleDateString("en-CA", {
+                  timeZone: vendor.timeZone,
+                }),
+          )}
+        />
+      );
+      break;
+    case "bookings":
+      content = <BookingTable bookings={await listVendorBookings(id)} />;
+      break;
+    case "subscriptions":
+      content = (
+        <SubscriptionTable
+          subscriptions={
+            (await listSubscriptions({ vendorId: id, pageSize: 100 })).items
+          }
+          showCustomer
+        />
+      );
+      break;
+    case "reviews":
+      content = (
+        <ReviewTable
+          reviews={(await listReviews({ vendorId: id, pageSize: 100 })).items}
+        />
+      );
+      break;
+    default:
+      content = null;
   }
-
+  const index = SETUP_STEPS.findIndex(([key]) => key === tab);
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 min-w-0">
       <Link
-        href="/vendors"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        href={`/partners/${vendor.partnerId}/vendors`}
+        className="text-sm text-primary underline"
       >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to partner listings
+        {vendor.partner.name} / Listings
       </Link>
       <PageHeader
         eyebrow={vendor.category.name}
         title={vendor.name}
-        description={
-          vendor.description ??
-          "Partner listing profile, facilities, plans, schedule, and verification."
-        }
+        description={`Listing state: ${vendor.status.replaceAll("_", " ")} · Approved content version ${vendor.contentVersion}`}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-2">
             <VendorStatusBadge status={vendor.status} />
-            <VerificationStatusBadge status={vendor.verificationStatus} />
             <VendorLifecycleActions
-              vendorId={vendor.id}
+              vendorId={id}
               status={vendor.status}
+              submissionVersion={vendor.submissionVersion}
             />
           </div>
         }
       />
-
-      <Tabs defaultValue={tab ?? "overview"} className="gap-6">
-        <TabsList className="h-auto w-full flex-wrap justify-start rounded-xl bg-card p-1 shadow-sm">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="facilities">Facilities</TabsTrigger>
-          <TabsTrigger value="plans">Plans</TabsTrigger>
-          <TabsTrigger value="schedule">Schedule</TabsTrigger>
-          <TabsTrigger value="changes">
-            Changes{" "}
-            {changes.filter((change) => change.status === "PENDING").length ||
-              ""}
-          </TabsTrigger>
-          {occupancy && <TabsTrigger value="occupancy">Occupancy</TabsTrigger>}
-          <TabsTrigger value="bookings">Bookings</TabsTrigger>
-          <TabsTrigger value="photos">Photos</TabsTrigger>
-          {canViewReviews && <TabsTrigger value="reviews">Reviews</TabsTrigger>}
-          {canViewSubscriptions && (
-            <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
+      {changes.some((c) => ["DRAFT", "PENDING"].includes(c.status)) && (
+        <p role="status" className="rounded-lg border bg-muted p-4 text-sm">
+          Editors show proposed content. Customers still see the approved
+          version.{" "}
+          {frozen
+            ? "Your revision is submitted and frozen until a decision or withdrawal."
+            : "Open Changes to review and submit the entire revision."}
+        </p>
+      )}
+      <nav
+        aria-label="Listing setup and operations"
+        className="flex flex-wrap gap-2 border-b pb-4"
+      >
+        {tabs.map(([key, label]) => (
+          <Link
+            key={key}
+            href={`/vendors/${id}?tab=${key}`}
+            aria-current={tab === key ? "page" : undefined}
+            className={`whitespace-nowrap rounded-md border px-3 py-2 text-sm ${tab === key ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <section className="rounded-lg border bg-card p-4 sm:p-6">
+        {content}
+      </section>
+      {index >= 0 && (
+        <nav
+          aria-label="Setup steps"
+          className="flex flex-wrap justify-between gap-3"
+        >
+          {index > 0 ? (
+            <Link
+              className="rounded border px-4 py-2 text-sm"
+              href={`/vendors/${id}?tab=${SETUP_STEPS[index - 1][0]}`}
+            >
+              Previous step
+            </Link>
+          ) : (
+            <span />
           )}
-          <TabsTrigger value="verification">Verification</TabsTrigger>
-          {categoryTabLabel && (
-            <TabsTrigger value="category">{categoryTabLabel}</TabsTrigger>
+          {index < SETUP_STEPS.length - 1 && (
+            <Link
+              className="rounded border px-4 py-2 text-sm"
+              href={`/vendors/${id}?tab=${SETUP_STEPS[index + 1][0]}`}
+            >
+              Next: {SETUP_STEPS[index + 1][1]}
+            </Link>
           )}
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-4">
-          <Card>
-            <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-              <div className="rounded-xl bg-muted/50 px-4 py-3">
-                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Phone
-                </p>
-                <p className="mt-1 font-medium">{vendor.phone}</p>
-              </div>
-              <div className="rounded-xl bg-muted/50 px-4 py-3">
-                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Email
-                </p>
-                <p className="mt-1 font-medium">{vendor.email ?? "—"}</p>
-              </div>
-              <div className="rounded-xl bg-muted/50 px-4 py-3 sm:col-span-2">
-                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Address
-                </p>
-                <p className="mt-1 font-medium">
-                  {vendor.address
-                    ? `${vendor.address.addressLine1}, ${vendor.address.city}, ${vendor.address.state} ${vendor.address.pincode}`
-                    : "Not set"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-muted/50 px-4 py-3">
-                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Created by
-                </p>
-                <p className="mt-1 font-medium">{vendor.createdBy.name}</p>
-              </div>
-              {vendor.rejectionReason && (
-                <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 sm:col-span-2">
-                  <p className="text-xs font-semibold tracking-wide text-destructive uppercase">
-                    Rejection reason
-                  </p>
-                  <p className="mt-1 font-medium">{vendor.rejectionReason}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          <div className="flex gap-2">
-            <VendorProfileEditDialog vendor={vendor} categories={categories} />
-            <VendorAddressEditDialog
-              vendorId={vendor.id}
-              address={vendor.address}
-            />
-            {hasPermission(session, "vendorAccount.create") && (
-              <VendorAccountDialog vendorId={vendor.id} />
-            )}
-          </div>
-          {categorySlug !== "library" && (
-            <VendorCapacityCard
-              vendorId={vendor.id}
-              capacity={vendor.capacity}
-            />
-          )}
-          {hasPermission(session, "vendorAccount.create") &&
-            vendor.partner.users.length > 0 && (
-              <Card>
-                <CardContent>
-                  <p className="mb-3 text-sm font-semibold">Partner accounts</p>
-                  <div className="space-y-2">
-                    {vendor.partner.users.map((partnerUser) => (
-                      <div
-                        key={partnerUser.id}
-                        className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm"
-                      >
-                        <span className="font-medium">{partnerUser.name}</span>
-                        <span className="text-muted-foreground">
-                          {partnerUser.email}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-        </TabsContent>
-
-        <TabsContent value="facilities">
-          <VendorFacilitiesEditor
-            vendorId={vendor.id}
-            allFacilities={facilities.filter((f) => f.status === "ACTIVE")}
-            selectedFacilityIds={vendorFacilities.map((f) => f.facilityId)}
-          />
-        </TabsContent>
-
-        <TabsContent value="plans">
-          <PlanList vendorId={vendor.id} plans={plans} />
-        </TabsContent>
-        <TabsContent value="changes">
-          <ListingChangeList changes={changes} />
-        </TabsContent>
-
-        <TabsContent value="schedule">
-          <VendorScheduleEditor vendorId={vendor.id} schedules={schedules} />
-        </TabsContent>
-
-        {occupancy && (
-          <TabsContent value="occupancy">
-            <LibraryOccupancyPanel data={occupancy} />
-          </TabsContent>
-        )}
-
-        <TabsContent value="bookings">
-          <BookingTable bookings={bookings} />
-        </TabsContent>
-
-        <TabsContent value="photos">
-          <VendorMediaGallery vendorId={vendor.id} media={media} />
-        </TabsContent>
-
-        {canViewReviews && (
-          <TabsContent value="reviews">
-            <ReviewTable reviews={reviews} />
-          </TabsContent>
-        )}
-
-        {canViewSubscriptions && (
-          <TabsContent value="subscriptions">
-            <SubscriptionTable subscriptions={subscriptions} showCustomer />
-          </TabsContent>
-        )}
-
-        <TabsContent value="verification" className="space-y-6">
-          <UploadForm
-            vendorId={vendor.id}
-            requiredDocuments={getRequiredDocuments(vendor.category.slug)}
-          />
-          <DocumentList verifications={vendor.verifications} />
-        </TabsContent>
-
-        {categorySlug === "library" && (
-          <TabsContent value="category">
-            <LibraryCategoryPanel vendorId={vendor.id} />
-          </TabsContent>
-        )}
-        {categorySlug === "gym" && (
-          <TabsContent value="category">
-            <GymCategoryPanel vendorId={vendor.id} />
-          </TabsContent>
-        )}
-        {categorySlug === "co-working-space" && (
-          <TabsContent value="category">
-            <CoworkingSpaceCategoryPanel vendorId={vendor.id} />
-          </TabsContent>
-        )}
-        {categorySlug === "exam-hub" && (
-          <TabsContent value="category">
-            <ExamHubCategoryPanel vendorId={vendor.id} />
-          </TabsContent>
-        )}
-      </Tabs>
+        </nav>
+      )}
     </div>
-  );
-}
-
-async function LibraryCategoryPanel({ vendorId }: { vendorId: string }) {
-  const seatTypes = await listLibrarySeatTypes(vendorId);
-  return <SeatConfiguration vendorId={vendorId} seatTypes={seatTypes} />;
-}
-
-async function GymCategoryPanel({ vendorId }: { vendorId: string }) {
-  const [trainers, specializations] = await Promise.all([
-    listTrainers(vendorId),
-    listTrainerSpecializations(),
-  ]);
-  return (
-    <TrainersList
-      vendorId={vendorId}
-      trainers={trainers}
-      allSpecializations={specializations}
-    />
-  );
-}
-
-async function CoworkingSpaceCategoryPanel({ vendorId }: { vendorId: string }) {
-  const categories = await listMenu(vendorId);
-  return <MenuEditor vendorId={vendorId} categories={categories} />;
-}
-
-async function ExamHubCategoryPanel({ vendorId }: { vendorId: string }) {
-  const [teachers, courses, subjects] = await Promise.all([
-    listTeachers(vendorId),
-    listCourses(vendorId),
-    listSubjects(),
-  ]);
-  return (
-    <AcademicsPanel
-      vendorId={vendorId}
-      teachers={teachers}
-      courses={courses}
-      subjects={subjects}
-    />
   );
 }

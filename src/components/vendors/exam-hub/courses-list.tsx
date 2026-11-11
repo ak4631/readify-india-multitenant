@@ -10,7 +10,10 @@ import { CourseDetailDialog } from "@/components/vendors/exam-hub/course-detail-
 import { CourseFormDialog } from "@/components/vendors/exam-hub/course-form-dialog";
 import type { Subject, Teacher } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { archiveCourse, type CourseRow } from "@/server/actions/courses.actions";
+import {
+  archiveCourse,
+  type CourseRow,
+} from "@/server/actions/courses.actions";
 
 export function CoursesList({
   vendorId,
@@ -31,7 +34,9 @@ export function CoursesList({
     startTransition(async () => {
       try {
         await archiveCourse(courseId);
-        toast.success("Course archived");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");

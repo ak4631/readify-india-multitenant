@@ -61,10 +61,14 @@ export function TeacherFormDialog({
     try {
       if (teacher) {
         await updateTeacher(teacher.id, values);
-        toast.success("Teacher updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       } else {
         await createTeacher(vendorId, values);
-        toast.success("Teacher added");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       }
       setOpen(false);
       form.reset();

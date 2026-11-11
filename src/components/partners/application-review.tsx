@@ -6,14 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { reviewPartnerApplication } from "@/server/actions/partners.actions";
 
-export function ApplicationReview({ partnerId }: { partnerId: string }) {
+export function ApplicationReview({
+  partnerId,
+  version,
+}: {
+  partnerId: string;
+  version: number;
+}) {
   const [reason, setReason] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   function decide(approve: boolean) {
     startTransition(async () => {
       try {
-        await reviewPartnerApplication(partnerId, approve, reason);
+        await reviewPartnerApplication(partnerId, approve, reason, version);
         toast.success("Application reviewed");
         router.refresh();
       } catch (error) {
@@ -26,7 +32,8 @@ export function ApplicationReview({ partnerId }: { partnerId: string }) {
       <h2 className="font-semibold">Partner application awaiting review</h2>
       <p>
         Approval activates the organization account. Individual listings and
-        documents still require their own approval before publication.
+        documents still require their own approval before publication. You are
+        reviewing application version {version}.
       </p>
       <Textarea
         aria-label="Application rejection reason"

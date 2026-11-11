@@ -66,10 +66,14 @@ export function MenuItemFormDialog({
     try {
       if (item) {
         await updateMenuItem(vendorId, item.id, values);
-        toast.success("Item updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       } else {
         await createMenuItem(vendorId, categoryId, values);
-        toast.success("Item added");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
       }
       setOpen(false);
       form.reset();

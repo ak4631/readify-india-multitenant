@@ -1,7 +1,7 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: design.md · designed-as-app */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "../styles/brand-tokens.css";
 @import "../../tokens.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -142,6 +142,15 @@
     letter-spacing: 0;
   }
 
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+  }
+
   ::selection {
     background: color-mix(in oklch, var(--color-accent), white 68%);
     color: var(--color-ink);
@@ -184,4 +193,50 @@
     width: 35%;
     transform: translateX(290%);
   }
+}
+
+/* Role colours remain constant in both themes; text labels make role identity explicit. */
+.workspace-header {
+  --workspace-header-background: var(--brand-yellow);
+  --workspace-header-foreground: var(--brand-forest);
+  --workspace-header-border: var(--brand-forest);
+  --workspace-control: color-mix(
+    in srgb,
+    var(--workspace-header-background),
+    var(--workspace-header-foreground) 8%
+  );
+  background: var(--workspace-header-background);
+  color: var(--workspace-header-foreground);
+  border-color: var(--workspace-header-border);
+}
+.workspace-header[data-workspace-role="super-admin"] {
+  --workspace-header-background: var(--brand-forest);
+  --workspace-header-foreground: var(--brand-ivory);
+  --workspace-header-border: var(--brand-lime);
+}
+.workspace-header[data-workspace-role="admin"] {
+  --workspace-header-background: var(--brand-lime);
+}
+.workspace-header .workspace-sign-out,
+.workspace-header .workspace-avatar {
+  background: var(--workspace-control);
+  color: var(--workspace-header-foreground);
+  border-color: var(--workspace-header-foreground);
+}
+.workspace-header .workspace-sign-out:hover,
+.workspace-header .workspace-nav-link:hover,
+.workspace-header .workspace-nav-active {
+  background: var(--workspace-header-foreground);
+  color: var(--workspace-header-background);
+}
+.workspace-header .workspace-mobile-nav {
+  border-color: color-mix(
+    in srgb,
+    var(--workspace-header-foreground),
+    transparent 70%
+  );
+}
+.workspace-header :focus-visible {
+  outline: 3px solid var(--workspace-header-foreground);
+  outline-offset: 3px;
 }

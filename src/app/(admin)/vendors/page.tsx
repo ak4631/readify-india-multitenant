@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ export default async function VendorsPage({
   searchParams,
 }: {
   searchParams: Promise<{
+    partnerId?: string;
     categoryId?: string;
     status?: string;
     city?: string;
@@ -25,6 +27,7 @@ export default async function VendorsPage({
   const session = await getCurrentSession();
   const [vendors, categories] = await Promise.all([
     listVendorsPage({
+      partnerId: params.partnerId,
       categoryId: params.categoryId,
       status: params.status as VendorStatus | undefined,
       city: params.city,
@@ -45,7 +48,13 @@ export default async function VendorsPage({
               nativeButton={false}
               render={
                 <Link
-                  href={isSuperAdmin(session) ? "/partners" : "/vendors/new"}
+                  href={
+                    params.partnerId
+                      ? `/vendors/new?partnerId=${encodeURIComponent(params.partnerId)}`
+                      : isSuperAdmin(session)
+                        ? "/partners"
+                        : "/vendors/new"
+                  }
                 >
                   {isSuperAdmin(session) ? "Manage partners" : "Add listing"}
                 </Link>
@@ -60,7 +69,7 @@ export default async function VendorsPage({
           <VendorTable vendors={vendors.items} />
           <ListPagination
             page={vendors}
-            path="/vendors"
+            path={partnerPath(params.partnerId, "vendors")}
             params={params}
             noun="listings"
           />

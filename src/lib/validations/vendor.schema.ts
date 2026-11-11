@@ -28,6 +28,10 @@ export const vendorBasicInfoSchema = z.object({
     .string()
     .trim()
     .url("Enter a full URL, including https://")
+    .refine(
+      (value) => /^https?:\/\//i.test(value),
+      "Use an HTTP or HTTPS website URL",
+    )
     .optional()
     .or(z.literal("")),
 });

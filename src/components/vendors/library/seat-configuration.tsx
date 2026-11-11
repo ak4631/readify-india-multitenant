@@ -26,7 +26,9 @@ export function SeatConfiguration({
     startTransition(async () => {
       try {
         await deleteLibrarySeatType(seatTypeId);
-        toast.success("Seat type removed");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");

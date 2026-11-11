@@ -49,7 +49,9 @@ export function VendorScheduleEditor({
     startTransition(async () => {
       try {
         await updateVendorSchedule(vendorId, { days });
-        toast.success("Timings updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Update failed");

@@ -85,8 +85,32 @@ export async function suspendUser(input: { userId: string }) {
   const session = await requireSuperAdmin();
   const { userId } = suspendUserSchema.parse(input);
 
+  if (session.user.id === userId)
+    throw new Error("You cannot suspend your own account");
   await prisma.$transaction(async (tx) => {
-    const before = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+    const before = await tx.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { roles: { include: { role: true } } },
+    });
+    if (before.roles.some(({ role }) => role.name === "SUPER_ADMIN"))
+      throw new Error("Super Admin accounts cannot be suspended here");
+    if (before.partnerId) {
+      await tx.$queryRaw`SELECT id FROM admin.partners WHERE id=${before.partnerId} FOR UPDATE`;
+      if (before.roles.some(({ role }) => role.name === "PARTNER_ADMIN")) {
+        const owners = await tx.user.count({
+          where: {
+            partnerId: before.partnerId,
+            status: "ACTIVE",
+            id: { not: userId },
+            roles: { some: { role: { name: "PARTNER_ADMIN" } } },
+          },
+        });
+        if (!owners)
+          throw new Error(
+            "Add another active owner before suspending the last partner owner",
+          );
+      }
+    }
 
     const after = await tx.user.update({
       where: { id: userId },

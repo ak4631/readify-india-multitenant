@@ -40,7 +40,7 @@ export function WorkspaceSummary({
         ))}
       </div>
       <p className="font-medium">
-        Today: {data.reservedSeatHours.toFixed(1)} of{" "}
+        Library seat-hours today: {data.reservedSeatHours.toFixed(1)} of{" "}
         {data.totalSeatHours.toFixed(1)} seat-hours reserved. Each seat&apos;s
         free time ranges are available in Service Management.
       </p>

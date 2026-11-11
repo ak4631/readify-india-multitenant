@@ -74,7 +74,9 @@ export function CourseDetailDialog({
     startTransition(async () => {
       try {
         await setCourseTeachers(course.id, Array.from(selectedTeachers));
-        toast.success("Teachers updated");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Update failed");
@@ -87,9 +89,13 @@ export function CourseDetailDialog({
       try {
         await createLecture(vendorId, course.id, {
           ...lectureForm,
+          startTime: new Date(lectureForm.startTime).toISOString(),
+          endTime: new Date(lectureForm.endTime).toISOString(),
           teacherId: lectureForm.teacherId || undefined,
         });
-        toast.success("Lecture scheduled");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         setLectureForm({
           title: "",
           teacherId: "",
@@ -109,7 +115,9 @@ export function CourseDetailDialog({
     startTransition(async () => {
       try {
         await cancelLecture(vendorId, lectureId);
-        toast.success("Lecture cancelled");
+        toast.success(
+          "Saved. Changes to approved listings must be submitted from Changes.",
+        );
         router.refresh();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Action failed");
@@ -220,6 +228,7 @@ export function CourseDetailDialog({
                     <Label>Start</Label>
                     <Input
                       type="datetime-local"
+                      aria-description="Enter time in your device timezone"
                       value={lectureForm.startTime}
                       onChange={(e) =>
                         setLectureForm((f) => ({
@@ -233,6 +242,7 @@ export function CourseDetailDialog({
                     <Label>End</Label>
                     <Input
                       type="datetime-local"
+                      aria-description="Enter time in your device timezone"
                       value={lectureForm.endTime}
                       onChange={(e) =>
                         setLectureForm((f) => ({

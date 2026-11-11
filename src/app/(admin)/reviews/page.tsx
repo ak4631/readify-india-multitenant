@@ -1,3 +1,4 @@
+import { partnerPath } from "@/lib/partner-path";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReviewTable } from "@/components/reviews/review-table";
@@ -8,10 +9,13 @@ import { listReviews } from "@/server/actions/reviews.actions";
 export default async function ReviewsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ partnerId?: string; page?: string }>;
 }) {
   const params = await searchParams;
-  const reviews = await listReviews({ page: parsePage(params.page) });
+  const reviews = await listReviews({
+    partnerId: params.partnerId,
+    page: parsePage(params.page),
+  });
 
   return (
     <div className="space-y-8">
@@ -25,7 +29,7 @@ export default async function ReviewsPage({
           <ReviewTable reviews={reviews.items} showVendor />
           <ListPagination
             page={reviews}
-            path="/reviews"
+            path={partnerPath(params.partnerId, "reviews")}
             params={params}
             noun="reviews"
           />

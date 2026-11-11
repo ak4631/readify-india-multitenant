@@ -1,11 +1,6 @@
 "use server";
 
-import {
-  pageWindow,
-  slicePage,
-  toPage,
-  type Page,
-} from "@/lib/pagination";
+import { pageWindow, slicePage, toPage, type Page } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { getSessionPartnerId, requirePermission } from "@/lib/rbac";
 import { listCustomerProfiles, lookupCustomerProfiles } from "@/lib/profiles";
@@ -42,10 +37,10 @@ export type CustomersResult = {
 export type CustomerType = "all" | "new" | "active" | "permanent" | "flexible";
 
 export async function listCustomers(
-  options: { page?: number; type?: CustomerType } = {},
+  options: { partnerId?: string; page?: number; type?: CustomerType } = {},
 ): Promise<CustomersResult> {
   const session = await requirePermission("customer.read");
-  const partnerId = await getSessionPartnerId(session);
+  const partnerId = await getSessionPartnerId(session, options.partnerId);
   const window = pageWindow(options.page ?? 1);
   const asOf = new Date();
 
@@ -56,16 +51,16 @@ export async function listCustomers(
       scope: "platform",
       customers: toPage(
         profiles.items.map((p) => ({
-        id: p.id,
-        fullName: p.fullName,
-        email: p.email,
-        role: p.role,
-        isActive: p.isActive,
-        totalBookings: null,
-        activeSubscriptions: null,
-        totalSpent: null,
-        lastActivityAt: null,
-        joinedAt: p.createdAt,
+          id: p.id,
+          fullName: p.fullName,
+          email: p.email,
+          role: p.role,
+          isActive: p.isActive,
+          totalBookings: null,
+          activeSubscriptions: null,
+          totalSpent: null,
+          lastActivityAt: null,
+          joinedAt: p.createdAt,
         })),
         profiles.total,
         window,
@@ -86,7 +81,9 @@ export async function listCustomers(
             : customer.joinedAt.getTime() > asOf.getTime() - 7 * 86400000),
   );
   const page = slicePage(rows, window.page);
-  const profiles = await lookupCustomerProfiles(page.items.map((row) => row.id));
+  const profiles = await lookupCustomerProfiles(
+    page.items.map((row) => row.id),
+  );
   return {
     asOf,
     scope: "partner",

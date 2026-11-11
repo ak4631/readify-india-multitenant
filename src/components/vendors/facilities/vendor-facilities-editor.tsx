@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,15 +13,23 @@ export function VendorFacilitiesEditor({
   vendorId,
   allFacilities,
   selectedFacilityIds,
+  readOnly = false,
 }: {
   vendorId: string;
   allFacilities: Facility[];
   selectedFacilityIds: string[];
+  readOnly?: boolean;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState(new Set(selectedFacilityIds));
-  const canEdit = usePermission("vendor.update");
+  const selectionVersion = JSON.stringify([...selectedFacilityIds].sort());
+  const [previousSelectionVersion, setPreviousSelectionVersion] =
+    useState(selectionVersion);
+  if (selectionVersion !== previousSelectionVersion) {
+    setPreviousSelectionVersion(selectionVersion);
+    setSelected(new Set(selectedFacilityIds));
+  }
+  const canEdit = usePermission("vendor.update") && !readOnly;
 
   function toggle(facilityId: string) {
     setSelected((prev) => {
@@ -36,12 +43,28 @@ export function VendorFacilitiesEditor({
     });
   }
 
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
   function handleSave() {
+    setSaveMessage(null);
     startTransition(async () => {
       try {
-        await setVendorFacilities(vendorId, Array.from(selected));
-        toast.success("Facilities updated");
-        router.refresh();
+        const result = await setVendorFacilities(
+          vendorId,
+          Array.from(selected),
+        );
+        if (!result.ok) {
+          toast.error(result.message);
+          setSaveMessage(result.message);
+          return;
+        }
+        const message =
+          result.outcome === "queued"
+            ? "Proposed facilities saved. Open Changes to submit for Super Admin approval. Customers still see the approved facilities."
+            : "Draft facilities saved.";
+        setSaveMessage(message);
+        toast.success(message);
+        // revalidatePath in the action already returns the refreshed server tree.
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Update failed");
       }
@@ -59,7 +82,7 @@ export function VendorFacilitiesEditor({
             <Checkbox
               checked={selected.has(facility.id)}
               onCheckedChange={() => toggle(facility.id)}
-              disabled={!canEdit}
+              disabled={!canEdit || isPending}
             />
             {facility.name}
           </Label>
@@ -70,6 +93,11 @@ export function VendorFacilitiesEditor({
           </p>
         )}
       </div>
+      {saveMessage && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {saveMessage}
+        </p>
+      )}
       {canEdit && (
         <Button onClick={handleSave} disabled={isPending} aria-busy={isPending}>
           {isPending ? "Saving..." : "Save Facilities"}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -17,10 +18,10 @@ import type { VendorStatus } from "@/generated/prisma/enums";
 import { usePermission } from "@/hooks/use-permission";
 import {
   approveVendor,
+  reopenLegacyListing,
   publishVendor,
   rejectVendor,
   suspendVendor,
-  submitVendorForReview,
   reviseRejectedVendor,
   requestListingReactivation,
 } from "@/server/actions/vendors.actions";
@@ -28,9 +29,11 @@ import {
 export function VendorLifecycleActions({
   vendorId,
   status,
+  submissionVersion,
 }: {
   vendorId: string;
   status: VendorStatus;
+  submissionVersion: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -56,20 +59,30 @@ export function VendorLifecycleActions({
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
+      {["SUBMITTED", "UNDER_REVIEW"].includes(status) &&
+        submissionVersion === 0 &&
+        canReject && (
+          <Button
+            size="sm"
+            disabled={isPending}
+            onClick={() =>
+              run(
+                () => reopenLegacyListing(vendorId),
+                "Returned to draft for complete setup",
+              )
+            }
+          >
+            Return legacy review to draft
+          </Button>
+        )}
       {status === "DRAFT" && canEdit && (
-        <Button
-          size="sm"
-          disabled={isPending}
-          onClick={() =>
-            run(
-              () => submitVendorForReview(vendorId),
-              "Submitted for Admin review",
-            )
-          }
+        <Link
+          className="rounded border px-3 py-2 text-sm"
+          href={`/vendors/${vendorId}?tab=review`}
         >
-          Submit for review
-        </Button>
+          Review setup
+        </Link>
       )}
       {status === "REJECTED" && canEdit && (
         <Button
@@ -104,7 +117,12 @@ export function VendorLifecycleActions({
           size="sm"
           disabled={isPending}
           aria-busy={isPending}
-          onClick={() => run(() => approveVendor(vendorId), "Listing approved")}
+          onClick={() =>
+            run(
+              () => approveVendor(vendorId, submissionVersion),
+              "Listing approved",
+            )
+          }
         >
           Approve
         </Button>
@@ -139,7 +157,7 @@ export function VendorLifecycleActions({
                 aria-busy={isPending}
                 onClick={() =>
                   run(async () => {
-                    await rejectVendor(vendorId, reason);
+                    await rejectVendor(vendorId, reason, submissionVersion);
                     setRejectOpen(false);
                     setReason("");
                   }, "Listing rejected")
@@ -157,7 +175,10 @@ export function VendorLifecycleActions({
           disabled={isPending}
           aria-busy={isPending}
           onClick={() =>
-            run(() => publishVendor(vendorId), "Listing published")
+            run(
+              () => publishVendor(vendorId, submissionVersion),
+              "Listing published",
+            )
           }
         >
           Publish

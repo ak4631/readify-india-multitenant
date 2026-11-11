@@ -46,7 +46,7 @@ export async function requirePermissionOrRedirect(
 }
 
 export function isSuperAdmin(session: Session): boolean {
-  return session.user.roles.includes("SUPER_ADMIN");
+  return isPlatformStaff(session) && session.user.roles.includes("SUPER_ADMIN");
 }
 
 export function isPlatformStaff(session: Session): boolean {
@@ -82,24 +82,68 @@ export async function requireSuperAdmin(): Promise<Session> {
   return session;
 }
 
+export async function requireSuperAdminPermission(permission: PermissionKey) {
+  const session = await requirePlatformPermission(permission);
+  if (!isSuperAdmin(session)) throw new Error("Super admin access required");
+  return session;
+}
+
+export type DataScope =
+  | { kind: "platform"; partnerId: null }
+  | { kind: "partner"; partnerId: string };
+
+// A selected partner narrows a platform query; it never overrides tenant access.
+// Inactive partners remain inspectable by platform staff for remediation.
+export async function resolveDataScope(
+  session: Session,
+  selectedPartnerId?: string,
+): Promise<DataScope> {
+  if (
+    selectedPartnerId !== undefined &&
+    (typeof selectedPartnerId !== "string" ||
+      !selectedPartnerId.trim() ||
+      selectedPartnerId.length > 128)
+  ) {
+    throw new Error("Invalid partner selection");
+  }
+  if (isPlatformStaff(session)) {
+    if (selectedPartnerId === undefined)
+      return { kind: "platform", partnerId: null };
+    const partner = await prisma.partner.findUnique({
+      where: { id: selectedPartnerId },
+      select: { id: true },
+    });
+    if (!partner) throw new Error("Partner not found");
+    return { kind: "partner", partnerId: partner.id };
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      partnerId: true,
+      status: true,
+      partner: { select: { status: true, approvalStatus: true } },
+    },
+  });
+  if (
+    !user?.partnerId ||
+    user.status !== "ACTIVE" ||
+    user.partner?.status !== "ACTIVE" ||
+    user.partner.approvalStatus !== "APPROVED"
+  ) {
+    throw new Error("Active partner access required");
+  }
+  if (selectedPartnerId !== undefined && selectedPartnerId !== user.partnerId) {
+    throw new Error("You do not have access to this partner");
+  }
+  return { kind: "partner", partnerId: user.partnerId };
+}
+
 export async function requirePartnerAccess(
   partnerId: string,
   permission: PermissionKey,
 ): Promise<Session> {
   const session = await requirePermission(permission);
-  if (isPlatformStaff(session)) return session;
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { partnerId: true, partner: { select: { status: true } } },
-  });
-  if (
-    !user?.partnerId ||
-    user.partnerId !== partnerId ||
-    user.partner?.status !== "ACTIVE"
-  ) {
-    throw new Error("You do not have access to this partner");
-  }
+  await resolveDataScope(session, partnerId);
   return session;
 }
 
@@ -109,22 +153,13 @@ export async function requireVendorAccess(
 ): Promise<Session> {
   const session = await requirePermission(permission);
   if (isPlatformStaff(session)) return session;
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { partnerId: true, partner: { select: { status: true } } },
-  });
+  const scope = await resolveDataScope(session);
   const vendor = await prisma.vendor.findUnique({
     where: { id: vendorId },
     select: { partnerId: true },
   });
 
-  if (
-    !user?.partnerId ||
-    !vendor ||
-    vendor.partnerId !== user.partnerId ||
-    user.partner?.status !== "ACTIVE"
-  ) {
+  if (!vendor || vendor.partnerId !== scope.partnerId) {
     throw new Error("You do not have access to this listing");
   }
   return session;
@@ -136,27 +171,19 @@ export async function requireVendorAccess(
 // listings (customers, subscriptions, ...).
 export async function getSessionPartnerId(
   session: Session,
+  selectedPartnerId?: string,
 ): Promise<string | null> {
-  if (isPlatformStaff(session)) return null;
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { partnerId: true },
-  });
-  if (!user?.partnerId) throw new Error("Partner access required");
-  return user.partnerId;
+  return (await resolveDataScope(session, selectedPartnerId)).partnerId;
 }
 
 export async function getAccessibleVendorIds(
   session: Session,
+  selectedPartnerId?: string,
 ): Promise<string[] | null> {
-  if (isPlatformStaff(session)) return null;
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { partnerId: true },
-  });
-  if (!user?.partnerId) return [];
+  const scope = await resolveDataScope(session, selectedPartnerId);
+  if (scope.kind === "platform") return null;
   const vendors = await prisma.vendor.findMany({
-    where: { partnerId: user.partnerId },
+    where: { partnerId: scope.partnerId },
     select: { id: true },
   });
   return vendors.map((vendor) => vendor.id);

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth.schema";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
@@ -59,21 +60,9 @@ function LoginForm() {
     <main className="grid min-h-svh place-items-center bg-background px-6 py-12">
       <div className="w-full max-w-md">
         <div className="mb-8">
-          <div className="mb-5 flex items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="grid size-10 place-items-center rounded-lg bg-primary text-xl font-bold text-primary-foreground"
-            >
-              V
-            </span>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                Vriddhora
-              </h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Management Portal
-              </p>
-            </div>
+          <div className="mb-5 text-center">
+            <BrandLogo className="mx-auto w-52" />
+            <h1 className="mt-3 text-xl font-semibold">Management Portal</h1>
           </div>
           <div className="rounded-lg border border-primary/20 bg-secondary px-4 py-3 text-sm text-secondary-foreground">
             <div className="flex items-center gap-2 font-semibold">

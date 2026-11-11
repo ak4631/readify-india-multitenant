@@ -20,14 +20,27 @@ export const courseSchema = z.object({
 
 export type CourseInput = z.infer<typeof courseSchema>;
 
-export const lectureSchema = z.object({
-  title: z.string().min(2, "Title is required"),
-  description: z.string().optional(),
-  teacherId: z.string().optional(),
-  mode: z.enum(["OFFLINE", "ONLINE", "HYBRID"]),
-  startTime: z.string().min(1, "Start time is required"),
-  endTime: z.string().min(1, "End time is required"),
-  meetingUrl: z.string().url().optional().or(z.literal("")),
-});
+export const lectureSchema = z
+  .object({
+    title: z.string().min(2, "Title is required"),
+    description: z.string().optional(),
+    teacherId: z.string().optional(),
+    mode: z.enum(["OFFLINE", "ONLINE", "HYBRID"]),
+    startTime: z.iso.datetime({ offset: true }),
+    endTime: z.iso.datetime({ offset: true }),
+    meetingUrl: z
+      .string()
+      .url()
+      .refine(
+        (v) => /^https?:\/\//i.test(v),
+        "Use an HTTP or HTTPS meeting URL",
+      )
+      .optional()
+      .or(z.literal("")),
+  })
+  .refine((v) => new Date(v.endTime) > new Date(v.startTime), {
+    path: ["endTime"],
+    message: "End time must follow start time",
+  });
 
 export type LectureInput = z.infer<typeof lectureSchema>;

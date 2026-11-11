@@ -1,4 +1,5 @@
 "use server";
+import { queueListingChange } from "@/lib/listing-changes";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -13,14 +14,19 @@ import {
 } from "@/lib/rbac";
 
 export async function listReviews(
-  filters: { vendorId?: string; page?: number; pageSize?: number } = {},
+  filters: {
+    partnerId?: string;
+    vendorId?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
 ) {
   const session = await requirePermission("review.read");
   if (filters.vendorId) {
     await requireVendorAccess(filters.vendorId, "vendor.read");
   }
 
-  const partnerId = await getSessionPartnerId(session);
+  const partnerId = await getSessionPartnerId(session, filters.partnerId);
   const where = {
     vendorId: filters.vendorId,
     vendor: partnerId ? { partnerId } : undefined,
@@ -107,6 +113,17 @@ export async function replyToReview(reviewId: string, reply: string) {
     });
     if (current.status !== "PUBLISHED")
       throw new Error("Only published reviews can receive a reply");
+    if (
+      await queueListingChange(
+        tx,
+        review.vendorId,
+        session.user.id,
+        "REVIEW_REPLY",
+        reviewId,
+        { reply: text },
+      )
+    )
+      return;
     await tx.review.update({
       where: { id: reviewId },
       data: { ownerReply: text, repliedAt: new Date() },
