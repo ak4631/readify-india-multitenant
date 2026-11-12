@@ -336,8 +336,16 @@ export default async function VendorDetail({
           Editors show proposed content. Customers still see the approved
           version.{" "}
           {frozen
-            ? "Your revision is submitted and frozen until a decision or withdrawal."
-            : "Open Changes to review and submit the entire revision."}
+            ? "Your revision is submitted and frozen until a decision or withdrawal. "
+            : "Your revision is a draft and must be submitted for approval. "}
+          <Link
+            href={`/vendors/${id}?tab=changes`}
+            className="font-medium text-primary underline"
+          >
+            {frozen
+              ? "View approval status"
+              : "Open Changes to submit revision"}
+          </Link>
         </p>
       )}
       <nav

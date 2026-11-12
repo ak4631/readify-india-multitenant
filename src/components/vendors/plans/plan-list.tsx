@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -68,36 +69,65 @@ export function PlanList({
                 </p>
               </div>
               <Badge
-                variant={plan.status === "ACTIVE" ? "default" : "secondary"}
+                variant={
+                  !plan.pendingReview && plan.status === "ACTIVE"
+                    ? "default"
+                    : "secondary"
+                }
               >
-                {plan.status}
+                {plan.pendingReview === "PENDING"
+                  ? "Awaiting approval"
+                  : plan.pendingReview
+                    ? plan.proposedCreation
+                      ? "Draft · not live"
+                      : "Draft changes"
+                    : plan.status}
               </Badge>
             </CardHeader>
-            <CardContent className="flex gap-2">
-              {canEdit && (
-                <>
-                  <PlanFormDialog
-                    vendorId={vendorId}
-                    plan={plan}
-                    trigger={
-                      <Button variant="outline" size="sm">
-                        Edit
-                      </Button>
-                    }
-                  />
-                  {plan.status !== "ARCHIVED" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={isPending}
-                      aria-busy={isPending}
-                      onClick={() => handleArchive(plan.id)}
-                    >
-                      Archive
-                    </Button>
-                  )}
-                </>
+            <CardContent className="space-y-3">
+              {plan.pendingReview && (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>
+                    {plan.proposedCreation
+                      ? "This plan will appear in the app after approval."
+                      : "Customers see the approved plan until these changes are approved."}
+                  </p>
+                  <Link
+                    href={`/vendors/${vendorId}?tab=changes`}
+                    className="text-primary underline"
+                  >
+                    {plan.pendingReview === "DRAFT"
+                      ? "Open Changes to submit for approval"
+                      : "View approval status"}
+                  </Link>
+                </div>
               )}
+              <div className="flex gap-2">
+                {canEdit && (
+                  <>
+                    <PlanFormDialog
+                      vendorId={vendorId}
+                      plan={plan}
+                      trigger={
+                        <Button variant="outline" size="sm">
+                          Edit
+                        </Button>
+                      }
+                    />
+                    {plan.status !== "ARCHIVED" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isPending}
+                        aria-busy={isPending}
+                        onClick={() => handleArchive(plan.id)}
+                      >
+                        Archive
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}

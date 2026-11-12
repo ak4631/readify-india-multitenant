@@ -18,7 +18,12 @@ import { librarySeatTypeSchema } from "@/lib/validations/library-seat-type.schem
 import { randomUUID } from "node:crypto";
 import { applyCategoryChange } from "@/lib/category-changes";
 import { listingSnapshot, snapshotDigest } from "@/lib/listing-snapshot";
-import { assertReady, getReadiness } from "@/lib/listing-readiness";
+import {
+  assertReady,
+  getReadiness,
+  ListingReadinessError,
+  type ReadinessIssue,
+} from "@/lib/listing-readiness";
 
 export async function listListingChanges(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
@@ -200,12 +205,15 @@ export async function reviseListingRevision(revisionId: string) {
   });
   revalidatePath(`/vendors/${ref.vendorId}`);
 }
+export type RevisionReviewResult =
+  { ok: true } | { ok: false; message: string; issues: ReadinessIssue[] };
+
 export async function reviewListingRevision(
   revisionId: string,
   expectedDigest: string,
   approve: boolean,
   reason?: string,
-) {
+): Promise<RevisionReviewResult> {
   const session = await requireSuperAdminPermission(
     approve ? "vendor.approve" : "vendor.reject",
   );
@@ -215,276 +223,292 @@ export async function reviewListingRevision(
   const reference = await prisma.listingRevision.findUniqueOrThrow({
     where: { id: revisionId },
   });
-  await prisma.$transaction(async (tx) => {
-    const vendor = await lockListing(tx, reference.vendorId);
-    const revision = await tx.listingRevision.findUniqueOrThrow({
-      where: { id: revisionId },
-      include: { changes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
-    });
-    if (revision.status !== "PENDING")
-      throw new Error("This revision is not awaiting review");
-    const digest = snapshotDigest({
-      baseVersion: revision.baseVersion,
-      changes: revision.changes.map((c) => ({
-        id: c.id,
-        kind: c.kind,
-        targetId: c.targetId,
-        payload: c.payload,
-      })),
-    });
-    if (!expectedDigest || digest !== expectedDigest)
-      throw new Error("The revision has changed. Reload before deciding.");
-    if (approve) {
-      if (revision.baseVersion !== vendor.contentVersion)
-        throw new Error(
-          "This proposal is based on an older approved version. Reject it and request a corrected revision.",
-        );
-      if (!["PUBLISHED", "APPROVED", "SUSPENDED"].includes(vendor.status))
-        throw new Error("Review the listing's current status first");
-      // Parent creates precede dependent child operations, regardless of save order.
-      const priority = (kind: string) =>
-        kind.endsWith("CREATE")
-          ? kind === "TRAINER_CREATE" ||
-            kind === "TEACHER_CREATE" ||
-            kind === "MENU_CATEGORY_CREATE"
-            ? 0
-            : kind === "COURSE_CREATE"
-              ? 1
-              : 2
-          : kind === "MENU_CATEGORY_DELETE"
-            ? 6
-            : kind.endsWith("DELETE")
-              ? 5
-              : 3;
-      for (const change of [...revision.changes].sort(
-        (a, b) => priority(a.kind) - priority(b.kind),
-      )) {
-        const target = { id: change.targetId, vendorId: change.vendorId };
-        switch (change.kind) {
-          case "PROFILE": {
-            const { partnerId: _partnerId, ...data } =
-              vendorBasicInfoSchema.parse(change.payload);
-            void _partnerId;
-            if (data.categoryId !== vendor.categoryId)
-              throw new Error("A listing service cannot be changed");
-            await tx.vendor.update({ where: { id: change.vendorId }, data });
-            break;
-          }
-          case "ADDRESS": {
-            const data = vendorAddressSchema.parse(change.payload);
-            await tx.vendorAddress.upsert({
-              where: { vendorId: change.vendorId },
-              create: { ...data, vendorId: change.vendorId },
-              update: data,
-            });
-            break;
-          }
-          case "CAPACITY":
-            await tx.vendor.update({
-              where: { id: change.vendorId },
-              data: vendorCapacitySchema.parse(change.payload),
-            });
-            break;
-          case "SCHEDULE":
-            for (const day of vendorScheduleSchema.parse(change.payload).days) {
-              const data = {
-                isClosed: day.isClosed,
-                openTime: new Date(`1970-01-01T${day.openTime}:00Z`),
-                closeTime: new Date(`1970-01-01T${day.closeTime}:00Z`),
-              };
-              await tx.vendorSchedule.upsert({
-                where: {
-                  vendorId_dayOfWeek: {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const vendor = await lockListing(tx, reference.vendorId);
+      const revision = await tx.listingRevision.findUniqueOrThrow({
+        where: { id: revisionId },
+        include: {
+          changes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+        },
+      });
+      if (revision.status !== "PENDING")
+        throw new Error("This revision is not awaiting review");
+      const digest = snapshotDigest({
+        baseVersion: revision.baseVersion,
+        changes: revision.changes.map((c) => ({
+          id: c.id,
+          kind: c.kind,
+          targetId: c.targetId,
+          payload: c.payload,
+        })),
+      });
+      if (!expectedDigest || digest !== expectedDigest)
+        throw new Error("The revision has changed. Reload before deciding.");
+      if (approve) {
+        if (revision.baseVersion !== vendor.contentVersion)
+          throw new Error(
+            "This proposal is based on an older approved version. Reject it and request a corrected revision.",
+          );
+        if (!["PUBLISHED", "APPROVED", "SUSPENDED"].includes(vendor.status))
+          throw new Error("Review the listing's current status first");
+        // Parent creates precede dependent child operations, regardless of save order.
+        const priority = (kind: string) =>
+          kind.endsWith("CREATE")
+            ? kind === "TRAINER_CREATE" ||
+              kind === "TEACHER_CREATE" ||
+              kind === "MENU_CATEGORY_CREATE"
+              ? 0
+              : kind === "COURSE_CREATE"
+                ? 1
+                : 2
+            : kind === "MENU_CATEGORY_DELETE"
+              ? 6
+              : kind.endsWith("DELETE")
+                ? 5
+                : 3;
+        for (const change of [...revision.changes].sort(
+          (a, b) => priority(a.kind) - priority(b.kind),
+        )) {
+          const target = { id: change.targetId, vendorId: change.vendorId };
+          switch (change.kind) {
+            case "PROFILE": {
+              const { partnerId: _partnerId, ...data } =
+                vendorBasicInfoSchema.parse(change.payload);
+              void _partnerId;
+              if (data.categoryId !== vendor.categoryId)
+                throw new Error("A listing service cannot be changed");
+              await tx.vendor.update({ where: { id: change.vendorId }, data });
+              break;
+            }
+            case "ADDRESS": {
+              const data = vendorAddressSchema.parse(change.payload);
+              await tx.vendorAddress.upsert({
+                where: { vendorId: change.vendorId },
+                create: { ...data, vendorId: change.vendorId },
+                update: data,
+              });
+              break;
+            }
+            case "CAPACITY":
+              await tx.vendor.update({
+                where: { id: change.vendorId },
+                data: vendorCapacitySchema.parse(change.payload),
+              });
+              break;
+            case "SCHEDULE":
+              for (const day of vendorScheduleSchema.parse(change.payload)
+                .days) {
+                const data = {
+                  isClosed: day.isClosed,
+                  openTime: new Date(`1970-01-01T${day.openTime}:00Z`),
+                  closeTime: new Date(`1970-01-01T${day.closeTime}:00Z`),
+                };
+                await tx.vendorSchedule.upsert({
+                  where: {
+                    vendorId_dayOfWeek: {
+                      vendorId: change.vendorId,
+                      dayOfWeek: day.dayOfWeek,
+                    },
+                  },
+                  create: {
+                    ...data,
                     vendorId: change.vendorId,
                     dayOfWeek: day.dayOfWeek,
                   },
+                  update: data,
+                });
+              }
+              {
+                const check = await tx.$queryRaw<
+                  { fits: boolean }[]
+                >`SELECT admin.reservations_fit_schedule(${change.vendorId}) AS fits`;
+                if (!check[0]?.fits)
+                  throw new Error(
+                    "These hours conflict with existing reservations. Cancel and refund affected purchases before changing the schedule.",
+                  );
+              }
+              break;
+            case "FACILITIES": {
+              const ids = [
+                ...new Set(
+                  z.array(z.string().min(1)).max(200).parse(change.payload),
+                ),
+              ];
+              if (
+                (await tx.facility.count({
+                  where: { id: { in: ids }, status: "ACTIVE" },
+                })) !== ids.length
+              )
+                throw new Error("Some facilities are no longer active");
+              await tx.vendorFacility.deleteMany({
+                where: { vendorId: change.vendorId },
+              });
+              if (ids.length)
+                await tx.vendorFacility.createMany({
+                  data: ids.map((facilityId) => ({
+                    vendorId: change.vendorId,
+                    facilityId,
+                  })),
+                  skipDuplicates: true,
+                });
+              break;
+            }
+            case "PLAN_CREATE":
+              await tx.membershipPlan.create({
+                data: {
+                  ...membershipPlanSchema.parse(change.payload),
+                  id: change.targetId,
+                  vendorId: change.vendorId,
                 },
-                create: {
+              });
+              break;
+            case "PLAN_UPDATE":
+              await tx.membershipPlan.update({
+                where: target,
+                data: membershipPlanSchema.parse(change.payload),
+              });
+              break;
+            case "PLAN_ARCHIVE":
+              await tx.membershipPlan.update({
+                where: target,
+                data: { status: "ARCHIVED" },
+              });
+              break;
+            case "SEAT_CREATE":
+              await tx.librarySeatType.create({
+                data: {
+                  ...librarySeatTypeSchema.parse(change.payload),
+                  id: change.targetId,
+                  vendorId: change.vendorId,
+                },
+              });
+              break;
+            case "SEAT_UPDATE":
+              await tx.librarySeatType.update({
+                where: target,
+                data: librarySeatTypeSchema.parse(change.payload),
+              });
+              break;
+            case "SEAT_DELETE":
+              await tx.librarySeatType.delete({ where: target });
+              break;
+            case "MEDIA_CREATE": {
+              const data = z
+                .object({ mediaUrl: z.url(), externalId: z.string().min(1) })
+                .parse(change.payload);
+              const count = await tx.vendorMedia.count({
+                where: { vendorId: change.vendorId },
+              });
+              await tx.vendorMedia.create({
+                data: {
                   ...data,
-                  vendorId: change.vendorId,
-                  dayOfWeek: day.dayOfWeek,
+                  ...target,
+                  isPrimary: count === 0,
+                  sortOrder: count,
                 },
-                update: data,
               });
+              break;
             }
-            {
-              const check = await tx.$queryRaw<
-                { fits: boolean }[]
-              >`SELECT admin.reservations_fit_schedule(${change.vendorId}) AS fits`;
-              if (!check[0]?.fits)
-                throw new Error(
-                  "These hours conflict with existing reservations. Cancel and refund affected purchases before changing the schedule.",
-                );
-            }
-            break;
-          case "FACILITIES": {
-            const ids = [
-              ...new Set(
-                z.array(z.string().min(1)).max(200).parse(change.payload),
-              ),
-            ];
-            if (
-              (await tx.facility.count({
-                where: { id: { in: ids }, status: "ACTIVE" },
-              })) !== ids.length
-            )
-              throw new Error("Some facilities are no longer active");
-            await tx.vendorFacility.deleteMany({
-              where: { vendorId: change.vendorId },
-            });
-            if (ids.length)
-              await tx.vendorFacility.createMany({
-                data: ids.map((facilityId) => ({
-                  vendorId: change.vendorId,
-                  facilityId,
-                })),
-                skipDuplicates: true,
+            case "MEDIA_DELETE":
+              await tx.vendorMedia.delete({ where: target });
+              break;
+            case "MEDIA_PRIMARY":
+              await tx.vendorMedia.findUniqueOrThrow({ where: target });
+              await tx.vendorMedia.updateMany({
+                where: { vendorId: change.vendorId },
+                data: { isPrimary: false },
               });
-            break;
-          }
-          case "PLAN_CREATE":
-            await tx.membershipPlan.create({
-              data: {
-                ...membershipPlanSchema.parse(change.payload),
-                id: change.targetId,
-                vendorId: change.vendorId,
-              },
-            });
-            break;
-          case "PLAN_UPDATE":
-            await tx.membershipPlan.update({
-              where: target,
-              data: membershipPlanSchema.parse(change.payload),
-            });
-            break;
-          case "PLAN_ARCHIVE":
-            await tx.membershipPlan.update({
-              where: target,
-              data: { status: "ARCHIVED" },
-            });
-            break;
-          case "SEAT_CREATE":
-            await tx.librarySeatType.create({
-              data: {
-                ...librarySeatTypeSchema.parse(change.payload),
-                id: change.targetId,
-                vendorId: change.vendorId,
-              },
-            });
-            break;
-          case "SEAT_UPDATE":
-            await tx.librarySeatType.update({
-              where: target,
-              data: librarySeatTypeSchema.parse(change.payload),
-            });
-            break;
-          case "SEAT_DELETE":
-            await tx.librarySeatType.delete({ where: target });
-            break;
-          case "MEDIA_CREATE": {
-            const data = z
-              .object({ mediaUrl: z.url(), externalId: z.string().min(1) })
-              .parse(change.payload);
-            const count = await tx.vendorMedia.count({
-              where: { vendorId: change.vendorId },
-            });
-            await tx.vendorMedia.create({
-              data: {
-                ...data,
-                ...target,
-                isPrimary: count === 0,
-                sortOrder: count,
-              },
-            });
-            break;
-          }
-          case "MEDIA_DELETE":
-            await tx.vendorMedia.delete({ where: target });
-            break;
-          case "MEDIA_PRIMARY":
-            await tx.vendorMedia.findUniqueOrThrow({ where: target });
-            await tx.vendorMedia.updateMany({
-              where: { vendorId: change.vendorId },
-              data: { isPrimary: false },
-            });
-            await tx.vendorMedia.update({
-              where: target,
-              data: { isPrimary: true },
-            });
-            break;
-          case "SEAT_ACTIVE": {
-            const data = z
-              .object({ isActive: z.boolean() })
-              .parse(change.payload);
-            if (!data.isActive) {
-              const occupied = await tx.$queryRaw<
-                { busy: boolean }[]
-              >`SELECT EXISTS(SELECT 1 FROM admin.seat_busy_intervals(${change.targetId}, now(), now() + interval '100 years')) AS busy`;
-              if (occupied[0]?.busy)
-                throw new Error(
-                  "This seat has reservations. Cancel them before deactivating it.",
-                );
+              await tx.vendorMedia.update({
+                where: target,
+                data: { isPrimary: true },
+              });
+              break;
+            case "SEAT_ACTIVE": {
+              const data = z
+                .object({ isActive: z.boolean() })
+                .parse(change.payload);
+              if (!data.isActive) {
+                const occupied = await tx.$queryRaw<
+                  { busy: boolean }[]
+                >`SELECT EXISTS(SELECT 1 FROM admin.seat_busy_intervals(${change.targetId}, now(), now() + interval '100 years')) AS busy`;
+                if (occupied[0]?.busy)
+                  throw new Error(
+                    "This seat has reservations. Cancel them before deactivating it.",
+                  );
+              }
+              await tx.librarySeat.update({ where: target, data });
+              break;
             }
-            await tx.librarySeat.update({ where: target, data });
-            break;
+            default:
+              if (!(await applyCategoryChange(tx, change)))
+                throw new Error(
+                  "Unsupported change type. No changes were applied.",
+                );
           }
-          default:
-            if (!(await applyCategoryChange(tx, change)))
-              throw new Error(
-                "Unsupported change type. No changes were applied.",
-              );
         }
+        assertReady(await getReadiness(tx, vendor.id, true));
+        await tx.vendor.update({
+          where: { id: vendor.id },
+          data: { contentVersion: { increment: 1 } },
+        });
       }
-      assertReady(await getReadiness(tx, vendor.id, true));
-      await tx.vendor.update({
-        where: { id: vendor.id },
-        data: { contentVersion: { increment: 1 } },
+      await tx.listingChange.updateMany({
+        where: { revisionId },
+        data: {
+          status: approve ? "APPROVED" : "REJECTED",
+          reviewedBy: session.user.id,
+          reviewedAt: new Date(),
+          reason: rejectionReason,
+        },
       });
-    }
-    await tx.listingChange.updateMany({
-      where: { revisionId },
-      data: {
-        status: approve ? "APPROVED" : "REJECTED",
-        reviewedBy: session.user.id,
-        reviewedAt: new Date(),
-        reason: rejectionReason,
-      },
+      await tx.listingRevision.update({
+        where: { id: revisionId },
+        data: {
+          status: approve ? "APPROVED" : "REJECTED",
+          reviewedBy: session.user.id,
+          reviewedAt: new Date(),
+          reason: rejectionReason,
+        },
+      });
+      await tx.portalNotification.create({
+        data: {
+          userId: revision.requestedBy,
+          title: approve
+            ? "Listing changes approved"
+            : "Listing changes rejected",
+          body: vendor.name + (rejectionReason ? `: ${rejectionReason}` : ""),
+          href: `/vendors/${vendor.id}?tab=changes`,
+        },
+      });
+      await writeAuditLog(tx, {
+        userId: session.user.id,
+        action: approve ? "APPROVE_LISTING_CHANGE" : "REJECT_LISTING_CHANGE",
+        entityType: "listing_change",
+        entityId: revisionId,
+        newValue: {
+          digest,
+          status: approve ? "APPROVED" : "REJECTED",
+          reason: rejectionReason,
+        },
+      });
     });
-    await tx.listingRevision.update({
-      where: { id: revisionId },
-      data: {
-        status: approve ? "APPROVED" : "REJECTED",
-        reviewedBy: session.user.id,
-        reviewedAt: new Date(),
-        reason: rejectionReason,
-      },
-    });
-    await tx.portalNotification.create({
-      data: {
-        userId: revision.requestedBy,
-        title: approve
-          ? "Listing changes approved"
-          : "Listing changes rejected",
-        body: vendor.name + (rejectionReason ? `: ${rejectionReason}` : ""),
-        href: `/vendors/${vendor.id}?tab=changes`,
-      },
-    });
-    await writeAuditLog(tx, {
-      userId: session.user.id,
-      action: approve ? "APPROVE_LISTING_CHANGE" : "REJECT_LISTING_CHANGE",
-      entityType: "listing_change",
-      entityId: revisionId,
-      newValue: {
-        digest,
-        status: approve ? "APPROVED" : "REJECTED",
-        reason: rejectionReason,
-      },
-    });
-  });
+  } catch (error) {
+    // Catch after the transaction rejects so partially applied proposals roll back.
+    if (error instanceof ListingReadinessError)
+      return {
+        ok: false,
+        message:
+          "Approval blocked. Resolve these listing setup issues before approving the revision.",
+        issues: error.issues,
+      };
+    throw error;
+  }
   revalidatePath(`/vendors/${reference.vendorId}`);
   revalidatePath("/vendors");
   revalidatePath("/dashboard");
   revalidatePath("/notifications");
+  return { ok: true };
 }
 
 function approvedValues(

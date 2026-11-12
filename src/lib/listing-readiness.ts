@@ -125,9 +125,17 @@ export async function getReadiness(
   }
   return { ready: issues.length === 0, issues };
 }
+export class ListingReadinessError extends Error {
+  readonly issues: ReadinessIssue[];
+  constructor(issues: ReadinessIssue[]) {
+    super(issues.map((issue) => issue.message).join(" "));
+    this.name = "ListingReadinessError";
+    this.issues = issues.map((issue) => ({ ...issue }));
+  }
+}
+
 export function assertReady(result: { issues: ReadinessIssue[] }) {
-  if (result.issues.length)
-    throw new Error(result.issues.map((i) => i.message).join(" "));
+  if (result.issues.length) throw new ListingReadinessError(result.issues);
 }
 
 export function planFitsSchedule(

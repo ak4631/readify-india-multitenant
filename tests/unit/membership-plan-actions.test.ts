@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   revalidate: vi.fn(),
   transaction: vi.fn(),
   reference: vi.fn(),
+  rows: vi.fn(),
+  changes: vi.fn(),
   tx: {
     membershipPlan: {
       create: vi.fn(),
@@ -27,11 +29,13 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     $transaction: mocks.transaction,
-    membershipPlan: { findUnique: mocks.reference },
+    membershipPlan: { findUnique: mocks.reference, findMany: mocks.rows },
+    listingChange: { findMany: mocks.changes },
   },
 }));
 import {
   createMembershipPlan,
+  listMembershipPlans,
   updateMembershipPlan,
   archiveMembershipPlan,
 } from "@/server/actions/membership-plans.actions";
@@ -60,9 +64,63 @@ describe("plan saves", () => {
     mocks.queue.mockResolvedValue(false);
     mocks.transaction.mockImplementation(async (cb) => cb(mocks.tx));
     mocks.reference.mockResolvedValue(plan);
+    mocks.rows.mockResolvedValue([]);
+    mocks.changes.mockResolvedValue([]);
     mocks.tx.membershipPlan.create.mockResolvedValue(plan);
     mocks.tx.membershipPlan.update.mockResolvedValue(plan);
     mocks.tx.membershipPlan.findUniqueOrThrow.mockResolvedValue(plan);
+  });
+
+  it.each(["DRAFT", "PENDING"])(
+    "identifies a %s proposed plan separately from active customer plans",
+    async (status) => {
+      mocks.changes.mockResolvedValue([
+        {
+          targetId: "proposal",
+          kind: "PLAN_CREATE",
+          status,
+          payload: input,
+        },
+      ]);
+      const rows = await listMembershipPlans("venue");
+      expect(rows).toEqual([
+        expect.objectContaining({
+          id: "proposal",
+          name: "Prime",
+          pendingReview: status,
+          proposedCreation: true,
+        }),
+      ]);
+    },
+  );
+
+  it("preserves the distinction between an approved plan and its draft edits", async () => {
+    mocks.rows.mockResolvedValue([plan]);
+    mocks.changes.mockResolvedValue([
+      {
+        targetId: "plan",
+        kind: "PLAN_UPDATE",
+        status: "DRAFT",
+        payload: { price: 1400 },
+      },
+    ]);
+    expect(await listMembershipPlans("venue")).toEqual([
+      expect.objectContaining({
+        id: "plan",
+        price: 1400,
+        pendingReview: "DRAFT",
+        proposedCreation: false,
+      }),
+    ]);
+    mocks.changes.mockResolvedValue([]);
+    expect(await listMembershipPlans("venue")).toEqual([
+      expect.objectContaining({
+        id: "plan",
+        price: 1500,
+        pendingReview: null,
+        proposedCreation: false,
+      }),
+    ]);
   });
 
   it("accepts the reported monthly-plan payload and returns client-safe data after a direct save", async () => {

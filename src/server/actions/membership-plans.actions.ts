@@ -26,15 +26,21 @@ const PLAN_TRANSACTION_TIMEOUT_MS = 15_000;
 
 export async function listMembershipPlans(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
-  const plans = await prisma.membershipPlan.findMany({
-    where: { vendorId },
-    orderBy: { createdAt: "asc" },
-  });
+  const [plans, changes] = await Promise.all([
+    prisma.membershipPlan.findMany({
+      where: { vendorId },
+      orderBy: { createdAt: "asc" },
+    }),
+    editorChanges(vendorId),
+  ]);
+  const planChanges = changes.filter((change) =>
+    change.kind.startsWith("PLAN_"),
+  );
 
   // Prisma's Decimal is a class instance, not a plain object -- Next.js
   // refuses to pass it from this Server Action to a Client Component
   // (PlanList/PlanFormDialog receive this array as props).
-  return overlayRows(plans, await editorChanges(vendorId), "PLAN", {
+  return overlayRows(plans, changes, "PLAN", {
     vendorId,
     name: "",
     description: null,
@@ -48,7 +54,15 @@ export async function listMembershipPlans(vendorId: string) {
     status: "ACTIVE",
     createdAt: new Date(),
     updatedAt: new Date(),
-  }).map((plan) => ({ ...plan, price: Number(plan.price) }));
+  }).map((plan) => {
+    const pending = planChanges.filter((change) => change.targetId === plan.id);
+    return {
+      ...plan,
+      price: Number(plan.price),
+      pendingReview: pending.at(-1)?.status ?? null,
+      proposedCreation: pending.some((change) => change.kind === "PLAN_CREATE"),
+    };
+  });
 }
 
 export type PlanRow = Awaited<ReturnType<typeof listMembershipPlans>>[number];

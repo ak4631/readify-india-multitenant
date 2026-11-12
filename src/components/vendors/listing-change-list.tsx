@@ -1,5 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +12,7 @@ import {
   withdrawListingRevision,
   reviseListingRevision,
   type listListingRevisions,
+  type RevisionReviewResult,
 } from "@/server/actions/listing-changes.actions";
 
 type Revision = Awaited<ReturnType<typeof listListingRevisions>>[number];
@@ -91,15 +93,29 @@ function RevisionCard({
   const canReject = usePermission("vendor.reject");
   const [reason, setReason] = useState("");
   const [pending, startTransition] = useTransition();
-  function run(action: () => Promise<void>, message: string) {
+  const [failure, setFailure] = useState<Extract<
+    RevisionReviewResult,
+    { ok: false }
+  > | null>(null);
+  function run(
+    action: () => Promise<void | RevisionReviewResult>,
+    message: string,
+  ) {
     startTransition(async () => {
+      setFailure(null);
       try {
-        await action();
+        const result = await action();
+        if (result && !result.ok) {
+          setFailure(result);
+          toast.error(result.message);
+          return;
+        }
         toast.success(message);
       } catch (e) {
-        toast.error(
-          e instanceof Error ? e.message : "Could not complete this action",
-        );
+        const errorMessage =
+          e instanceof Error ? e.message : "Could not complete this action";
+        setFailure({ ok: false, message: errorMessage, issues: [] });
+        toast.error(errorMessage);
       }
     });
   }
@@ -118,6 +134,20 @@ function RevisionCard({
         Based on approved version {r.baseVersion} ·{" "}
         {new Date(r.createdAt).toLocaleString("en-IN")}
       </p>
+      {r.status === "DRAFT" && (
+        <p role="status" className="rounded-md bg-muted p-3 text-sm">
+          {canEdit
+            ? "Step 1: Review the proposed changes, then select Submit revision below. Step 2: A Super Admin opens this page and selects Approve revision. Drafts do not appear in the approvals queue."
+            : "This revision has not been submitted. A listing editor must submit it before a Super Admin can approve it."}
+        </p>
+      )}
+      {r.status === "PENDING" && (
+        <p role="status" className="rounded-md bg-muted p-3 text-sm">
+          {canApprove
+            ? "Ready for your decision. Review the proposed changes, then select Approve revision or reject with a reason below."
+            : "Submitted and awaiting Super Admin approval. Your account cannot approve listing revisions."}
+        </p>
+      )}
       {r.reason && (
         <p className="rounded border p-3">Review feedback: {r.reason}</p>
       )}
@@ -167,6 +197,29 @@ function RevisionCard({
           )}
         </details>
       ))}
+      {failure && (
+        <div
+          role="alert"
+          className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
+        >
+          <p className="font-medium text-destructive">{failure.message}</p>
+          {failure.issues.length > 0 && (
+            <ul className="list-disc space-y-2 pl-5">
+              {failure.issues.map((issue, index) => (
+                <li key={`${issue.section}-${index}`}>
+                  {issue.message}{" "}
+                  <Link
+                    className="font-medium text-primary underline"
+                    href={`/vendors/${r.vendorId}?tab=${encodeURIComponent(issue.section)}`}
+                  >
+                    Open {title(issue.section)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap gap-3">
         {r.status === "DRAFT" && canEdit && (
           <Button

@@ -140,7 +140,44 @@ describe("atomic versioned content decisions", () => {
     });
     await expect(
       reviewListingRevision("revision", digest(), true),
-    ).rejects.toThrow("required plan");
+    ).resolves.toEqual({
+      ok: false,
+      message: expect.stringContaining("Approval blocked"),
+      issues: [{ section: "plans", message: "A required plan is missing" }],
+    });
+    expect(mocks.tx.vendor.update).not.toHaveBeenCalled();
+    expect(mocks.tx.listingChange.updateMany).not.toHaveBeenCalled();
+    expect(mocks.tx.portalNotification.create).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+    expect(mocks.tx.listingRevision.update).not.toHaveBeenCalled();
+  });
+  it("returns every setup blocker without approving or notifying", async () => {
+    const issues = [
+      { section: "verification", message: "ADDRESS PROOF must be verified." },
+      { section: "verification", message: "OWNER ID must be verified." },
+      {
+        section: "schedule",
+        message: "Configure all seven days and at least one open day.",
+      },
+      {
+        section: "plans",
+        message: "The daily window for Prime Time must fit every open day.",
+      },
+    ];
+    mocks.ready.mockResolvedValue({ ready: false, issues });
+    const result = await reviewListingRevision("revision", digest(), true);
+    expect(result).toEqual({ ok: false, message: expect.any(String), issues });
+    expect(mocks.tx.vendor.update).not.toHaveBeenCalled();
+    expect(mocks.tx.listingRevision.update).not.toHaveBeenCalled();
+    expect(mocks.tx.listingChange.updateMany).not.toHaveBeenCalled();
+    expect(mocks.tx.portalNotification.create).not.toHaveBeenCalled();
+  });
+
+  it("does not expose unexpected database failures as validation messages", async () => {
+    mocks.ready.mockRejectedValue(new Error("private database failure"));
+    await expect(
+      reviewListingRevision("revision", digest(), true),
+    ).rejects.toThrow("private database failure");
     expect(mocks.tx.listingRevision.update).not.toHaveBeenCalled();
   });
 });
