@@ -43,6 +43,27 @@ import {
   type PlanRow,
 } from "@/server/actions/membership-plans.actions";
 
+const subscriptionDurations = [
+  {
+    value: "MONTHS-1",
+    label: "Monthly · 1 month",
+    unit: "MONTHS",
+    duration: 1,
+  },
+  {
+    value: "MONTHS-3",
+    label: "Quarterly · 3 months",
+    unit: "MONTHS",
+    duration: 3,
+  },
+  {
+    value: "YEARS-1",
+    label: "Yearly · 1 year (12 months)",
+    unit: "YEARS",
+    duration: 1,
+  },
+] as const;
+
 export function PlanFormDialog({
   vendorId,
   plan,
@@ -82,9 +103,11 @@ export function PlanFormDialog({
     if (isFlexible) {
       form.setValue("durationUnit", "HOURS");
       form.setValue("durationValue", 1);
+    } else if (form.getValues("durationUnit") === "HOURS") {
+      form.setValue("durationUnit", "MONTHS");
+      form.setValue("durationValue", 1);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFlexible]);
+  }, [isFlexible, form]);
 
   async function onSubmit(values: MembershipPlanInput) {
     setIsSubmitting(true);
@@ -115,89 +138,80 @@ export function PlanFormDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="shrink-0 border-b p-4 pr-12">
           <DialogTitle>{plan ? "Edit Plan" : "Add Plan"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="isFlexible"
-              render={({ field }) => (
-                <FormItem>
-                  <Label className="flex items-center gap-2 font-normal">
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={(checked) =>
-                        field.onChange(checked === true)
-                      }
-                    />
-                    Flexible plan (customer picks 1-14 days at checkout)
-                  </Label>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-2 gap-4">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex min-h-0 flex-col"
+          >
+            <div className="space-y-4 overflow-y-auto p-4">
               <FormField
                 control={form.control}
-                name="price"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      {isFlexible ? "Rate per hour (₹)" : "Price (₹)"}
-                    </FormLabel>
+                    <FormLabel>Name</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={field.value}
-                        onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        rows={2}
+                        className="max-h-32 min-h-20"
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              {!isFlexible && (
+              <FormField
+                control={form.control}
+                name="isFlexible"
+                render={({ field }) => (
+                  <FormItem>
+                    <Label className="flex items-center gap-2 font-normal">
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(checked) =>
+                          field.onChange(checked === true)
+                        }
+                      />
+                      Flexible plan (customer picks 1-14 days at checkout)
+                    </Label>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid items-start gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
-                  name="durationValue"
+                  name="price"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Duration</FormLabel>
+                      <FormLabel>
+                        {isFlexible
+                          ? "Rate per hour (₹)"
+                          : "Total plan price (₹)"}
+                      </FormLabel>
                       <FormControl>
                         <Input
                           type="number"
-                          min={1}
+                          min={0}
+                          step="0.01"
                           value={field.value}
                           onChange={(e) =>
                             field.onChange(e.target.valueAsNumber)
@@ -208,90 +222,118 @@ export function PlanFormDialog({
                     </FormItem>
                   )}
                 />
+                {!isFlexible && (
+                  <FormField
+                    control={form.control}
+                    name="durationValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Subscription duration</FormLabel>
+                        <Select
+                          value={`${durationUnit}-${field.value}`}
+                          onValueChange={(value) => {
+                            const duration = subscriptionDurations.find(
+                              (item) => item.value === value,
+                            );
+                            if (!duration) return;
+                            form.setValue("durationUnit", duration.unit, {
+                              shouldDirty: true,
+                            });
+                            field.onChange(duration.duration);
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger
+                              className="w-full"
+                              onBlur={field.onBlur}
+                              ref={field.ref}
+                            >
+                              <SelectValue>
+                                {subscriptionDurations.find(
+                                  (item) =>
+                                    item.value ===
+                                    `${durationUnit}-${field.value}`,
+                                )?.label ?? "Choose a duration"}
+                              </SelectValue>
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {subscriptionDurations.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+              {(isFlexible ||
+                durationUnit === "DAYS" ||
+                durationUnit === "MONTHS" ||
+                durationUnit === "YEARS") && (
+                <FormField
+                  control={form.control}
+                  name="dailyHours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {isFlexible
+                          ? "Hours per day"
+                          : "Hours per day (library seat)"}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={24}
+                          placeholder="e.g. 4"
+                          value={field.value ?? ""}
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value === ""
+                                ? null
+                                : e.target.valueAsNumber,
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isFlexible && ["MONTHS", "YEARS"].includes(durationUnit) && (
+                <FormField
+                  control={form.control}
+                  name="dailyStart"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Daily access starts at</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="time"
+                          value={field.value ?? ""}
+                          onChange={(event) =>
+                            field.onChange(event.target.value || null)
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isFlexible && (
+                <p className="text-sm text-muted-foreground">
+                  Daily access must fit within your library’s opening hours.
+                </p>
               )}
             </div>
-            {!isFlexible && (
-              <FormField
-                control={form.control}
-                name="durationUnit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Duration Unit</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="MONTHS">Months</SelectItem>
-                        <SelectItem value="YEARS">Years</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            {(isFlexible ||
-              durationUnit === "DAYS" ||
-              durationUnit === "MONTHS" ||
-              durationUnit === "YEARS") && (
-              <FormField
-                control={form.control}
-                name="dailyHours"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {isFlexible
-                        ? "Hours per day"
-                        : "Hours per day (library seat)"}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={24}
-                        placeholder={
-                          isFlexible ? undefined : "Blank = full opening hours"
-                        }
-                        value={field.value ?? ""}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value === ""
-                              ? null
-                              : e.target.valueAsNumber,
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            {!isFlexible && ["MONTHS", "YEARS"].includes(durationUnit) && (
-              <FormField
-                control={form.control}
-                name="dailyStart"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Daily access starts at</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="time"
-                        value={field.value ?? ""}
-                        onChange={(event) =>
-                          field.onChange(event.target.value || null)
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            <DialogFooter>
+            <DialogFooter className="mx-0 mb-0 shrink-0">
               <Button
                 type="submit"
                 disabled={isSubmitting}
