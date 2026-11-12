@@ -137,7 +137,10 @@ export default async function VendorDetail({
                 requiredDocuments={getRequiredDocuments(vendor.category.slug)}
               />
             )}
-          <DocumentList verifications={vendor.verifications} />
+          <DocumentList
+            verifications={vendor.verifications}
+            requiredDocuments={getRequiredDocuments(vendor.category.slug)}
+          />
         </div>
       );
       break;

@@ -51,7 +51,10 @@ export function StepVerification({
             vendorId={vendorId}
             requiredDocuments={requiredDocuments}
           />
-          <DocumentList verifications={verifications} />
+          <DocumentList
+            verifications={verifications}
+            requiredDocuments={requiredDocuments}
+          />
           <Button
             onClick={handleSubmitForReview}
             disabled={isPending || verifications.length === 0}
