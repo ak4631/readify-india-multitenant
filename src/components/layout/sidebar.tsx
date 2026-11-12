@@ -66,7 +66,7 @@ export function Sidebar({
             <BrandLogo
               className={cn(
                 "mx-auto flex max-w-full",
-                collapsed ? "w-14 p-1" : "w-36",
+                collapsed ? "w-14 p-1" : "w-24 p-1",
               )}
             />
             <span
