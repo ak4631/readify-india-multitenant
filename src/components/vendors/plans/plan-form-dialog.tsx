@@ -76,6 +76,7 @@ export function PlanFormDialog({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const form = useForm<MembershipPlanInput>({
     resolver: zodResolver(membershipPlanSchema),
@@ -111,32 +112,44 @@ export function PlanFormDialog({
 
   async function onSubmit(values: MembershipPlanInput) {
     setIsSubmitting(true);
+    setSaveError("");
     try {
-      if (plan) {
-        await updateMembershipPlan(plan.id, values);
-        toast.success(
-          "Saved. Changes to approved listings must be submitted from Changes.",
-        );
-      } else {
-        await createMembershipPlan(vendorId, values);
-        toast.success(
-          "Saved. Changes to approved listings must be submitted from Changes.",
-        );
+      const result = plan
+        ? await updateMembershipPlan(plan.id, values)
+        : await createMembershipPlan(vendorId, values);
+      if (!result.ok) {
+        setSaveError(result.message);
+        toast.error(result.message);
+        return;
       }
+      toast.success(
+        result.outcome === "queued"
+          ? "Draft saved. Submit it from Changes for approval."
+          : "Plan saved.",
+      );
       setOpen(false);
       form.reset();
       router.refresh();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Something went wrong",
-      );
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not reach the server. Please try again.";
+      setSaveError(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value);
+        setSaveError("");
+      }}
+    >
       <DialogTrigger render={trigger} />
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
         <DialogHeader className="shrink-0 border-b p-4 pr-12">
@@ -333,7 +346,15 @@ export function PlanFormDialog({
                 </p>
               )}
             </div>
-            <DialogFooter className="mx-0 mb-0 shrink-0">
+            <DialogFooter className="mx-0 mb-0 shrink-0 flex-wrap">
+              {saveError && (
+                <p
+                  role="alert"
+                  className="w-full break-words text-sm text-destructive"
+                >
+                  {saveError}
+                </p>
+              )}
               <Button
                 type="submit"
                 disabled={isSubmitting}
