@@ -29,9 +29,13 @@ import {
   type PartnerInput,
 } from "@/lib/validations/partner.schema";
 import {
-  createPartner,
-  updatePartner,
+  createPartner as serverAction_createPartner,
+  updatePartner as serverAction_updatePartner,
 } from "@/server/actions/partners.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createPartner = actionClient(serverAction_createPartner);
+const updatePartner = actionClient(serverAction_updatePartner);
 
 export function PartnerFormDialog({
   partner,

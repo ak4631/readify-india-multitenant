@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import { queueListingChange } from "@/lib/listing-changes";
 import { cancelPaidPurchase } from "@/lib/payments";
 import { revalidatePath } from "next/cache";
@@ -104,7 +106,8 @@ export async function getLibraryOccupancy(
   date: string,
 ): Promise<LibraryOccupancy> {
   await requireVendorAccess(vendorId, "vendor.read");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+    throw new PublicActionError("Invalid date");
 
   const vendor = await prisma.vendor.findUniqueOrThrow({
     where: { id: vendorId },
@@ -428,7 +431,7 @@ export async function cancelLibraryBooking(bookingId: string) {
       where: { id: bookingId },
     });
     if (before.status === "CANCELLED" || before.status === "COMPLETED") {
-      throw new Error("This booking can no longer be cancelled");
+      throw new PublicActionError("This booking can no longer be cancelled");
     }
     const after = await tx.booking.update({
       where: { id: bookingId },
@@ -490,7 +493,7 @@ export async function setLibrarySeatActive(seatId: string, isActive: boolean) {
         }),
       ]);
       if (futureBookings + activeSubs > 0) {
-        throw new Error(
+        throw new PublicActionError(
           "This seat has active bookings or subscriptions. Cancel them first.",
         );
       }

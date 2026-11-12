@@ -11,9 +11,12 @@ import { TrainerFormDialog } from "@/components/vendors/gym/trainer-form-dialog"
 import type { TrainerSpecialization } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  deactivateTrainer,
+  deactivateTrainer as serverAction_deactivateTrainer,
   type TrainerRow,
 } from "@/server/actions/trainers.actions";
+import { actionClient } from "@/lib/action-client";
+
+const deactivateTrainer = actionClient(serverAction_deactivateTrainer);
 
 export function TrainersList({
   vendorId,

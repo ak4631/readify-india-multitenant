@@ -31,10 +31,14 @@ import {
   type MenuItemInput,
 } from "@/lib/validations/menu.schema";
 import {
-  createMenuItem,
-  updateMenuItem,
+  createMenuItem as serverAction_createMenuItem,
+  updateMenuItem as serverAction_updateMenuItem,
   type MenuCategoryRow,
 } from "@/server/actions/menu.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createMenuItem = actionClient(serverAction_createMenuItem);
+const updateMenuItem = actionClient(serverAction_updateMenuItem);
 
 export function MenuItemFormDialog({
   vendorId,

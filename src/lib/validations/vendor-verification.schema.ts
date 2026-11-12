@@ -1,7 +1,13 @@
 import { z } from "zod";
 
-export const MAX_DOCUMENT_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
-export const ALLOWED_DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+import { MAX_UPLOAD_SIZE_BYTES } from "@/lib/upload-limits";
+
+export const MAX_DOCUMENT_SIZE_BYTES = MAX_UPLOAD_SIZE_BYTES;
+export const ALLOWED_DOCUMENT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+];
 
 export const uploadVerificationDocumentSchema = z.object({
   vendorId: z.string().min(1),

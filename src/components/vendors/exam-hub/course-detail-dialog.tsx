@@ -26,11 +26,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Teacher } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  cancelLecture,
-  createLecture,
-  setCourseTeachers,
+  cancelLecture as serverAction_cancelLecture,
+  createLecture as serverAction_createLecture,
+  setCourseTeachers as serverAction_setCourseTeachers,
   type CourseRow,
 } from "@/server/actions/courses.actions";
+import { actionClient } from "@/lib/action-client";
+
+const cancelLecture = actionClient(serverAction_cancelLecture);
+const createLecture = actionClient(serverAction_createLecture);
+const setCourseTeachers = actionClient(serverAction_setCourseTeachers);
 
 export function CourseDetailDialog({
   vendorId,

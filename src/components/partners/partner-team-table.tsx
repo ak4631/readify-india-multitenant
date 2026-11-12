@@ -16,7 +16,10 @@ import {
 import { UserStatusBadge } from "@/components/users/user-status-badge";
 import type { Role, User, UserRole } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { setPartnerUserActive } from "@/server/actions/partners.actions";
+import { setPartnerUserActive as serverAction_setPartnerUserActive } from "@/server/actions/partners.actions";
+import { actionClient } from "@/lib/action-client";
+
+const setPartnerUserActive = actionClient(serverAction_setPartnerUserActive);
 
 type TeamUser = Omit<User, "passwordHash"> & {
   roles: (UserRole & { role: Role })[];

@@ -18,12 +18,18 @@ import {
 import type { Review } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  deleteReview,
-  hideReview,
-  restoreReview,
-  replyToReview,
+  deleteReview as serverAction_deleteReview,
+  hideReview as serverAction_hideReview,
+  restoreReview as serverAction_restoreReview,
+  replyToReview as serverAction_replyToReview,
   type ReviewRow,
 } from "@/server/actions/reviews.actions";
+import { actionClient } from "@/lib/action-client";
+
+const deleteReview = actionClient(serverAction_deleteReview);
+const hideReview = actionClient(serverAction_hideReview);
+const restoreReview = actionClient(serverAction_restoreReview);
+const replyToReview = actionClient(serverAction_replyToReview);
 
 const STATUS_VARIANTS: Record<
   Review["status"],

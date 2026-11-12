@@ -38,10 +38,14 @@ import {
   type MembershipPlanInput,
 } from "@/lib/validations/membership-plan.schema";
 import {
-  createMembershipPlan,
-  updateMembershipPlan,
+  createMembershipPlan as serverAction_createMembershipPlan,
+  updateMembershipPlan as serverAction_updateMembershipPlan,
   type PlanRow,
 } from "@/server/actions/membership-plans.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createMembershipPlan = actionClient(serverAction_createMembershipPlan);
+const updateMembershipPlan = actionClient(serverAction_updateMembershipPlan);
 
 const subscriptionDurations = [
   {

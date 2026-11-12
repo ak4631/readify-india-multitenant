@@ -17,7 +17,12 @@ import { VerificationStatusBadge } from "@/components/vendors/vendor-status-badg
 import { ReviewPanel } from "@/components/vendors/verification/review-panel";
 import type { VendorVerification } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { getVerificationDocumentUrl } from "@/server/actions/vendor-verification.actions";
+import { getVerificationDocumentUrl as serverAction_getVerificationDocumentUrl } from "@/server/actions/vendor-verification.actions";
+import { actionClient } from "@/lib/action-client";
+
+const getVerificationDocumentUrl = actionClient(
+  serverAction_getVerificationDocumentUrl,
+);
 
 export function DocumentList({
   verifications,

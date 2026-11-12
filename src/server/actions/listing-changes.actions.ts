@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -69,9 +71,11 @@ export async function submitListingRevision(revisionId: string) {
       include: { changes: true },
     });
     if (revision.status !== "DRAFT" || !revision.changes.length)
-      throw new Error("Only a nonempty draft revision can be submitted");
+      throw new PublicActionError(
+        "Only a nonempty draft revision can be submitted",
+      );
     if (revision.baseVersion !== vendor.contentVersion)
-      throw new Error(
+      throw new PublicActionError(
         "Approved content has changed. Withdraw this revision and prepare a new one.",
       );
     await tx.listingChange.updateMany({
@@ -120,7 +124,7 @@ export async function withdrawListingRevision(revisionId: string) {
       where: { id: revisionId },
     });
     if (!["DRAFT", "PENDING"].includes(current.status))
-      throw new Error("This revision has already been decided");
+      throw new PublicActionError("This revision has already been decided");
     await tx.listingChange.updateMany({
       where: { revisionId },
       data: { status: "WITHDRAWN" },
@@ -151,7 +155,7 @@ export async function reviseListingRevision(revisionId: string) {
       include: { changes: true },
     });
     if (!["REJECTED", "WITHDRAWN"].includes(original.status))
-      throw new Error(
+      throw new PublicActionError(
         "Only rejected or withdrawn revisions can be copied for correction",
       );
     if (
@@ -159,7 +163,7 @@ export async function reviseListingRevision(revisionId: string) {
         where: { vendorId: ref.vendorId, status: { in: ["DRAFT", "PENDING"] } },
       })
     )
-      throw new Error("Finish the current revision first");
+      throw new PublicActionError("Finish the current revision first");
     const copy = await tx.listingRevision.create({
       data: {
         vendorId: ref.vendorId,
@@ -233,7 +237,7 @@ export async function reviewListingRevision(
         },
       });
       if (revision.status !== "PENDING")
-        throw new Error("This revision is not awaiting review");
+        throw new PublicActionError("This revision is not awaiting review");
       const digest = snapshotDigest({
         baseVersion: revision.baseVersion,
         changes: revision.changes.map((c) => ({
@@ -244,14 +248,18 @@ export async function reviewListingRevision(
         })),
       });
       if (!expectedDigest || digest !== expectedDigest)
-        throw new Error("The revision has changed. Reload before deciding.");
+        throw new PublicActionError(
+          "The revision has changed. Reload before deciding.",
+        );
       if (approve) {
         if (revision.baseVersion !== vendor.contentVersion)
-          throw new Error(
+          throw new PublicActionError(
             "This proposal is based on an older approved version. Reject it and request a corrected revision.",
           );
         if (!["PUBLISHED", "APPROVED", "SUSPENDED"].includes(vendor.status))
-          throw new Error("Review the listing's current status first");
+          throw new PublicActionError(
+            "Review the listing's current status first",
+          );
         // Parent creates precede dependent child operations, regardless of save order.
         const priority = (kind: string) =>
           kind.endsWith("CREATE")
@@ -277,7 +285,9 @@ export async function reviewListingRevision(
                 vendorBasicInfoSchema.parse(change.payload);
               void _partnerId;
               if (data.categoryId !== vendor.categoryId)
-                throw new Error("A listing service cannot be changed");
+                throw new PublicActionError(
+                  "A listing service cannot be changed",
+                );
               await tx.vendor.update({ where: { id: change.vendorId }, data });
               break;
             }
@@ -324,7 +334,7 @@ export async function reviewListingRevision(
                   { fits: boolean }[]
                 >`SELECT admin.reservations_fit_schedule(${change.vendorId}) AS fits`;
                 if (!check[0]?.fits)
-                  throw new Error(
+                  throw new PublicActionError(
                     "These hours conflict with existing reservations. Cancel and refund affected purchases before changing the schedule.",
                   );
               }
@@ -340,7 +350,9 @@ export async function reviewListingRevision(
                   where: { id: { in: ids }, status: "ACTIVE" },
                 })) !== ids.length
               )
-                throw new Error("Some facilities are no longer active");
+                throw new PublicActionError(
+                  "Some facilities are no longer active",
+                );
               await tx.vendorFacility.deleteMany({
                 where: { vendorId: change.vendorId },
               });
@@ -433,7 +445,7 @@ export async function reviewListingRevision(
                   { busy: boolean }[]
                 >`SELECT EXISTS(SELECT 1 FROM admin.seat_busy_intervals(${change.targetId}, now(), now() + interval '100 years')) AS busy`;
                 if (occupied[0]?.busy)
-                  throw new Error(
+                  throw new PublicActionError(
                     "This seat has reservations. Cancel them before deactivating it.",
                   );
               }
@@ -442,7 +454,7 @@ export async function reviewListingRevision(
             }
             default:
               if (!(await applyCategoryChange(tx, change)))
-                throw new Error(
+                throw new PublicActionError(
                   "Unsupported change type. No changes were applied.",
                 );
           }
@@ -586,7 +598,9 @@ export async function discardDraftChange(changeId: string) {
       include: { revision: true },
     });
     if (current.status !== "DRAFT" || current.revision?.status !== "DRAFT")
-      throw new Error("Only an editable draft change can be removed");
+      throw new PublicActionError(
+        "Only an editable draft change can be removed",
+      );
     const all = await tx.listingChange.findMany({
       where: { revisionId: current.revisionId },
     });

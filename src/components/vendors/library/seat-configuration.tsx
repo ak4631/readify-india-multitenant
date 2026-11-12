@@ -8,7 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SeatTypeFormDialog } from "@/components/vendors/library/seat-type-form-dialog";
 import type { LibrarySeatType } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { deleteLibrarySeatType } from "@/server/actions/library-seat-types.actions";
+import { deleteLibrarySeatType as serverAction_deleteLibrarySeatType } from "@/server/actions/library-seat-types.actions";
+import { actionClient } from "@/lib/action-client";
+
+const deleteLibrarySeatType = actionClient(serverAction_deleteLibrarySeatType);
 
 export function SeatConfiguration({
   vendorId,

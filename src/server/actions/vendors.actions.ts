@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import { editorChanges, changeData } from "@/lib/listing-editor";
 import { lockListing, queueListingChange } from "@/lib/listing-changes";
 import { assertReady, getReadiness } from "@/lib/listing-readiness";
@@ -165,7 +167,7 @@ export async function createVendorDraft(input: VendorBasicInfoInput) {
     where: { id: data.categoryId },
   });
   if (!category.launchEnabled || category.status !== "ACTIVE")
-    throw new Error(
+    throw new PublicActionError(
       "This service is coming soon. Only active services can be onboarded.",
     );
   const slug = await uniqueSlug(data.name);
@@ -174,10 +176,11 @@ export async function createVendorDraft(input: VendorBasicInfoInput) {
     select: { partnerId: true },
   });
   const partnerId = isSuperAdmin(session) ? data.partnerId : actor.partnerId;
-  if (!partnerId) throw new Error("A partner organization is required");
+  if (!partnerId)
+    throw new PublicActionError("A partner organization is required");
   const partner = await prisma.partner.findUnique({ where: { id: partnerId } });
   if (!partner || partner.status !== "ACTIVE")
-    throw new Error("Partner is not active");
+    throw new PublicActionError("Partner is not active");
 
   const vendor = await prisma.$transaction(async (tx) => {
     const created = await tx.vendor.create({
@@ -220,7 +223,7 @@ export async function updateVendorProfile(
     select: { categoryId: true },
   });
   if (existing.categoryId !== data.categoryId)
-    throw new Error(
+    throw new PublicActionError(
       "A listing's service cannot be changed. Create a separate listing instead.",
     );
 
@@ -366,7 +369,7 @@ async function transitionVendor(
         extra?.expectedVersion !== vendor.submissionVersion ||
         (!vendor.submissionVersion && to !== "PUBLISHED")
       )
-        throw new Error(
+        throw new PublicActionError(
           "Reload this listing before reviewing its current submission.",
         );
       if (vendor.submissionVersion > 0) {
@@ -377,12 +380,14 @@ async function transitionVendor(
         });
         if (to !== "PUBLISHED") {
           if (submission.status !== "PENDING")
-            throw new Error("This submission has already been decided");
+            throw new PublicActionError(
+              "This submission has already been decided",
+            );
           if (
             submission.digest !==
             snapshotDigest(await listingSnapshot(tx, vendorId))
           )
-            throw new Error(
+            throw new PublicActionError(
               "Submitted content has changed. Request a new submission before approving.",
             );
           await tx.listingSubmission.update({
@@ -395,7 +400,7 @@ async function transitionVendor(
             },
           });
         } else if (submission.status !== "APPROVED")
-          throw new Error("An approved submission is required");
+          throw new PublicActionError("An approved submission is required");
       }
     }
     if (to === "APPROVED" || to === "PUBLISHED") {
@@ -406,7 +411,7 @@ async function transitionVendor(
           where: { vendorId, status: { in: ["DRAFT", "PENDING"] } },
         }))
       )
-        throw new Error(
+        throw new PublicActionError(
           "Finish or withdraw pending changes before first publication",
         );
     }
@@ -455,11 +460,11 @@ export async function submitVendorForReview(vendorId: string) {
   await prisma.$transaction(async (tx) => {
     const vendor = await lockListing(tx, vendorId);
     if (!["DRAFT", "SUSPENDED", "UNDER_REVIEW"].includes(vendor.status))
-      throw new Error(
+      throw new PublicActionError(
         "This listing cannot be submitted from its current state",
       );
     if (vendor.status === "UNDER_REVIEW" && vendor.submissionVersion > 0)
-      throw new Error("This listing is already under review");
+      throw new PublicActionError("This listing is already under review");
     assertReady(await getReadiness(tx, vendorId));
     const snapshot = await listingSnapshot(tx, vendorId);
     await tx.listingSubmission.create({
@@ -539,7 +544,7 @@ export async function rejectVendor(
         reason.trim().length >= 3
           ? reason.trim()
           : (() => {
-              throw new Error(
+              throw new PublicActionError(
                 "Provide a rejection reason of at least 3 characters",
               );
             })(),
@@ -599,7 +604,9 @@ export async function reopenLegacyListing(vendorId: string) {
       !["SUBMITTED", "UNDER_REVIEW"].includes(vendor.status) ||
       vendor.submissionVersion !== 0
     )
-      throw new Error("This action is only for legacy unversioned reviews");
+      throw new PublicActionError(
+        "This action is only for legacy unversioned reviews",
+      );
     await tx.vendor.update({
       where: { id: vendorId },
       data: { status: "DRAFT" },

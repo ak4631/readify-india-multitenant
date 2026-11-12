@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import {
   editorChanges,
   overlayRows,
@@ -154,9 +156,9 @@ export async function createMenuItem(
       where: { id: categoryId, vendorId },
     })) ?? (await proposedParent(categoryId, "MENU_CATEGORY_CREATE"));
   if (category.vendorId !== vendorId)
-    throw new Error("Category does not belong to this listing");
+    throw new PublicActionError("Category does not belong to this listing");
   if (!category)
-    throw new Error("Menu category does not belong to this vendor");
+    throw new PublicActionError("Menu category does not belong to this vendor");
 
   const item = await prisma.$transaction(async (tx) => {
     if (
@@ -201,8 +203,9 @@ export async function updateMenuItem(
       where: { id: itemId, category: { vendorId } },
     })) ?? (await proposedParent(itemId, "MENU_ITEM_CREATE"));
   if ("vendorId" in item && item.vendorId !== vendorId)
-    throw new Error("Item does not belong to this listing");
-  if (!item) throw new Error("Menu item does not belong to this vendor");
+    throw new PublicActionError("Item does not belong to this listing");
+  if (!item)
+    throw new PublicActionError("Menu item does not belong to this vendor");
 
   await prisma.$transaction(async (tx) => {
     if (
@@ -241,8 +244,9 @@ export async function deleteMenuItem(vendorId: string, itemId: string) {
       where: { id: itemId, category: { vendorId } },
     })) ?? (await proposedParent(itemId, "MENU_ITEM_CREATE"));
   if ("vendorId" in item && item.vendorId !== vendorId)
-    throw new Error("Item does not belong to this listing");
-  if (!item) throw new Error("Menu item does not belong to this vendor");
+    throw new PublicActionError("Item does not belong to this listing");
+  if (!item)
+    throw new PublicActionError("Menu item does not belong to this vendor");
 
   await prisma.$transaction(async (tx) => {
     if (

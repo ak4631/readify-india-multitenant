@@ -14,8 +14,15 @@ import {
 } from "@/components/ui/table";
 import { UserStatusBadge } from "@/components/users/user-status-badge";
 import type { User, UserRole, Role } from "@/generated/prisma/client";
-import { activateUser, suspendUser } from "@/server/actions/users.actions";
+import {
+  activateUser as serverAction_activateUser,
+  suspendUser as serverAction_suspendUser,
+} from "@/server/actions/users.actions";
 import { usePermission } from "@/hooks/use-permission";
+import { actionClient } from "@/lib/action-client";
+
+const activateUser = actionClient(serverAction_activateUser);
+const suspendUser = actionClient(serverAction_suspendUser);
 
 type UserRow = Omit<User, "passwordHash"> & {
   roles: (UserRole & { role: Role })[];

@@ -6,14 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  discardDraftChange,
-  reviewListingRevision,
-  submitListingRevision,
-  withdrawListingRevision,
-  reviseListingRevision,
+  discardDraftChange as serverAction_discardDraftChange,
+  reviewListingRevision as serverAction_reviewListingRevision,
+  submitListingRevision as serverAction_submitListingRevision,
+  withdrawListingRevision as serverAction_withdrawListingRevision,
+  reviseListingRevision as serverAction_reviseListingRevision,
   type listListingRevisions,
   type RevisionReviewResult,
 } from "@/server/actions/listing-changes.actions";
+import { actionClient } from "@/lib/action-client";
+
+const discardDraftChange = actionClient(serverAction_discardDraftChange);
+const reviewListingRevision = actionClient(serverAction_reviewListingRevision);
+const submitListingRevision = actionClient(serverAction_submitListingRevision);
+const withdrawListingRevision = actionClient(
+  serverAction_withdrawListingRevision,
+);
+const reviseListingRevision = actionClient(serverAction_reviseListingRevision);
 
 type Revision = Awaited<ReturnType<typeof listListingRevisions>>[number];
 const title = (s: string) =>

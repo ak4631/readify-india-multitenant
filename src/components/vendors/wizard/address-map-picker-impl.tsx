@@ -3,15 +3,25 @@
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, LocateFixed } from "lucide-react";
 import {
-  searchAddressAction,
-  reverseGeocodeAction,
+  searchAddressAction as serverAction_searchAddressAction,
+  reverseGeocodeAction as serverAction_reverseGeocodeAction,
 } from "@/server/actions/geocoding.actions";
 import type { GeocodeResult } from "@/lib/geocoding";
+import { actionClient } from "@/lib/action-client";
+
+const searchAddressAction = actionClient(serverAction_searchAddressAction);
+const reverseGeocodeAction = actionClient(serverAction_reverseGeocodeAction);
 
 // Leaflet's default marker icon references image files by relative URL,
 // which breaks under most bundlers (webpack/Turbopack rewrite asset paths).
@@ -40,7 +50,11 @@ function RecenterOnChange({ position }: { position: [number, number] }) {
   return null;
 }
 
-function ClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
+function ClickHandler({
+  onClick,
+}: {
+  onClick: (lat: number, lng: number) => void;
+}) {
   useMapEvents({
     click(e) {
       onClick(e.latlng.lat, e.latlng.lng);
@@ -63,7 +77,9 @@ export function AddressMapPickerImpl({
   onAddressSelect,
 }: AddressMapPickerProps) {
   const position: [number, number] =
-    latitude != null && longitude != null ? [latitude, longitude] : DEFAULT_CENTER;
+    latitude != null && longitude != null
+      ? [latitude, longitude]
+      : DEFAULT_CENTER;
   const hasPin = latitude != null && longitude != null;
 
   const [query, setQuery] = useState("");
@@ -98,7 +114,9 @@ export function AddressMapPickerImpl({
       } catch (error) {
         setResults([]);
         setErrorMessage(
-          error instanceof Error ? error.message : "Address search failed. Please try again.",
+          error instanceof Error
+            ? error.message
+            : "Address search failed. Please try again.",
         );
       } finally {
         setSearching(false);
@@ -196,7 +214,9 @@ export function AddressMapPickerImpl({
         </Button>
       </div>
 
-      {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
+      {errorMessage && (
+        <p className="text-xs text-destructive">{errorMessage}</p>
+      )}
 
       <div className="h-64 w-full overflow-hidden rounded-lg border border-border">
         <MapContainer
@@ -214,8 +234,8 @@ export function AddressMapPickerImpl({
         </MapContainer>
       </div>
       <p className="text-xs text-muted-foreground">
-        Search an address, click &ldquo;Use my current location&rdquo;, or click directly on the
-        map to place the pin.
+        Search an address, click &ldquo;Use my current location&rdquo;, or click
+        directly on the map to place the pin.
       </p>
     </div>
   );

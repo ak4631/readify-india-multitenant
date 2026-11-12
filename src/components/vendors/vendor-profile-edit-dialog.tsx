@@ -37,9 +37,12 @@ import {
   type VendorBasicInfoInput,
 } from "@/lib/validations/vendor.schema";
 import {
-  updateVendorProfile,
+  updateVendorProfile as serverAction_updateVendorProfile,
   type VendorDetail,
 } from "@/server/actions/vendors.actions";
+import { actionClient } from "@/lib/action-client";
+
+const updateVendorProfile = actionClient(serverAction_updateVendorProfile);
 
 export function VendorProfileEditDialog({
   vendor,

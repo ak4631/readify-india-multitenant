@@ -9,7 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TeacherFormDialog } from "@/components/vendors/exam-hub/teacher-form-dialog";
 import type { Teacher } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { deactivateTeacher } from "@/server/actions/teachers.actions";
+import { deactivateTeacher as serverAction_deactivateTeacher } from "@/server/actions/teachers.actions";
+import { actionClient } from "@/lib/action-client";
+
+const deactivateTeacher = actionClient(serverAction_deactivateTeacher);
 
 export function TeachersList({
   vendorId,

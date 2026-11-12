@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
@@ -86,14 +88,16 @@ export async function suspendUser(input: { userId: string }) {
   const { userId } = suspendUserSchema.parse(input);
 
   if (session.user.id === userId)
-    throw new Error("You cannot suspend your own account");
+    throw new PublicActionError("You cannot suspend your own account");
   await prisma.$transaction(async (tx) => {
     const before = await tx.user.findUniqueOrThrow({
       where: { id: userId },
       include: { roles: { include: { role: true } } },
     });
     if (before.roles.some(({ role }) => role.name === "SUPER_ADMIN"))
-      throw new Error("Super Admin accounts cannot be suspended here");
+      throw new PublicActionError(
+        "Super Admin accounts cannot be suspended here",
+      );
     if (before.partnerId) {
       await tx.$queryRaw`SELECT id FROM admin.partners WHERE id=${before.partnerId} FOR UPDATE`;
       if (before.roles.some(({ role }) => role.name === "PARTNER_ADMIN")) {
@@ -106,7 +110,7 @@ export async function suspendUser(input: { userId: string }) {
           },
         });
         if (!owners)
-          throw new Error(
+          throw new PublicActionError(
             "Add another active owner before suspending the last partner owner",
           );
       }

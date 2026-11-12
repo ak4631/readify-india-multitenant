@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import { revalidatePath } from "next/cache";
 import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +9,7 @@ import { getCurrentSession } from "@/lib/rbac";
 
 export async function listPortalNotifications(page = 1) {
   const session = await getCurrentSession();
-  if (!session?.user) throw new Error("Not authenticated");
+  if (!session?.user) throw new PublicActionError("Not authenticated");
   const where = { userId: session.user.id };
   const window = pageWindow(page);
   const [items, total] = await Promise.all([
@@ -24,7 +26,7 @@ export async function listPortalNotifications(page = 1) {
 
 export async function markPortalNotificationRead(id: string) {
   const session = await getCurrentSession();
-  if (!session?.user) throw new Error("Not authenticated");
+  if (!session?.user) throw new PublicActionError("Not authenticated");
   await prisma.portalNotification.updateMany({
     where: { id, userId: session.user.id, readAt: null },
     data: { readAt: new Date() },

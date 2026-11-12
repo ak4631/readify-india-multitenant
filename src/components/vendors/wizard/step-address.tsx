@@ -16,13 +16,16 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import type { VendorDetail } from "@/server/actions/vendors.actions";
-import { updateVendorAddress } from "@/server/actions/vendors.actions";
+import { updateVendorAddress as serverAction_updateVendorAddress } from "@/server/actions/vendors.actions";
 import {
   vendorAddressSchema,
   type VendorAddressInput,
 } from "@/lib/validations/vendor.schema";
 import { AddressMapPicker } from "./address-map-picker";
 import type { GeocodeResult } from "@/lib/geocoding";
+import { actionClient } from "@/lib/action-client";
+
+const updateVendorAddress = actionClient(serverAction_updateVendorAddress);
 
 export function StepAddress({
   vendorId,

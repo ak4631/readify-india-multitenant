@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -15,7 +17,7 @@ export async function checkInByCode(code: string) {
     UNION ALL SELECT id,vendor_id,user_id FROM admin.flex_bookings WHERE booking_code=${value}
     UNION ALL SELECT id,vendor_id,user_id FROM admin.subscriptions WHERE 'subscription:'||id=${value}`;
   const target = references[0];
-  if (!target) throw new Error("Booking code not found");
+  if (!target) throw new PublicActionError("Booking code not found");
   const session = await requireVendorAccess(target.vendorId, "vendor.update");
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM admin.payment_orders WHERE target_id=${target.id} FOR UPDATE`;
@@ -23,14 +25,18 @@ export async function checkInByCode(code: string) {
       where: { targetId: target.id },
     });
     if (!order || order.status !== "CAPTURED")
-      throw new Error("Payment has not been verified for this booking");
+      throw new PublicActionError(
+        "Payment has not been verified for this booking",
+      );
     const active = await tx.$queryRaw<{ date: string }[]>`
       SELECT (now() AT TIME ZONE v.time_zone)::date::text AS date FROM admin.seat_reservations r
       JOIN admin.library_seats s ON s.id=r.seat_id JOIN admin.vendors v ON v.id=s.vendor_id
       JOIN public.published_listings listing ON listing.id=v.id
       WHERE r.source_id=${target.id} AND r."window" @> now() LIMIT 1`;
     if (!active.length)
-      throw new Error("This booking is not valid for the current time window");
+      throw new PublicActionError(
+        "This booking is not valid for the current time window",
+      );
     const existing = await tx.attendanceVisit.findFirst({
       where: { targetId: target.id, checkedOutAt: null },
     });

@@ -25,13 +25,17 @@ import {
 import { Input } from "@/components/ui/input";
 import type { Facility } from "@/generated/prisma/client";
 import {
-  createFacility,
-  updateFacility,
+  createFacility as serverAction_createFacility,
+  updateFacility as serverAction_updateFacility,
 } from "@/server/actions/facilities.actions";
 import {
   facilitySchema,
   type FacilityInput,
 } from "@/lib/validations/facility.schema";
+import { actionClient } from "@/lib/action-client";
+
+const createFacility = actionClient(serverAction_createFacility);
+const updateFacility = actionClient(serverAction_updateFacility);
 
 export function FacilityFormDialog({
   facility,

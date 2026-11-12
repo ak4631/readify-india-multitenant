@@ -11,9 +11,12 @@ import { CourseFormDialog } from "@/components/vendors/exam-hub/course-form-dial
 import type { Subject, Teacher } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  archiveCourse,
+  archiveCourse as serverAction_archiveCourse,
   type CourseRow,
 } from "@/server/actions/courses.actions";
+import { actionClient } from "@/lib/action-client";
+
+const archiveCourse = actionClient(serverAction_archiveCourse);
 
 export function CoursesList({
   vendorId,

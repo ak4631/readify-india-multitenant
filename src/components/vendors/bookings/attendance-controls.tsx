@@ -5,11 +5,15 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  checkInByCode,
-  checkOutVisit,
+  checkInByCode as serverAction_checkInByCode,
+  checkOutVisit as serverAction_checkOutVisit,
 } from "@/server/actions/attendance.actions";
 import { usePermission } from "@/hooks/use-permission";
 import type { listWorkspaceAttendance } from "@/server/actions/workspace.actions";
+import { actionClient } from "@/lib/action-client";
+
+const checkInByCode = actionClient(serverAction_checkInByCode);
+const checkOutVisit = actionClient(serverAction_checkOutVisit);
 
 export function AttendanceControls({
   visits,

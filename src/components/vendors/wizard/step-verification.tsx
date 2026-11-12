@@ -8,7 +8,10 @@ import { DocumentList } from "@/components/vendors/verification/document-list";
 import { UploadForm } from "@/components/vendors/verification/upload-form";
 import type { DocumentType } from "@/generated/prisma/enums";
 import type { VendorVerification } from "@/generated/prisma/client";
-import { submitVendorForReview } from "@/server/actions/vendors.actions";
+import { submitVendorForReview as serverAction_submitVendorForReview } from "@/server/actions/vendors.actions";
+import { actionClient } from "@/lib/action-client";
+
+const submitVendorForReview = actionClient(serverAction_submitVendorForReview);
 
 export function StepVerification({
   vendorId,

@@ -10,9 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlanFormDialog } from "@/components/vendors/plans/plan-form-dialog";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  archiveMembershipPlan,
+  archiveMembershipPlan as serverAction_archiveMembershipPlan,
   type PlanRow,
 } from "@/server/actions/membership-plans.actions";
+import { actionClient } from "@/lib/action-client";
+
+const archiveMembershipPlan = actionClient(serverAction_archiveMembershipPlan);
 
 export function PlanList({
   vendorId,

@@ -16,7 +16,10 @@ import {
 import { FacilityFormDialog } from "@/components/facilities/facility-form-dialog";
 import type { Facility } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { deactivateFacility } from "@/server/actions/facilities.actions";
+import { deactivateFacility as serverAction_deactivateFacility } from "@/server/actions/facilities.actions";
+import { actionClient } from "@/lib/action-client";
+
+const deactivateFacility = actionClient(serverAction_deactivateFacility);
 
 type FacilityRow = Facility & { _count: { vendorFacilities: number } };
 

@@ -28,11 +28,14 @@ import {
   type VendorAddressInput,
 } from "@/lib/validations/vendor.schema";
 import {
-  updateVendorAddress,
+  updateVendorAddress as serverAction_updateVendorAddress,
   type VendorDetail,
 } from "@/server/actions/vendors.actions";
 import { AddressMapPicker } from "./wizard/address-map-picker";
 import type { GeocodeResult } from "@/lib/geocoding";
+import { actionClient } from "@/lib/action-client";
+
+const updateVendorAddress = actionClient(serverAction_updateVendorAddress);
 
 export function VendorAddressEditDialog({
   vendorId,

@@ -9,10 +9,16 @@ import { Input } from "@/components/ui/input";
 import type { VendorMedia } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  deleteVendorMedia,
-  setPrimaryVendorMedia,
-  uploadVendorMedia,
+  deleteVendorMedia as serverAction_deleteVendorMedia,
+  setPrimaryVendorMedia as serverAction_setPrimaryVendorMedia,
+  uploadVendorMedia as serverAction_uploadVendorMedia,
 } from "@/server/actions/vendor-media.actions";
+import { actionClient } from "@/lib/action-client";
+import { validateUploadFile } from "@/lib/upload-limits";
+
+const deleteVendorMedia = actionClient(serverAction_deleteVendorMedia);
+const setPrimaryVendorMedia = actionClient(serverAction_setPrimaryVendorMedia);
+const uploadVendorMedia = actionClient(serverAction_uploadVendorMedia);
 
 export function VendorMediaGallery({
   vendorId,
@@ -25,9 +31,21 @@ export function VendorMediaGallery({
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const canEdit = usePermission("vendor.update");
 
   async function handleUpload(formData: FormData) {
+    const validation = validateUploadFile(formData.get("file"), [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ]);
+    if (validation) {
+      setUploadError(validation);
+      toast.error(validation);
+      return;
+    }
+    setUploadError("");
     setIsUploading(true);
     try {
       await uploadVendorMedia(formData);
@@ -37,7 +55,9 @@ export function VendorMediaGallery({
       formRef.current?.reset();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed");
+      const message = error instanceof Error ? error.message : "Upload failed";
+      setUploadError(message);
+      toast.error(message);
     } finally {
       setIsUploading(false);
     }
@@ -77,15 +97,35 @@ export function VendorMediaGallery({
         <form
           ref={formRef}
           action={handleUpload}
-          className="flex items-end gap-3"
+          className="flex flex-wrap items-end gap-3"
         >
           <input type="hidden" name="vendorId" value={vendorId} />
           <Input
             type="file"
             name="file"
             accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              setUploadError(
+                file
+                  ? (validateUploadFile(file, [
+                      "image/jpeg",
+                      "image/png",
+                      "image/webp",
+                    ]) ?? "")
+                  : "",
+              );
+            }}
             required
           />
+          <p className="w-full text-sm text-muted-foreground">
+            JPG, PNG or WEBP. Maximum 4 MB per file.
+          </p>
+          {uploadError && (
+            <p role="alert" className="w-full text-sm text-destructive">
+              {uploadError}
+            </p>
+          )}
           <Button type="submit" disabled={isUploading}>
             {isUploading ? "Uploading..." : "Upload"}
           </Button>

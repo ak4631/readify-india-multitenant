@@ -17,14 +17,25 @@ import { Textarea } from "@/components/ui/textarea";
 import type { VendorStatus } from "@/generated/prisma/enums";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  approveVendor,
-  reopenLegacyListing,
-  publishVendor,
-  rejectVendor,
-  suspendVendor,
-  reviseRejectedVendor,
-  requestListingReactivation,
+  approveVendor as serverAction_approveVendor,
+  reopenLegacyListing as serverAction_reopenLegacyListing,
+  publishVendor as serverAction_publishVendor,
+  rejectVendor as serverAction_rejectVendor,
+  suspendVendor as serverAction_suspendVendor,
+  reviseRejectedVendor as serverAction_reviseRejectedVendor,
+  requestListingReactivation as serverAction_requestListingReactivation,
 } from "@/server/actions/vendors.actions";
+import { actionClient } from "@/lib/action-client";
+
+const approveVendor = actionClient(serverAction_approveVendor);
+const reopenLegacyListing = actionClient(serverAction_reopenLegacyListing);
+const publishVendor = actionClient(serverAction_publishVendor);
+const rejectVendor = actionClient(serverAction_rejectVendor);
+const suspendVendor = actionClient(serverAction_suspendVendor);
+const reviseRejectedVendor = actionClient(serverAction_reviseRejectedVendor);
+const requestListingReactivation = actionClient(
+  serverAction_requestListingReactivation,
+);
 
 export function VendorLifecycleActions({
   vendorId,

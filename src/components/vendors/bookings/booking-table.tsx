@@ -15,15 +15,19 @@ import {
 } from "@/components/ui/table";
 import { usePermission } from "@/hooks/use-permission";
 import type { VendorBookingRow } from "@/server/actions/bookings.actions";
-import { cancelLibraryBooking } from "@/server/actions/library-occupancy.actions";
+import { cancelLibraryBooking as serverAction_cancelLibraryBooking } from "@/server/actions/library-occupancy.actions";
+import { actionClient } from "@/lib/action-client";
 
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive"> = {
-  PENDING: "secondary",
-  CONFIRMED: "default",
-  COMPLETED: "default",
-  CANCELLED: "destructive",
-  EXPIRED: "secondary",
-};
+const cancelLibraryBooking = actionClient(serverAction_cancelLibraryBooking);
+
+const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive"> =
+  {
+    PENDING: "secondary",
+    CONFIRMED: "default",
+    COMPLETED: "default",
+    CANCELLED: "destructive",
+    EXPIRED: "secondary",
+  };
 
 function formatPlaced(iso: string) {
   return new Date(iso).toLocaleString("en-IN", {

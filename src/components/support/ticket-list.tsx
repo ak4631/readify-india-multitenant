@@ -6,10 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  createSupportTicket,
-  resolveSupportTicket,
+  createSupportTicket as serverAction_createSupportTicket,
+  resolveSupportTicket as serverAction_resolveSupportTicket,
   type listSupportTickets,
 } from "@/server/actions/support.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createSupportTicket = actionClient(serverAction_createSupportTicket);
+const resolveSupportTicket = actionClient(serverAction_resolveSupportTicket);
 
 export function TicketList({
   tickets,

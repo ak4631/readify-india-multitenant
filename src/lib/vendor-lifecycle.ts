@@ -1,3 +1,4 @@
+import { PublicActionError } from "@/lib/public-action-error";
 import type { VendorStatus } from "@/generated/prisma/enums";
 
 export const ALLOWED_TRANSITIONS: Record<VendorStatus, VendorStatus[]> = {
@@ -16,6 +17,8 @@ export function canTransition(from: VendorStatus, to: VendorStatus): boolean {
 
 export function assertTransition(from: VendorStatus, to: VendorStatus): void {
   if (!canTransition(from, to)) {
-    throw new Error(`Invalid vendor status transition: ${from} -> ${to}`);
+    throw new PublicActionError(
+      `Invalid vendor status transition: ${from} -> ${to}`,
+    );
   }
 }

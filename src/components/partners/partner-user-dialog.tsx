@@ -35,7 +35,10 @@ import {
   partnerUserSchema,
   type PartnerUserInput,
 } from "@/lib/validations/partner.schema";
-import { createPartnerUser } from "@/server/actions/partners.actions";
+import { createPartnerUser as serverAction_createPartnerUser } from "@/server/actions/partners.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createPartnerUser = actionClient(serverAction_createPartnerUser);
 
 const ROLE_LABELS = {
   PARTNER_ADMIN: "Partner Admin",

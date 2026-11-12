@@ -3,8 +3,12 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { submitVendorForReview } from "@/server/actions/vendors.actions";
+import { submitVendorForReview as serverAction_submitVendorForReview } from "@/server/actions/vendors.actions";
 import type { ReadinessIssue } from "@/lib/listing-readiness";
+import { actionClient } from "@/lib/action-client";
+
+const submitVendorForReview = actionClient(serverAction_submitVendorForReview);
+
 export function SetupReview({
   vendorId,
   ready,

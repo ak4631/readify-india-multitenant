@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import { Prisma } from "@/generated/prisma/client";
 import {
   editorChanges,
@@ -260,7 +262,7 @@ export async function setCourseTeachers(
         where: { id: teacherId, vendorId: record.vendorId },
       })) ?? (await proposedParent(teacherId, "TEACHER_CREATE"));
     if (teacher.vendorId !== record.vendorId)
-      throw new Error("Every teacher must belong to this listing");
+      throw new PublicActionError("Every teacher must belong to this listing");
   }
 
   const vendorId = await prisma.$transaction(async (tx) => {
@@ -311,16 +313,18 @@ export async function createLecture(
     (await prisma.course.findFirst({ where: { id: courseId, vendorId } })) ??
     (await proposedParent(courseId, "COURSE_CREATE"));
   if (course.vendorId !== vendorId)
-    throw new Error("Course does not belong to this listing");
-  if (!course) throw new Error("Course does not belong to this vendor");
+    throw new PublicActionError("Course does not belong to this listing");
+  if (!course)
+    throw new PublicActionError("Course does not belong to this vendor");
   if (data.teacherId) {
     const teacher =
       (await prisma.teacher.findFirst({
         where: { id: data.teacherId, vendorId },
       })) ?? (await proposedParent(data.teacherId, "TEACHER_CREATE"));
     if (teacher.vendorId !== vendorId)
-      throw new Error("Teacher does not belong to this listing");
-    if (!teacher) throw new Error("Teacher does not belong to this vendor");
+      throw new PublicActionError("Teacher does not belong to this listing");
+    if (!teacher)
+      throw new PublicActionError("Teacher does not belong to this vendor");
   }
 
   const lecture = await prisma.$transaction(async (tx) => {
@@ -369,7 +373,8 @@ export async function cancelLecture(vendorId: string, lectureId: string) {
     (await prisma.lecture.findFirst({
       where: { id: lectureId, course: { vendorId } },
     })) ?? (await proposedParent(lectureId, "LECTURE_CREATE"));
-  if (!lecture) throw new Error("Lecture does not belong to this vendor");
+  if (!lecture)
+    throw new PublicActionError("Lecture does not belong to this vendor");
 
   await prisma.$transaction(async (tx) => {
     if (

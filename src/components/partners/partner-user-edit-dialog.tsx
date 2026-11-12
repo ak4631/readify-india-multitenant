@@ -28,7 +28,10 @@ import {
   partnerUserUpdateSchema,
   type PartnerUserUpdateInput,
 } from "@/lib/validations/partner.schema";
-import { updatePartnerUser } from "@/server/actions/partners.actions";
+import { updatePartnerUser as serverAction_updatePartnerUser } from "@/server/actions/partners.actions";
+import { actionClient } from "@/lib/action-client";
+
+const updatePartnerUser = actionClient(serverAction_updatePartnerUser);
 
 export function PartnerUserEditDialog({
   user,

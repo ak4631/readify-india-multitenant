@@ -19,7 +19,12 @@ export function parsePage(value: string | string[] | undefined): number {
 export function pageWindow(page: number, pageSize = PAGE_SIZE) {
   const size = Math.min(Math.max(Math.trunc(pageSize), 1), 100);
   const current = Math.max(Math.trunc(page) || 1, 1);
-  return { page: current, pageSize: size, skip: (current - 1) * size, take: size };
+  return {
+    page: current,
+    pageSize: size,
+    skip: (current - 1) * size,
+    take: size,
+  };
 }
 
 export function toPage<T>(

@@ -14,7 +14,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { DocumentType } from "@/generated/prisma/enums";
-import { uploadVerificationDocument } from "@/server/actions/vendor-verification.actions";
+import { uploadVerificationDocument as serverAction_uploadVerificationDocument } from "@/server/actions/vendor-verification.actions";
+import { actionClient } from "@/lib/action-client";
+import { validateUploadFile } from "@/lib/upload-limits";
+import { ALLOWED_DOCUMENT_TYPES } from "@/lib/validations/vendor-verification.schema";
+
+const uploadVerificationDocument = actionClient(
+  serverAction_uploadVerificationDocument,
+);
 
 const LABELS: Record<DocumentType, string> = {
   BUSINESS_REGISTRATION: "Business Registration",
@@ -43,6 +50,15 @@ export function UploadForm({
   );
 
   async function handleSubmit(formData: FormData) {
+    const validation = validateUploadFile(
+      formData.get("file"),
+      ALLOWED_DOCUMENT_TYPES,
+    );
+    if (validation) {
+      setError(validation);
+      toast.error(validation);
+      return;
+    }
     setIsSubmitting(true);
     setError("");
     try {
@@ -105,9 +121,20 @@ export function UploadForm({
           type="file"
           name="file"
           accept=".pdf,.jpg,.jpeg,.png"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            setError(
+              file
+                ? (validateUploadFile(file, ALLOWED_DOCUMENT_TYPES) ?? "")
+                : "",
+            );
+          }}
           required
         />
       </div>
+      <p className="w-full text-sm text-muted-foreground">
+        PDF, JPG or PNG. Maximum 4 MB per file.
+      </p>
       {error && (
         <p role="alert" className="w-full text-sm text-destructive">
           {error}

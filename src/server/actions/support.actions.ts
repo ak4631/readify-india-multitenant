@@ -1,4 +1,6 @@
 "use server";
+
+import { PublicActionError } from "@/lib/public-action-error";
 import { writeAuditLog } from "@/lib/audit";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -12,7 +14,7 @@ import {
 
 export async function listSupportTickets(page = 1, selectedPartnerId?: string) {
   const session = await getCurrentSession();
-  if (!session?.user) throw new Error("Not authenticated");
+  if (!session?.user) throw new PublicActionError("Not authenticated");
   const staff = isPlatformStaff(session);
   const partnerId = await getSessionPartnerId(session, selectedPartnerId);
   const where = staff
@@ -38,7 +40,7 @@ export async function createSupportTicket(input: {
   partnerId?: string;
 }) {
   const session = await getCurrentSession();
-  if (!session?.user) throw new Error("Not authenticated");
+  if (!session?.user) throw new PublicActionError("Not authenticated");
   const data = z
     .object({
       subject: z.string().trim().min(3).max(150),
@@ -69,14 +71,14 @@ export async function resolveSupportTicket(id: string, response: string) {
       ["SUPER_ADMIN", "ADMIN", "SUPPORT"].includes(role),
     )
   )
-    throw new Error("Support staff access required");
+    throw new PublicActionError("Support staff access required");
   const text = z.string().trim().min(3).max(5000).parse(response);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM admin.support_tickets WHERE id=${id} FOR UPDATE`;
     const current = await tx.supportTicket.findUniqueOrThrow({ where: { id } });
     if (current.status === "RESOLVED") {
       if (current.response === text) return;
-      throw new Error(
+      throw new PublicActionError(
         "This ticket is already resolved; its response cannot be overwritten",
       );
     }

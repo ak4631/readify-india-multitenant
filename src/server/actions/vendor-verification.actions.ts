@@ -39,7 +39,10 @@ export async function uploadVerificationDocument(
   if (!(file instanceof File) || file.size === 0)
     return { ok: false, message: "A file is required" };
   if (file.size > MAX_DOCUMENT_SIZE_BYTES)
-    return { ok: false, message: "File exceeds the 5MB limit" };
+    return {
+      ok: false,
+      message: "File exceeds the 4 MB limit. Choose a smaller file.",
+    };
   if (!ALLOWED_DOCUMENT_TYPES.includes(file.type))
     return { ok: false, message: "Only PDF, JPG, and PNG files are allowed" };
 

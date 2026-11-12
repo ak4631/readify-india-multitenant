@@ -1,4 +1,6 @@
 "use server";
+
+import { PublicActionError } from "@/lib/public-action-error";
 import { queueListingChange } from "@/lib/listing-changes";
 
 import { revalidatePath } from "next/cache";
@@ -106,13 +108,13 @@ export async function replyToReview(reviewId: string, reply: string) {
   });
   const session = await requireVendorAccess(review.vendorId, "vendor.update");
   if (!session.user.roles.includes("PARTNER_ADMIN"))
-    throw new Error("Only the partner owner can reply to reviews");
+    throw new PublicActionError("Only the partner owner can reply to reviews");
   await prisma.$transaction(async (tx) => {
     const current = await tx.review.findUniqueOrThrow({
       where: { id: reviewId },
     });
     if (current.status !== "PUBLISHED")
-      throw new Error("Only published reviews can receive a reply");
+      throw new PublicActionError("Only published reviews can receive a reply");
     if (
       await queueListingChange(
         tx,

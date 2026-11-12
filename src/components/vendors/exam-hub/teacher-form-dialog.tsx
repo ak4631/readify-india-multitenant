@@ -30,9 +30,13 @@ import {
   type TeacherInput,
 } from "@/lib/validations/academics.schema";
 import {
-  createTeacher,
-  updateTeacher,
+  createTeacher as serverAction_createTeacher,
+  updateTeacher as serverAction_updateTeacher,
 } from "@/server/actions/teachers.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createTeacher = actionClient(serverAction_createTeacher);
+const updateTeacher = actionClient(serverAction_updateTeacher);
 
 export function TeacherFormDialog({
   vendorId,

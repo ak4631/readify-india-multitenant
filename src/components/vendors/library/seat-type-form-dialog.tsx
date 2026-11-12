@@ -29,9 +29,13 @@ import {
   type LibrarySeatTypeInput,
 } from "@/lib/validations/library-seat-type.schema";
 import {
-  createLibrarySeatType,
-  updateLibrarySeatType,
+  createLibrarySeatType as serverAction_createLibrarySeatType,
+  updateLibrarySeatType as serverAction_updateLibrarySeatType,
 } from "@/server/actions/library-seat-types.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createLibrarySeatType = actionClient(serverAction_createLibrarySeatType);
+const updateLibrarySeatType = actionClient(serverAction_updateLibrarySeatType);
 
 export function SeatTypeFormDialog({
   vendorId,

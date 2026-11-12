@@ -10,7 +10,10 @@ import { Label } from "@/components/ui/label";
 import type { VendorSchedule } from "@/generated/prisma/client";
 import { DAYS_OF_WEEK } from "@/lib/validations/vendor-schedule.schema";
 import { usePermission } from "@/hooks/use-permission";
-import { updateVendorSchedule } from "@/server/actions/vendor-schedule.actions";
+import { updateVendorSchedule as serverAction_updateVendorSchedule } from "@/server/actions/vendor-schedule.actions";
+import { actionClient } from "@/lib/action-client";
+
+const updateVendorSchedule = actionClient(serverAction_updateVendorSchedule);
 
 function toHHMM(date: Date): string {
   return date.toISOString().slice(11, 16);

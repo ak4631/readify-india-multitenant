@@ -25,12 +25,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { TrainerSpecialization } from "@/generated/prisma/client";
 import { TRAINER_DAYS_OF_WEEK } from "@/lib/validations/trainer.schema";
 import {
-  addTrainerPricing,
-  deleteTrainerPricing,
-  setTrainerAvailability,
-  setTrainerSpecializations,
+  addTrainerPricing as serverAction_addTrainerPricing,
+  deleteTrainerPricing as serverAction_deleteTrainerPricing,
+  setTrainerAvailability as serverAction_setTrainerAvailability,
+  setTrainerSpecializations as serverAction_setTrainerSpecializations,
   type TrainerRow,
 } from "@/server/actions/trainers.actions";
+import { actionClient } from "@/lib/action-client";
+
+const addTrainerPricing = actionClient(serverAction_addTrainerPricing);
+const deleteTrainerPricing = actionClient(serverAction_deleteTrainerPricing);
+const setTrainerAvailability = actionClient(
+  serverAction_setTrainerAvailability,
+);
+const setTrainerSpecializations = actionClient(
+  serverAction_setTrainerSpecializations,
+);
 
 function toHHMM(date: Date): string {
   return date.toISOString().slice(11, 16);

@@ -25,12 +25,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { VendorCategory } from "@/generated/prisma/client";
-import { createVendorDraft } from "@/server/actions/vendors.actions";
+import { createVendorDraft as serverAction_createVendorDraft } from "@/server/actions/vendors.actions";
 import {
   vendorBasicInfoSchema,
   type VendorBasicInfoInput,
 } from "@/lib/validations/vendor.schema";
 import { ArrowRight } from "lucide-react";
+import { actionClient } from "@/lib/action-client";
+
+const createVendorDraft = actionClient(serverAction_createVendorDraft);
 
 const COUNTRY_CODES = [
   { code: "+91", label: "India" },

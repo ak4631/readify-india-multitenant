@@ -1,3 +1,4 @@
+import { PublicActionError } from "@/lib/public-action-error";
 import type { Prisma } from "@/generated/prisma/client";
 import { getRequiredDocuments } from "@/config/verification-requirements";
 import { launchPlansReady } from "@/lib/launch-plans";
@@ -125,7 +126,7 @@ export async function getReadiness(
   }
   return { ready: issues.length === 0, issues };
 }
-export class ListingReadinessError extends Error {
+export class ListingReadinessError extends PublicActionError {
   readonly issues: ReadinessIssue[];
   constructor(issues: ReadinessIssue[]) {
     super(issues.map((issue) => issue.message).join(" "));

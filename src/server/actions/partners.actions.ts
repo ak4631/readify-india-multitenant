@@ -1,5 +1,7 @@
 "use server";
 
+import { PublicActionError } from "@/lib/public-action-error";
+
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -160,7 +162,9 @@ export async function setPartnerActive(partnerId: string, active: boolean) {
       where: { id: partnerId },
     });
     if (active && before.approvalStatus !== "APPROVED")
-      throw new Error("Approve this application before activating the partner");
+      throw new PublicActionError(
+        "Approve this application before activating the partner",
+      );
     const after = await tx.partner.update({
       where: { id: partnerId },
       data: { status: active ? "ACTIVE" : "INACTIVE" },
@@ -220,9 +224,9 @@ export async function createPartnerUser(input: PartnerUserInput) {
 
 export async function setPartnerUserActive(userId: string, active: boolean) {
   const actorSession = await getCurrentSession();
-  if (!actorSession?.user) throw new Error("Not authenticated");
+  if (!actorSession?.user) throw new PublicActionError("Not authenticated");
   if (actorSession.user.id === userId)
-    throw new Error("You cannot deactivate your own account");
+    throw new PublicActionError("You cannot deactivate your own account");
   const target = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: {
@@ -230,9 +234,10 @@ export async function setPartnerUserActive(userId: string, active: boolean) {
       roles: { select: { role: { select: { name: true } } } },
     },
   });
-  if (!target.partnerId) throw new Error("This is not a partner account");
+  if (!target.partnerId)
+    throw new PublicActionError("This is not a partner account");
   if (target.roles.some(({ role }) => role.name === "SUPER_ADMIN")) {
-    throw new Error("Super admin accounts cannot be managed here");
+    throw new PublicActionError("Super admin accounts cannot be managed here");
   }
   const session = await requirePartnerAccess(
     target.partnerId,
@@ -250,7 +255,7 @@ export async function setPartnerUserActive(userId: string, active: boolean) {
         },
       });
       if (!owners)
-        throw new Error(
+        throw new PublicActionError(
           "Add another active owner before deactivating the last partner owner",
         );
     }
@@ -280,9 +285,10 @@ export async function updatePartnerUser(input: PartnerUserUpdateInput) {
       roles: { select: { role: { select: { name: true } } } },
     },
   });
-  if (!target.partnerId) throw new Error("This is not a partner account");
+  if (!target.partnerId)
+    throw new PublicActionError("This is not a partner account");
   if (target.roles.some(({ role }) => role.name === "SUPER_ADMIN")) {
-    throw new Error("Super admin accounts cannot be managed here");
+    throw new PublicActionError("Super admin accounts cannot be managed here");
   }
   const session = await requirePartnerAccess(
     target.partnerId,
@@ -324,9 +330,11 @@ export async function reviewPartnerApplication(
       where: { id: partnerId },
     });
     if (expectedVersion !== before.applicationVersion)
-      throw new Error("This application has changed. Reload before deciding.");
+      throw new PublicActionError(
+        "This application has changed. Reload before deciding.",
+      );
     if (before.approvalStatus !== "PENDING")
-      throw new Error("This application has already been reviewed");
+      throw new PublicActionError("This application has already been reviewed");
     const service = before.requestedServiceId
       ? await tx.vendorCategory.findUnique({
           where: { id: before.requestedServiceId },

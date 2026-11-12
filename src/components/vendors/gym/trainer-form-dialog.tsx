@@ -30,9 +30,13 @@ import {
   type TrainerInput,
 } from "@/lib/validations/trainer.schema";
 import {
-  createTrainer,
-  updateTrainer,
+  createTrainer as serverAction_createTrainer,
+  updateTrainer as serverAction_updateTrainer,
 } from "@/server/actions/trainers.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createTrainer = actionClient(serverAction_createTrainer);
+const updateTrainer = actionClient(serverAction_updateTrainer);
 
 export function TrainerFormDialog({
   vendorId,

@@ -1,3 +1,4 @@
+import { PublicActionError } from "@/lib/public-action-error";
 import { getServerSession, type Session } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -22,10 +23,10 @@ export async function requirePermission(
 ): Promise<Session> {
   const session = await getCurrentSession();
   if (!session?.user) {
-    throw new Error("Not authenticated");
+    throw new PublicActionError("Not authenticated");
   }
   if (!hasPermission(session, permission)) {
-    throw new Error(`Missing permission: ${permission}`);
+    throw new PublicActionError(`Missing permission: ${permission}`);
   }
   return session;
 }
@@ -71,20 +72,22 @@ export function isPlatformStaff(session: Session): boolean {
 export async function requirePlatformPermission(permission: PermissionKey) {
   const session = await requirePermission(permission);
   if (!isPlatformStaff(session))
-    throw new Error("Platform staff access required");
+    throw new PublicActionError("Platform staff access required");
   return session;
 }
 
 export async function requireSuperAdmin(): Promise<Session> {
   const session = await getCurrentSession();
-  if (!session?.user) throw new Error("Not authenticated");
-  if (!isSuperAdmin(session)) throw new Error("Super admin access required");
+  if (!session?.user) throw new PublicActionError("Not authenticated");
+  if (!isSuperAdmin(session))
+    throw new PublicActionError("Super admin access required");
   return session;
 }
 
 export async function requireSuperAdminPermission(permission: PermissionKey) {
   const session = await requirePlatformPermission(permission);
-  if (!isSuperAdmin(session)) throw new Error("Super admin access required");
+  if (!isSuperAdmin(session))
+    throw new PublicActionError("Super admin access required");
   return session;
 }
 
@@ -104,7 +107,7 @@ export async function resolveDataScope(
       !selectedPartnerId.trim() ||
       selectedPartnerId.length > 128)
   ) {
-    throw new Error("Invalid partner selection");
+    throw new PublicActionError("Invalid partner selection");
   }
   if (isPlatformStaff(session)) {
     if (selectedPartnerId === undefined)
@@ -113,7 +116,7 @@ export async function resolveDataScope(
       where: { id: selectedPartnerId },
       select: { id: true },
     });
-    if (!partner) throw new Error("Partner not found");
+    if (!partner) throw new PublicActionError("Partner not found");
     return { kind: "partner", partnerId: partner.id };
   }
   const user = await prisma.user.findUnique({
@@ -130,10 +133,10 @@ export async function resolveDataScope(
     user.partner?.status !== "ACTIVE" ||
     user.partner.approvalStatus !== "APPROVED"
   ) {
-    throw new Error("Active partner access required");
+    throw new PublicActionError("Active partner access required");
   }
   if (selectedPartnerId !== undefined && selectedPartnerId !== user.partnerId) {
-    throw new Error("You do not have access to this partner");
+    throw new PublicActionError("You do not have access to this partner");
   }
   return { kind: "partner", partnerId: user.partnerId };
 }
@@ -160,7 +163,7 @@ export async function requireVendorAccess(
   });
 
   if (!vendor || vendor.partnerId !== scope.partnerId) {
-    throw new Error("You do not have access to this listing");
+    throw new PublicActionError("You do not have access to this listing");
   }
   return session;
 }

@@ -1,5 +1,9 @@
 "use server";
 
+import { MAX_UPLOAD_SIZE_BYTES } from "@/lib/upload-limits";
+
+import { PublicActionError } from "@/lib/public-action-error";
+
 import { proposedParent } from "@/lib/listing-editor";
 import { randomUUID } from "node:crypto";
 import { queueListingChange } from "@/lib/listing-changes";
@@ -9,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { requireVendorAccess } from "@/lib/rbac";
 import { deleteVendorPhoto, uploadVendorPhoto } from "@/lib/imagekit";
 
-const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_PHOTO_SIZE_BYTES = MAX_UPLOAD_SIZE_BYTES;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export async function uploadVendorMedia(formData: FormData) {
@@ -17,17 +21,19 @@ export async function uploadVendorMedia(formData: FormData) {
   const file = formData.get("file");
 
   if (typeof vendorId !== "string" || !vendorId) {
-    throw new Error("vendorId is required");
+    throw new PublicActionError("vendorId is required");
   }
   const session = await requireVendorAccess(vendorId, "vendor.update");
   if (!(file instanceof File) || file.size === 0) {
-    throw new Error("A file is required");
+    throw new PublicActionError("A file is required");
   }
   if (file.size > MAX_PHOTO_SIZE_BYTES) {
-    throw new Error("File exceeds the 5MB limit");
+    throw new PublicActionError(
+      "File exceeds the 4 MB limit. Choose a smaller file.",
+    );
   }
   if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
-    throw new Error("Only JPG, PNG, and WEBP files are allowed");
+    throw new PublicActionError("Only JPG, PNG, and WEBP files are allowed");
   }
 
   const { url: mediaUrl, fileId } = await uploadVendorPhoto(vendorId, file);

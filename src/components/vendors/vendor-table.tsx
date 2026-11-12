@@ -7,10 +7,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { VendorStatusBadge, VerificationStatusBadge } from "@/components/vendors/vendor-status-badge";
-import type { Vendor, VendorAddress, VendorCategory } from "@/generated/prisma/client";
+import {
+  VendorStatusBadge,
+  VerificationStatusBadge,
+} from "@/components/vendors/vendor-status-badge";
+import type {
+  Vendor,
+  VendorAddress,
+  VendorCategory,
+} from "@/generated/prisma/client";
 
-type VendorRow = Vendor & { category: VendorCategory; address: VendorAddress | null };
+type VendorRow = Vendor & {
+  category: VendorCategory;
+  address: VendorAddress | null;
+};
 
 export function VendorTable({ vendors }: { vendors: VendorRow[] }) {
   return (
@@ -28,7 +38,10 @@ export function VendorTable({ vendors }: { vendors: VendorRow[] }) {
         {vendors.map((vendor) => (
           <TableRow key={vendor.id}>
             <TableCell className="font-medium">
-                  <Link href={`/vendors/${vendor.id}`} className="text-primary hover:text-primary/80">
+              <Link
+                href={`/vendors/${vendor.id}`}
+                className="text-primary hover:text-primary/80"
+              >
                 {vendor.name}
               </Link>
             </TableCell>

@@ -1,3 +1,4 @@
+import { PublicActionError } from "@/lib/public-action-error";
 import { z } from "zod";
 import { DocumentType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
@@ -79,7 +80,7 @@ export async function applyCategoryChange(
           where: { id: { in: list } },
         })) !== list.length
       )
-        throw new Error("Unknown trainer specialization");
+        throw new PublicActionError("Unknown trainer specialization");
       await tx.trainerSpecializationMap.deleteMany({
         where: { trainerId: c.targetId },
       });
@@ -164,7 +165,7 @@ export async function applyCategoryChange(
           where: { id: { in: list }, vendorId: c.vendorId },
         })) !== list.length
       )
-        throw new Error("Teachers must belong to this listing");
+        throw new PublicActionError("Teachers must belong to this listing");
       await tx.courseTeacher.deleteMany({ where: { courseId: c.targetId } });
       if (list.length)
         await tx.courseTeacher.createMany({

@@ -15,7 +15,10 @@ import {
 } from "@/components/ui/table";
 import type { Partner } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { setPartnerActive } from "@/server/actions/partners.actions";
+import { setPartnerActive as serverAction_setPartnerActive } from "@/server/actions/partners.actions";
+import { actionClient } from "@/lib/action-client";
+
+const setPartnerActive = actionClient(serverAction_setPartnerActive);
 
 type PartnerRow = Partner & { _count: { users: number; vendors: number } };
 

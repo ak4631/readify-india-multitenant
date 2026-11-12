@@ -10,11 +10,16 @@ import { Input } from "@/components/ui/input";
 import { MenuItemFormDialog } from "@/components/vendors/co-working-space/menu-item-form-dialog";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  createMenuCategory,
-  deleteMenuCategory,
-  deleteMenuItem,
+  createMenuCategory as serverAction_createMenuCategory,
+  deleteMenuCategory as serverAction_deleteMenuCategory,
+  deleteMenuItem as serverAction_deleteMenuItem,
   type MenuCategoryRow,
 } from "@/server/actions/menu.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createMenuCategory = actionClient(serverAction_createMenuCategory);
+const deleteMenuCategory = actionClient(serverAction_deleteMenuCategory);
+const deleteMenuItem = actionClient(serverAction_deleteMenuItem);
 
 export function MenuEditor({
   vendorId,

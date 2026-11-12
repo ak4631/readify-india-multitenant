@@ -4,7 +4,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { reviewPartnerApplication } from "@/server/actions/partners.actions";
+import { reviewPartnerApplication as serverAction_reviewPartnerApplication } from "@/server/actions/partners.actions";
+import { actionClient } from "@/lib/action-client";
+
+const reviewPartnerApplication = actionClient(
+  serverAction_reviewPartnerApplication,
+);
 
 export function ApplicationReview({
   partnerId,

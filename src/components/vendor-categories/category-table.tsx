@@ -16,7 +16,12 @@ import {
 import { CategoryFormDialog } from "@/components/vendor-categories/category-form-dialog";
 import type { VendorCategory } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { deactivateVendorCategory } from "@/server/actions/vendor-categories.actions";
+import { deactivateVendorCategory as serverAction_deactivateVendorCategory } from "@/server/actions/vendor-categories.actions";
+import { actionClient } from "@/lib/action-client";
+
+const deactivateVendorCategory = actionClient(
+  serverAction_deactivateVendorCategory,
+);
 
 type CategoryRow = VendorCategory & { _count: { vendors: number } };
 

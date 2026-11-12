@@ -17,12 +17,17 @@ import {
 } from "@/components/ui/table";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  cancelLibraryBooking,
-  setLibrarySeatActive,
+  cancelLibraryBooking as serverAction_cancelLibraryBooking,
+  setLibrarySeatActive as serverAction_setLibrarySeatActive,
   type LibraryOccupancy,
   type RevenueRow,
 } from "@/server/actions/library-occupancy.actions";
-import { cancelSubscription } from "@/server/actions/subscriptions.actions";
+import { cancelSubscription as serverAction_cancelSubscription } from "@/server/actions/subscriptions.actions";
+import { actionClient } from "@/lib/action-client";
+
+const cancelLibraryBooking = actionClient(serverAction_cancelLibraryBooking);
+const setLibrarySeatActive = actionClient(serverAction_setLibrarySeatActive);
+const cancelSubscription = actionClient(serverAction_cancelSubscription);
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const hrs = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)}h`;

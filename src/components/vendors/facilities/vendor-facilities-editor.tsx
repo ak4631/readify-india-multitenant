@@ -7,7 +7,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import type { Facility } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
-import { setVendorFacilities } from "@/server/actions/vendor-facilities.actions";
+import { setVendorFacilities as serverAction_setVendorFacilities } from "@/server/actions/vendor-facilities.actions";
+import { actionClient } from "@/lib/action-client";
+
+const setVendorFacilities = actionClient(serverAction_setVendorFacilities);
 
 export function VendorFacilitiesEditor({
   vendorId,

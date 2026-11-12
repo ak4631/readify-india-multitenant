@@ -1,3 +1,4 @@
+import { PublicActionError } from "@/lib/public-action-error";
 import { listingSnapshot } from "@/lib/listing-snapshot";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
@@ -21,7 +22,7 @@ export type ListingChangeKind =
   | "SEAT_ACTIVE"
   | import("@/lib/category-changes").CategoryChangeKind;
 
-export class ListingChangeConflict extends Error {}
+export class ListingChangeConflict extends PublicActionError {}
 
 export async function lockListing(
   tx: Prisma.TransactionClient,

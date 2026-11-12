@@ -16,9 +16,12 @@ import {
 import type { Subscription } from "@/generated/prisma/client";
 import { usePermission } from "@/hooks/use-permission";
 import {
-  cancelSubscription,
+  cancelSubscription as serverAction_cancelSubscription,
   type SubscriptionRow,
 } from "@/server/actions/subscriptions.actions";
+import { actionClient } from "@/lib/action-client";
+
+const cancelSubscription = actionClient(serverAction_cancelSubscription);
 
 // slotStartTime is a Postgres TIME (Prisma returns it as a 1970-01-01 UTC
 // date), so its UTC time-of-day is the library-local wall-clock time.

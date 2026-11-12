@@ -8,7 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePermission } from "@/hooks/use-permission";
-import { updateVendorCapacity } from "@/server/actions/vendors.actions";
+import { updateVendorCapacity as serverAction_updateVendorCapacity } from "@/server/actions/vendors.actions";
+import { actionClient } from "@/lib/action-client";
+
+const updateVendorCapacity = actionClient(serverAction_updateVendorCapacity);
 
 const DEFAULT_CAPACITY = 20;
 

@@ -26,13 +26,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { VendorCategory } from "@/generated/prisma/client";
 import {
-  createVendorCategory,
-  updateVendorCategory,
+  createVendorCategory as serverAction_createVendorCategory,
+  updateVendorCategory as serverAction_updateVendorCategory,
 } from "@/server/actions/vendor-categories.actions";
 import {
   vendorCategorySchema,
   type VendorCategoryInput,
 } from "@/lib/validations/vendor-category.schema";
+import { actionClient } from "@/lib/action-client";
+
+const createVendorCategory = actionClient(serverAction_createVendorCategory);
+const updateVendorCategory = actionClient(serverAction_updateVendorCategory);
 
 export function CategoryFormDialog({
   category,

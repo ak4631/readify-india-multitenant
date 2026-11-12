@@ -1,3 +1,4 @@
+import { PublicActionError } from "@/lib/public-action-error";
 import { prisma } from "@/lib/prisma";
 import type { ListingChange } from "@/generated/prisma/client";
 
@@ -63,7 +64,9 @@ export async function proposedParent(id: string, kind: string) {
     },
   });
   if (!c)
-    throw new Error("This item no longer exists in the editable revision");
+    throw new PublicActionError(
+      "This item no longer exists in the editable revision",
+    );
   return { id, vendorId: c.vendorId };
 }
 export async function proposalLabels(vendorId: string) {

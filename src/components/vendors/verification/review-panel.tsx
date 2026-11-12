@@ -13,7 +13,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { reviewVerificationDocument } from "@/server/actions/vendor-verification.actions";
+import { reviewVerificationDocument as serverAction_reviewVerificationDocument } from "@/server/actions/vendor-verification.actions";
+import { actionClient } from "@/lib/action-client";
+
+const reviewVerificationDocument = actionClient(
+  serverAction_reviewVerificationDocument,
+);
 
 export function ReviewPanel({ verificationId }: { verificationId: string }) {
   const router = useRouter();

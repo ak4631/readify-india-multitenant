@@ -29,7 +29,10 @@ import {
   vendorAccountSchema,
   type VendorAccountInput,
 } from "@/lib/validations/user.schema";
-import { createVendorAccount } from "@/server/actions/users.actions";
+import { createVendorAccount as serverAction_createVendorAccount } from "@/server/actions/users.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createVendorAccount = actionClient(serverAction_createVendorAccount);
 
 export function VendorAccountDialog({ vendorId }: { vendorId: string }) {
   const router = useRouter();

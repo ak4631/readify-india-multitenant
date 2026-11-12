@@ -37,10 +37,14 @@ import {
   type CourseInput,
 } from "@/lib/validations/academics.schema";
 import {
-  createCourse,
-  updateCourse,
+  createCourse as serverAction_createCourse,
+  updateCourse as serverAction_updateCourse,
   type CourseRow,
 } from "@/server/actions/courses.actions";
+import { actionClient } from "@/lib/action-client";
+
+const createCourse = actionClient(serverAction_createCourse);
+const updateCourse = actionClient(serverAction_updateCourse);
 
 export function CourseFormDialog({
   vendorId,
