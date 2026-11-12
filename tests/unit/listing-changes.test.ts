@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Prisma } from "@/generated/prisma/client";
+import { writeAuditLog } from "@/lib/audit";
+import { listingSnapshot } from "@/lib/listing-snapshot";
 import { queueListingChange } from "@/lib/listing-changes";
 vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn() }));
 vi.mock("@/lib/listing-snapshot", () => ({
@@ -20,6 +22,7 @@ describe("approved listing isolation", () => {
       id: "vendor",
       status: "PUBLISHED",
       contentVersion: 2,
+      partnerId: "partner",
     });
     tx.listingRevision.findFirst.mockResolvedValue(null);
     tx.listingRevision.create.mockResolvedValue({
@@ -41,7 +44,18 @@ describe("approved listing isolation", () => {
       ),
     ).toBe(true);
     expect(tx.$queryRaw).toHaveBeenCalledOnce();
+    expect(tx.listingChange.findFirst).not.toHaveBeenCalled();
+    expect(listingSnapshot).toHaveBeenCalledOnce();
+    expect(writeAuditLog).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({
+        partnerId: "partner",
+        entityType: "listing_change",
+        entityId: "change",
+      }),
+    );
     expect(tx.listingChange.create).toHaveBeenCalledWith({
+      select: { id: true },
       data: expect.objectContaining({
         vendorId: "vendor",
         kind: "PLAN_UPDATE",
@@ -99,7 +113,10 @@ describe("approved listing isolation", () => {
     expect(tx.listingChange.update).toHaveBeenCalledWith({
       where: { id: "change" },
       data: { payload: { price: 300 }, requestedBy: "owner" },
+      select: { id: true },
     });
+    expect(listingSnapshot).not.toHaveBeenCalled();
+    expect(tx.listingRevision.create).not.toHaveBeenCalled();
     expect(tx.listingChange.create).not.toHaveBeenCalled();
   });
   it("allows draft setup without falsely queueing it as published content", async () => {

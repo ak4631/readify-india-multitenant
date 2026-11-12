@@ -51,11 +51,13 @@ export async function queueListingChange(
     return false;
   let revision = await tx.listingRevision.findFirst({
     where: { vendorId, status: { in: ["DRAFT", "PENDING"] } },
+    select: { id: true, status: true },
   });
   if (revision?.status === "PENDING")
     throw new ListingChangeConflict(
       "Your submitted revision is awaiting Super Admin review. Wait for a decision or withdraw it before editing.",
     );
+  const isNewRevision = !revision;
   if (!revision)
     revision = await tx.listingRevision.create({
       data: {
@@ -65,10 +67,16 @@ export async function queueListingChange(
         baseSnapshot: await listingSnapshot(tx, vendorId),
         requestedBy: userId,
       },
+      select: { id: true, status: true },
     });
-  const previous = await tx.listingChange.findFirst({
-    where: { revisionId: revision.id, targetId, kind },
-  });
+  // A new envelope cannot have an existing proposal. The listing lock keeps
+  // concurrent saves from creating another active envelope.
+  const previous = isNewRevision
+    ? null
+    : await tx.listingChange.findFirst({
+        where: { revisionId: revision.id, targetId, kind },
+        select: { id: true },
+      });
   const serialized = JSON.parse(
     JSON.stringify(payload),
   ) as Prisma.InputJsonValue;
@@ -76,6 +84,7 @@ export async function queueListingChange(
     ? await tx.listingChange.update({
         where: { id: previous.id },
         data: { payload: serialized, requestedBy: userId },
+        select: { id: true },
       })
     : await tx.listingChange.create({
         data: {
@@ -88,9 +97,11 @@ export async function queueListingChange(
           status: "DRAFT",
           payload: serialized,
         },
+        select: { id: true },
       });
   await writeAuditLog(tx, {
     userId,
+    partnerId: vendor.partnerId,
     action: "REQUEST_LISTING_CHANGE",
     entityType: "listing_change",
     entityId: change.id,

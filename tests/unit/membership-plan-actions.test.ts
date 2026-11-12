@@ -33,6 +33,7 @@ vi.mock("@/lib/prisma", () => ({
 import {
   createMembershipPlan,
   updateMembershipPlan,
+  archiveMembershipPlan,
 } from "@/server/actions/membership-plans.actions";
 
 const input = {
@@ -106,6 +107,43 @@ describe("plan saves", () => {
       expect(mocks.revalidate).not.toHaveBeenCalled();
       expect(mocks.tx.membershipPlan.create).not.toHaveBeenCalled();
       expect(mocks.tx.membershipPlan.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["create", false],
+    ["create", true],
+    ["update", false],
+    ["update", true],
+    ["archive", false],
+    ["archive", true],
+  ] as const)(
+    "allows a 5372ms commit during %s (queued: %s)",
+    async (operation, queued) => {
+      mocks.queue.mockResolvedValue(queued);
+      mocks.transaction.mockImplementation(async (callback, options) => {
+        const result = await callback(mocks.tx);
+        // Model the driver's commit check from the reported P2028 failure.
+        if (5372 > (options?.timeout ?? 5000))
+          throw Object.assign(new Error("Commit on expired transaction"), {
+            code: "P2028",
+          });
+        return result;
+      });
+      if (operation === "archive") {
+        await expect(archiveMembershipPlan("plan")).resolves.toBeUndefined();
+      } else {
+        const result =
+          operation === "create"
+            ? await createMembershipPlan("venue", input)
+            : await updateMembershipPlan("plan", input);
+        expect(result).toEqual({
+          ok: true,
+          outcome: queued ? "queued" : "saved",
+        });
+      }
+      expect(mocks.audit).toHaveBeenCalledTimes(queued ? 0 : 1);
+      expect(mocks.revalidate).toHaveBeenCalledWith("/vendors/venue");
     },
   );
 

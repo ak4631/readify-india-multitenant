@@ -20,6 +20,10 @@ import {
   type MembershipPlanInput,
 } from "@/lib/validations/membership-plan.schema";
 
+// Review drafts may snapshot the full listing before saving. Allow database
+// round trips and the audit write to finish together on the deployed runtime.
+const PLAN_TRANSACTION_TIMEOUT_MS = 15_000;
+
 export async function listMembershipPlans(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const plans = await prisma.membershipPlan.findMany({
@@ -84,30 +88,33 @@ export async function createMembershipPlan(
     if (!parsed.success)
       return { ok: false, message: parsed.error.issues[0].message };
     const data = parsed.data;
-    outcome = await prisma.$transaction(async (tx) => {
-      if (
-        await queueListingChange(
-          tx,
-          vendorId,
-          session.user.id,
-          "PLAN_CREATE",
-          randomUUID(),
-          data,
+    outcome = await prisma.$transaction(
+      async (tx) => {
+        if (
+          await queueListingChange(
+            tx,
+            vendorId,
+            session.user.id,
+            "PLAN_CREATE",
+            randomUUID(),
+            data,
+          )
         )
-      )
-        return "queued" as const;
-      const created = await tx.membershipPlan.create({
-        data: { ...data, vendorId },
-      });
-      await writeAuditLog(tx, {
-        userId: session.user.id,
-        action: "CREATE_MEMBERSHIP_PLAN",
-        entityType: "membership_plan",
-        entityId: created.id,
-        newValue: created,
-      });
-      return "saved" as const;
-    });
+          return "queued" as const;
+        const created = await tx.membershipPlan.create({
+          data: { ...data, vendorId },
+        });
+        await writeAuditLog(tx, {
+          userId: session.user.id,
+          action: "CREATE_MEMBERSHIP_PLAN",
+          entityType: "membership_plan",
+          entityId: created.id,
+          newValue: created,
+        });
+        return "saved" as const;
+      },
+      { timeout: PLAN_TRANSACTION_TIMEOUT_MS },
+    );
   } catch (error) {
     return planSaveFailure(error, "create", vendorId);
   }
@@ -134,35 +141,38 @@ export async function updateMembershipPlan(
     if (!parsed.success)
       return { ok: false, message: parsed.error.issues[0].message };
     const data = parsed.data;
-    outcome = await prisma.$transaction(async (tx) => {
-      if (
-        await queueListingChange(
-          tx,
-          vendorId,
-          session.user.id,
-          "PLAN_UPDATE",
-          planId,
-          data,
+    outcome = await prisma.$transaction(
+      async (tx) => {
+        if (
+          await queueListingChange(
+            tx,
+            vendorId,
+            session.user.id,
+            "PLAN_UPDATE",
+            planId,
+            data,
+          )
         )
-      )
-        return "queued" as const;
-      const before = await tx.membershipPlan.findUniqueOrThrow({
-        where: { id: planId },
-      });
-      const after = await tx.membershipPlan.update({
-        where: { id: planId },
-        data,
-      });
-      await writeAuditLog(tx, {
-        userId: session.user.id,
-        action: "UPDATE_MEMBERSHIP_PLAN",
-        entityType: "membership_plan",
-        entityId: planId,
-        oldValue: before,
-        newValue: after,
-      });
-      return "saved" as const;
-    });
+          return "queued" as const;
+        const before = await tx.membershipPlan.findUniqueOrThrow({
+          where: { id: planId },
+        });
+        const after = await tx.membershipPlan.update({
+          where: { id: planId },
+          data,
+        });
+        await writeAuditLog(tx, {
+          userId: session.user.id,
+          action: "UPDATE_MEMBERSHIP_PLAN",
+          entityType: "membership_plan",
+          entityId: planId,
+          oldValue: before,
+          newValue: after,
+        });
+        return "saved" as const;
+      },
+      { timeout: PLAN_TRANSACTION_TIMEOUT_MS },
+    );
   } catch (error) {
     return planSaveFailure(error, "update", vendorId);
   }
@@ -181,37 +191,40 @@ export async function archiveMembershipPlan(planId: string) {
     "vendor.update",
   );
 
-  const vendorId = await prisma.$transaction(async (tx) => {
-    if (
-      await queueListingChange(
-        tx,
-        planRecord.vendorId,
-        session.user.id,
-        "PLAN_ARCHIVE",
-        planId,
-        {},
+  const vendorId = await prisma.$transaction(
+    async (tx) => {
+      if (
+        await queueListingChange(
+          tx,
+          planRecord.vendorId,
+          session.user.id,
+          "PLAN_ARCHIVE",
+          planId,
+          {},
+        )
       )
-    )
-      return planRecord.vendorId;
-    const before = await tx.membershipPlan.findUniqueOrThrow({
-      where: { id: planId },
-    });
-    const after = await tx.membershipPlan.update({
-      where: { id: planId },
-      data: { status: "ARCHIVED" },
-    });
+        return planRecord.vendorId;
+      const before = await tx.membershipPlan.findUniqueOrThrow({
+        where: { id: planId },
+      });
+      const after = await tx.membershipPlan.update({
+        where: { id: planId },
+        data: { status: "ARCHIVED" },
+      });
 
-    await writeAuditLog(tx, {
-      userId: session.user.id,
-      action: "ARCHIVE_MEMBERSHIP_PLAN",
-      entityType: "membership_plan",
-      entityId: planId,
-      oldValue: { status: before.status },
-      newValue: { status: after.status },
-    });
+      await writeAuditLog(tx, {
+        userId: session.user.id,
+        action: "ARCHIVE_MEMBERSHIP_PLAN",
+        entityType: "membership_plan",
+        entityId: planId,
+        oldValue: { status: before.status },
+        newValue: { status: after.status },
+      });
 
-    return after.vendorId;
-  });
+      return after.vendorId;
+    },
+    { timeout: PLAN_TRANSACTION_TIMEOUT_MS },
+  );
 
   revalidatePath(`/vendors/${vendorId}`);
 }

@@ -25,6 +25,9 @@ export async function listingSnapshot(
   vendorId: string,
 ) {
   const v = await tx.vendor.findUniqueOrThrow({
+    // Aggregate related records in PostgreSQL instead of fetching every table
+    // separately while the listing's write lock is held.
+    relationLoadStrategy: "join",
     where: { id: vendorId },
     select: {
       id: true,
