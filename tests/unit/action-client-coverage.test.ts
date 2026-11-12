@@ -48,10 +48,21 @@ it("routes every client-side Server Action import through the shared error trans
         (element) => !element.isTypeOnly,
       )) {
         checked++;
-        if (
-          !item.name.text.startsWith("serverAction_") ||
-          !text.includes(`actionClient(${item.name.text})`)
-        )
+        let wrapped = false;
+        function inspect(current: ts.Node) {
+          if (
+            ts.isCallExpression(current) &&
+            ts.isIdentifier(current.expression) &&
+            current.expression.text === "actionClient" &&
+            current.arguments.some(
+              (arg) => ts.isIdentifier(arg) && arg.text === item.name.text,
+            )
+          )
+            wrapped = true;
+          ts.forEachChild(current, inspect);
+        }
+        inspect(ast);
+        if (!item.name.text.startsWith("serverAction_") || !wrapped)
           uncovered.push(`${file}: ${item.name.text}`);
       }
     }

@@ -27,6 +27,21 @@ describe("server action error transport", () => {
       message: "Verify the owner ID before approval.",
     });
   });
+  it("recognizes business errors constructed by a separately loaded bundle", async () => {
+    vi.resetModules();
+    const { PublicActionError: OtherBundleError } =
+      await import("@/lib/public-action-error");
+    const error = new OtherBundleError("Resolve the document status first.");
+    expect(error).not.toBeInstanceOf(PublicActionError);
+    expect(
+      await invokeAction(async () => {
+        throw error;
+      }, []),
+    ).toEqual({
+      success: false,
+      message: "Resolve the document status first.",
+    });
+  });
   it("returns input validation details without a production exception", async () => {
     const result = await invokeAction(
       async () =>

@@ -1,11 +1,13 @@
 "use client";
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermission } from "@/hooks/use-permission";
 import {
+  reopenListingRevisionForCorrection as serverAction_reopenListingRevisionForCorrection,
   discardDraftChange as serverAction_discardDraftChange,
   reviewListingRevision as serverAction_reviewListingRevision,
   submitListingRevision as serverAction_submitListingRevision,
@@ -16,6 +18,9 @@ import {
 } from "@/server/actions/listing-changes.actions";
 import { actionClient } from "@/lib/action-client";
 
+const reopenListingRevisionForCorrection = actionClient(
+  serverAction_reopenListingRevisionForCorrection,
+);
 const discardDraftChange = actionClient(serverAction_discardDraftChange);
 const reviewListingRevision = actionClient(serverAction_reviewListingRevision);
 const submitListingRevision = actionClient(serverAction_submitListingRevision);
@@ -97,6 +102,7 @@ function RevisionCard({
   revision: Revision;
   labels: Record<string, string>;
 }) {
+  const router = useRouter();
   const canEdit = usePermission("vendor.update");
   const canApprove = usePermission("vendor.approve");
   const canReject = usePermission("vendor.reject");
@@ -120,6 +126,7 @@ function RevisionCard({
           return;
         }
         toast.success(message);
+        router.refresh();
       } catch (e) {
         const errorMessage =
           e instanceof Error ? e.message : "Could not complete this action";
@@ -212,6 +219,12 @@ function RevisionCard({
           className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
         >
           <p className="font-medium text-destructive">{failure.message}</p>
+          {failure.issues.length > 0 && r.status === "PENDING" && (
+            <p>
+              Reopen this revision for corrections before editing the listed
+              sections. Your proposed changes will be preserved in a new draft.
+            </p>
+          )}
           {failure.issues.length > 0 && (
             <ul className="list-disc space-y-2 pl-5">
               {failure.issues.map((issue, index) => (
@@ -230,6 +243,20 @@ function RevisionCard({
         </div>
       )}
       <div className="flex flex-wrap gap-3">
+        {r.status === "PENDING" && canEdit && (
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={() =>
+              run(
+                () => reopenListingRevisionForCorrection(r.id),
+                "Revision reopened as an editable draft. Your proposed changes have been preserved.",
+              )
+            }
+          >
+            Reopen revision for corrections
+          </Button>
+        )}
         {r.status === "DRAFT" && canEdit && (
           <Button
             disabled={pending}

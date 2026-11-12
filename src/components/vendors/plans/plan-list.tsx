@@ -20,13 +20,18 @@ const archiveMembershipPlan = actionClient(serverAction_archiveMembershipPlan);
 export function PlanList({
   vendorId,
   plans,
+  readOnly = false,
 }: {
   vendorId: string;
   plans: PlanRow[];
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const canEdit = usePermission("vendor.update");
+  const canEdit =
+    usePermission("vendor.update") &&
+    !readOnly &&
+    !plans.some((plan) => plan.pendingReview === "PENDING");
 
   function handleArchive(planId: string) {
     startTransition(async () => {

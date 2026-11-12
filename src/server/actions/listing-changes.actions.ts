@@ -1,5 +1,11 @@
 "use server";
 
+import type {
+  Prisma,
+  Vendor,
+  ListingRevision,
+  ListingChange,
+} from "@/generated/prisma/client";
 import { PublicActionError } from "@/lib/public-action-error";
 
 import { revalidatePath } from "next/cache";
@@ -164,51 +170,110 @@ export async function reviseListingRevision(revisionId: string) {
       })
     )
       throw new PublicActionError("Finish the current revision first");
-    const copy = await tx.listingRevision.create({
-      data: {
-        vendorId: ref.vendorId,
-        baseVersion: vendor.contentVersion,
-        baseSnapshot: await listingSnapshot(tx, ref.vendorId),
-        requestedBy: session.user.id,
-      },
-    });
-    const ids = new Map(
-      original.changes
-        .filter((c) => c.kind.endsWith("_CREATE"))
-        .map((c) => [c.targetId, randomUUID()]),
-    );
-    const remap = (value: unknown): unknown =>
-      typeof value === "string"
-        ? (ids.get(value) ?? value)
-        : Array.isArray(value)
-          ? value.map(remap)
-          : value && typeof value === "object"
-            ? Object.fromEntries(
-                Object.entries(value).map(([k, v]) => [k, remap(v)]),
-              )
-            : value;
-    await tx.listingChange.createMany({
-      data: original.changes.map((c) => ({
-        id: randomUUID(),
-        vendorId: c.vendorId,
-        revisionId: copy.id,
-        kind: c.kind,
-        targetId: ids.get(c.targetId) ?? c.targetId,
-        payload: remap(c.payload) as object,
-        status: "DRAFT",
-        requestedBy: session.user.id,
-      })),
-    });
-    await writeAuditLog(tx, {
-      userId: session.user.id,
-      action: "REQUEST_LISTING_CHANGE",
-      entityType: "listing_change",
-      entityId: copy.id,
-      newValue: { copiedFrom: original.id },
-    });
+    await copyRevisionForCorrection(tx, vendor, original, session.user.id);
   });
   revalidatePath(`/vendors/${ref.vendorId}`);
 }
+async function copyRevisionForCorrection(
+  tx: Prisma.TransactionClient,
+  vendor: Pick<Vendor, "id" | "contentVersion" | "partnerId">,
+  original: ListingRevision & { changes: ListingChange[] },
+  userId: string,
+) {
+  const copy = await tx.listingRevision.create({
+    data: {
+      vendorId: vendor.id,
+      baseVersion: vendor.contentVersion,
+      baseSnapshot: await listingSnapshot(tx, vendor.id),
+      requestedBy: userId,
+    },
+  });
+  const ids = new Map(
+    original.changes
+      .filter((c) => c.kind.endsWith("_CREATE"))
+      .map((c) => [c.targetId, randomUUID()]),
+  );
+  const remap = (value: unknown): unknown =>
+    typeof value === "string"
+      ? (ids.get(value) ?? value)
+      : Array.isArray(value)
+        ? value.map(remap)
+        : value && typeof value === "object"
+          ? Object.fromEntries(
+              Object.entries(value).map(([k, v]) => [k, remap(v)]),
+            )
+          : value;
+  await tx.listingChange.createMany({
+    data: original.changes.map((c) => ({
+      id: randomUUID(),
+      vendorId: c.vendorId,
+      revisionId: copy.id,
+      kind: c.kind,
+      targetId: ids.get(c.targetId) ?? c.targetId,
+      payload: remap(c.payload) as object,
+      status: "DRAFT",
+      requestedBy: userId,
+    })),
+  });
+  await writeAuditLog(tx, {
+    userId,
+    partnerId: vendor.partnerId,
+    action: "REQUEST_LISTING_CHANGE",
+    entityType: "listing_change",
+    entityId: copy.id,
+    newValue: { copiedFrom: original.id },
+  });
+}
+
+export async function reopenListingRevisionForCorrection(revisionId: string) {
+  const ref = await prisma.listingRevision.findUniqueOrThrow({
+    where: { id: revisionId },
+  });
+  const session = await requireVendorAccess(ref.vendorId, "vendor.update");
+  await prisma.$transaction(
+    async (tx) => {
+      const vendor = await lockListing(tx, ref.vendorId);
+      const original = await tx.listingRevision.findUniqueOrThrow({
+        where: { id: revisionId },
+        include: { changes: true },
+      });
+      if (original.status !== "PENDING")
+        throw new PublicActionError(
+          "Only a pending revision can be reopened. Reload to see its current state.",
+        );
+      if (!["PUBLISHED", "APPROVED", "SUSPENDED"].includes(vendor.status))
+        throw new PublicActionError(
+          "This listing cannot be revised in its current state.",
+        );
+      // Preserve the exact submitted payloads. Withdrawing the envelope releases
+      // the unique active-revision slot before its editable copy is created.
+      await tx.listingChange.updateMany({
+        where: { revisionId },
+        data: { status: "WITHDRAWN" },
+      });
+      await tx.listingRevision.update({
+        where: { id: revisionId },
+        data: { status: "WITHDRAWN" },
+      });
+      await writeAuditLog(tx, {
+        userId: session.user.id,
+        partnerId: vendor.partnerId,
+        action: "REQUEST_LISTING_CHANGE",
+        entityType: "listing_change",
+        entityId: revisionId,
+        oldValue: { status: "PENDING" },
+        newValue: { status: "WITHDRAWN", correctionRequested: true },
+      });
+      await copyRevisionForCorrection(tx, vendor, original, session.user.id);
+    },
+    { timeout: 15_000 },
+  );
+  revalidatePath(`/vendors/${ref.vendorId}`);
+  revalidatePath("/plans");
+  revalidatePath("/approvals");
+  revalidatePath("/dashboard");
+}
+
 export type RevisionReviewResult =
   { ok: true } | { ok: false; message: string; issues: ReadinessIssue[] };
 

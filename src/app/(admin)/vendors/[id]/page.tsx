@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RevisionCorrectionNotice } from "@/components/vendors/revision-correction-notice";
 import { canUploadVerificationDocuments } from "@/lib/verification-upload-policy";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -81,6 +82,9 @@ export default async function VendorDetail({
     !["SUBMITTED", "UNDER_REVIEW"].includes(vendor.status);
   const changes = await listListingChanges(id);
   const frozen = changes.some((c) => c.status === "PENDING");
+  const pendingRevisionId = changes.find(
+    (change) => change.status === "PENDING",
+  )?.revisionId;
   let content: React.ReactNode;
   switch (tab) {
     case "overview":
@@ -186,7 +190,11 @@ export default async function VendorDetail({
     }
     case "plans":
       content = (
-        <PlanList vendorId={id} plans={await listMembershipPlans(id)} />
+        <PlanList
+          vendorId={id}
+          plans={await listMembershipPlans(id)}
+          readOnly={!editable || frozen}
+        />
       );
       break;
     case "schedule":
@@ -194,6 +202,7 @@ export default async function VendorDetail({
         <VendorScheduleEditor
           vendorId={id}
           schedules={await getVendorSchedule(id)}
+          readOnly={!editable || frozen}
         />
       );
       break;
@@ -351,21 +360,26 @@ export default async function VendorDetail({
         }
       />
       {changes.some((c) => ["DRAFT", "PENDING"].includes(c.status)) && (
-        <p role="status" className="rounded-lg border bg-muted p-4 text-sm">
-          Editors show proposed content. Customers still see the approved
-          version.{" "}
-          {frozen
-            ? "Your submitted content revision is frozen until a decision or withdrawal. Private document uploads and verification remain available. "
-            : "Your revision is a draft and must be submitted for approval. "}
-          <Link
-            href={`/vendors/${id}?tab=changes`}
-            className="font-medium text-primary underline"
-          >
+        <div className="space-y-3 rounded-lg border bg-muted p-4 text-sm">
+          <p role="status">
+            Editors show proposed content. Customers still see the approved
+            version.{" "}
             {frozen
-              ? "View approval status"
-              : "Open Changes to submit revision"}
-          </Link>
-        </p>
+              ? "Your submitted content revision is frozen until a decision or withdrawal. Private document uploads and verification remain available. "
+              : "Your revision is a draft and must be submitted for approval. "}
+            <Link
+              href={`/vendors/${id}?tab=changes`}
+              className="font-medium text-primary underline"
+            >
+              {frozen
+                ? "View approval status"
+                : "Open Changes to submit revision"}
+            </Link>
+          </p>
+          {frozen && editable && pendingRevisionId && (
+            <RevisionCorrectionNotice revisionId={pendingRevisionId} />
+          )}
+        </div>
       )}
       <nav
         aria-label="Listing setup and operations"

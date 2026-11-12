@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { unstable_rethrow } from "next/navigation";
 import { ZodError } from "zod";
 import { serializeActionValue } from "@/lib/serialize-action-value";
-import { PublicActionError } from "@/lib/public-action-error";
+import { isPublicActionError } from "@/lib/public-action-error";
 
 export type ActionResponse<T> =
   { success: true; value: T } | { success: false; message: string };
@@ -22,12 +22,23 @@ export async function invokeAction<Args extends unknown[], T>(
     };
   } catch (error) {
     unstable_rethrow(error);
-    if (error instanceof PublicActionError)
+    if (isPublicActionError(error))
       return { success: false, message: error.message };
-    if (error instanceof ZodError)
+    if (
+      error instanceof ZodError ||
+      (error instanceof Error &&
+        error.name === "ZodError" &&
+        "issues" in error &&
+        Array.isArray(error.issues) &&
+        error.issues.every(
+          (issue) => issue && typeof issue.message === "string",
+        ))
+    )
       return {
         success: false,
-        message: error.issues.map((issue) => issue.message).join(" "),
+        message: (error.issues as { message: string }[])
+          .map((issue) => issue.message)
+          .join(" "),
       };
     const reference = randomUUID();
     console.error("Server action failed", { reference, error });

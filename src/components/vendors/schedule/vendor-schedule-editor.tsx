@@ -22,13 +22,15 @@ function toHHMM(date: Date): string {
 export function VendorScheduleEditor({
   vendorId,
   schedules,
+  readOnly = false,
 }: {
   vendorId: string;
   schedules: VendorSchedule[];
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const canEdit = usePermission("vendor.update");
+  const canEdit = usePermission("vendor.update") && !readOnly;
 
   const [days, setDays] = useState(() =>
     DAYS_OF_WEEK.map((dayOfWeek) => {

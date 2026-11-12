@@ -1,6 +1,6 @@
 "use server";
 
-import { PublicActionError } from "@/lib/public-action-error";
+import { isPublicActionError } from "@/lib/public-action-error";
 import { Prisma } from "@/generated/prisma/client";
 import {
   editorChanges,
@@ -76,10 +76,7 @@ function planSaveFailure(
   operation: "create" | "update",
   vendorId: string,
 ): PlanSaveResult {
-  if (
-    error instanceof PublicActionError ||
-    error instanceof ListingChangeConflict
-  )
+  if (isPublicActionError(error) || error instanceof ListingChangeConflict)
     return { ok: false, message: error.message };
 
   const reference = randomUUID();
