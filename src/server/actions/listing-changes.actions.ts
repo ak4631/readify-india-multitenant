@@ -25,10 +25,10 @@ import { librarySeatTypeSchema } from "@/lib/validations/library-seat-type.schem
 
 import { randomUUID } from "node:crypto";
 import { applyCategoryChange } from "@/lib/category-changes";
+import { getRevisionReadiness } from "@/lib/revision-readiness";
 import { listingSnapshot, snapshotDigest } from "@/lib/listing-snapshot";
 import {
   assertReady,
-  getReadiness,
   ListingReadinessError,
   type ReadinessIssue,
 } from "@/lib/listing-readiness";
@@ -524,7 +524,9 @@ export async function reviewListingRevision(
                 );
           }
         }
-        assertReady(await getReadiness(tx, vendor.id, true));
+        assertReady(
+          await getRevisionReadiness(tx, vendor.id, revision.changes),
+        );
         await tx.vendor.update({
           where: { id: vendor.id },
           data: { contentVersion: { increment: 1 } },
@@ -576,7 +578,7 @@ export async function reviewListingRevision(
       return {
         ok: false,
         message:
-          "Approval blocked. Resolve these listing setup issues before approving the revision.",
+          "Approval blocked. Resolve these issues with the proposed changes before approving the revision.",
         issues: error.issues,
       };
     throw error;

@@ -26,10 +26,10 @@ vi.mock("@/lib/rbac", () => ({
   requireVendorAccess: mocks.access,
 }));
 vi.mock("@/lib/audit", () => ({ writeAuditLog: mocks.audit }));
-vi.mock("@/lib/listing-readiness", async (original) => ({
-  ...(await original<typeof import("@/lib/listing-readiness")>()),
-  getReadiness: mocks.ready,
+vi.mock("@/lib/revision-readiness", () => ({
+  getRevisionReadiness: mocks.ready,
 }));
+
 import { reviewListingRevision } from "@/server/actions/listing-changes.actions";
 import { snapshotDigest } from "@/lib/listing-snapshot";
 const change = {
@@ -99,6 +99,7 @@ describe("atomic versioned content decisions", () => {
         data: expect.objectContaining({ price: 20 }),
       }),
     );
+    expect(mocks.ready).toHaveBeenCalledWith(mocks.tx, "vendor", [change]);
     expect(mocks.tx.vendor.update).toHaveBeenCalledWith({
       where: { id: "vendor" },
       data: { contentVersion: { increment: 1 } },

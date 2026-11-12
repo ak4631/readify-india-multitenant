@@ -101,6 +101,15 @@ describe("listing readiness and immutable review evidence", () => {
     find.mockResolvedValue(v);
     expect((await getReadiness(tx, "v")).ready).toBe(true);
   });
+  it("still requires the full launch catalogue for initial library publication", async () => {
+    const vendor = userVendor();
+    vendor.plans = vendor.plans.slice(1, 2);
+    find.mockResolvedValue(vendor);
+    expect((await getReadiness(tx, "v")).issues).toContainEqual({
+      section: "plans",
+      message: "Configure Flex, monthly, quarterly and yearly plans.",
+    });
+  });
   it("denies disabled services and inactive partners before publication", async () => {
     const v = userVendor();
     v.category.launchEnabled = false;
