@@ -1,5 +1,6 @@
 "use server";
 import { prisma } from "@/lib/prisma";
+import type { VendorStatus } from "@/generated/prisma/enums";
 import { getSessionPartnerId, requirePermission } from "@/lib/rbac";
 import { pageWindow, toPage } from "@/lib/pagination";
 
@@ -137,7 +138,13 @@ export async function listApprovalQueue(
       vendor: {
         ...scope,
         status: {
-          in: ["SUBMITTED", "UNDER_REVIEW"] as ("SUBMITTED" | "UNDER_REVIEW")[],
+          in: [
+            "SUBMITTED",
+            "UNDER_REVIEW",
+            "APPROVED",
+            "PUBLISHED",
+            "SUSPENDED",
+          ] as VendorStatus[],
         },
       },
     };

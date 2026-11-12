@@ -37,19 +37,28 @@ export function UploadForm({
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const [documentType, setDocumentType] = useState<DocumentType>(
     requiredDocuments[0],
   );
 
   async function handleSubmit(formData: FormData) {
     setIsSubmitting(true);
+    setError("");
     try {
-      await uploadVerificationDocument(formData);
-      toast.success("Document uploaded");
+      const result = await uploadVerificationDocument(formData);
+      if (!result.ok) {
+        setError(result.message);
+        toast.error(result.message);
+        return;
+      }
+      toast.success("Document uploaded. Awaiting Super Admin verification.");
       formRef.current?.reset();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed");
+      const message = error instanceof Error ? error.message : "Upload failed";
+      setError(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -63,13 +72,13 @@ export function UploadForm({
     >
       <input type="hidden" name="vendorId" value={vendorId} />
       <div className="space-y-1">
-        <Label>Document Type</Label>
+        <Label htmlFor={`document-type-${vendorId}`}>Document Type</Label>
         <Select
           name="documentType"
           value={documentType}
           onValueChange={(value) => value && setDocumentType(value)}
         >
-          <SelectTrigger className="w-56">
+          <SelectTrigger id={`document-type-${vendorId}`} className="w-56">
             <SelectValue>{LABELS[documentType]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -82,13 +91,28 @@ export function UploadForm({
         </Select>
       </div>
       <div className="space-y-1">
-        <Label>Document Number</Label>
-        <Input name="documentNumber" className="w-48" />
+        <Label htmlFor={`document-number-${vendorId}`}>Document Number</Label>
+        <Input
+          id={`document-number-${vendorId}`}
+          name="documentNumber"
+          className="w-48"
+        />
       </div>
       <div className="space-y-1">
-        <Label>File</Label>
-        <Input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" required />
+        <Label htmlFor={`document-file-${vendorId}`}>File</Label>
+        <Input
+          id={`document-file-${vendorId}`}
+          type="file"
+          name="file"
+          accept=".pdf,.jpg,.jpeg,.png"
+          required
+        />
       </div>
+      {error && (
+        <p role="alert" className="w-full text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
         {isSubmitting ? "Uploading..." : "Upload"}
       </Button>

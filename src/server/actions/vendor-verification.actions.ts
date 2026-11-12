@@ -1,6 +1,6 @@
 "use server";
-import { randomUUID } from "node:crypto";
-import { queueListingChange } from "@/lib/listing-changes";
+import { lockListing, ListingChangeConflict } from "@/lib/listing-changes";
+import { canUploadVerificationDocuments } from "@/lib/verification-upload-policy";
 
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
@@ -14,65 +14,80 @@ import {
   uploadVerificationDocumentSchema,
 } from "@/lib/validations/vendor-verification.schema";
 
-export async function uploadVerificationDocument(formData: FormData) {
-  const input = uploadVerificationDocumentSchema.parse({
+export type VerificationUploadResult =
+  { ok: true } | { ok: false; message: string };
+
+const uploadFrozenMessage =
+  "This listing's initial submission is under review. Wait for a decision before uploading another document.";
+
+export async function uploadVerificationDocument(
+  formData: FormData,
+): Promise<VerificationUploadResult> {
+  const parsed = uploadVerificationDocumentSchema.safeParse({
     vendorId: formData.get("vendorId"),
     documentType: formData.get("documentType"),
     documentNumber: formData.get("documentNumber") || undefined,
   });
+  if (!parsed.success)
+    return { ok: false, message: parsed.error.issues[0].message };
+  const input = parsed.data;
   const session = await requireVendorAccess(
     input.vendorId,
     "verification.upload",
   );
-
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    throw new Error("A file is required");
-  }
-  if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
-    throw new Error("File exceeds the 5MB limit");
-  }
-  if (!ALLOWED_DOCUMENT_TYPES.includes(file.type)) {
-    throw new Error("Only PDF, JPG, and PNG files are allowed");
-  }
+  if (!(file instanceof File) || file.size === 0)
+    return { ok: false, message: "A file is required" };
+  if (file.size > MAX_DOCUMENT_SIZE_BYTES)
+    return { ok: false, message: "File exceeds the 5MB limit" };
+  if (!ALLOWED_DOCUMENT_TYPES.includes(file.type))
+    return { ok: false, message: "Only PDF, JPG, and PNG files are allowed" };
+
+  const listing = await prisma.vendor.findUniqueOrThrow({
+    where: { id: input.vendorId },
+    select: { status: true },
+  });
+  if (!canUploadVerificationDocuments(listing.status))
+    return { ok: false, message: uploadFrozenMessage };
 
   const documentUrl = await uploadVendorDocument(
     input.vendorId,
     file,
     input.documentType,
   );
-
-  await prisma.$transaction(async (tx) => {
-    if (
-      await queueListingChange(
-        tx,
-        input.vendorId,
-        session.user.id,
-        "DOCUMENT_CREATE",
-        randomUUID(),
-        { ...input, documentUrl },
-      )
-    )
-      return;
-    const verification = await tx.vendorVerification.create({
-      data: {
-        vendorId: input.vendorId,
-        documentType: input.documentType,
-        documentNumber: input.documentNumber,
-        documentUrl,
-      },
+  try {
+    await prisma.$transaction(async (tx) => {
+      const vendor = await lockListing(tx, input.vendorId);
+      if (!canUploadVerificationDocuments(vendor.status))
+        throw new ListingChangeConflict(uploadFrozenMessage);
+      // Store private evidence immediately so a Super Admin can verify it before
+      // approving a content revision. Uploads never auto-verify documents.
+      const verification = await tx.vendorVerification.create({
+        data: {
+          vendorId: input.vendorId,
+          documentType: input.documentType,
+          documentNumber: input.documentNumber,
+          documentUrl,
+          status: "PENDING",
+        },
+      });
+      await writeAuditLog(tx, {
+        userId: session.user.id,
+        partnerId: vendor.partnerId,
+        action: "UPLOAD_VERIFICATION_DOCUMENT",
+        entityType: "vendor_verification",
+        entityId: verification.id,
+        newValue: verification,
+      });
     });
-
-    await writeAuditLog(tx, {
-      userId: session.user.id,
-      action: "UPLOAD_VERIFICATION_DOCUMENT",
-      entityType: "vendor_verification",
-      entityId: verification.id,
-      newValue: verification,
-    });
-  });
-
+  } catch (error) {
+    if (error instanceof ListingChangeConflict)
+      return { ok: false, message: error.message };
+    throw error;
+  }
   revalidatePath(`/vendors/${input.vendorId}`);
+  revalidatePath("/approvals");
+  return { ok: true };
 }
 
 export async function reviewVerificationDocument(input: {

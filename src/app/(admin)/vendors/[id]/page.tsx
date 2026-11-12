@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { canUploadVerificationDocuments } from "@/lib/verification-upload-policy";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession, hasPermission } from "@/lib/rbac";
@@ -129,14 +130,29 @@ export default async function VendorDetail({
     case "verification":
       content = (
         <div className="space-y-5">
-          {editable &&
-            !frozen &&
-            hasPermission(session, "verification.upload") && (
-              <UploadForm
-                vendorId={id}
-                requiredDocuments={getRequiredDocuments(vendor.category.slug)}
-              />
-            )}
+          {hasPermission(session, "verification.upload") &&
+            (canUploadVerificationDocuments(vendor.status) ? (
+              <section className="space-y-3 rounded-lg border p-4">
+                <h2 className="font-semibold">Upload verification document</h2>
+                <p className="text-sm text-muted-foreground">
+                  Documents stay private and can be uploaded while a plan
+                  revision is awaiting approval. A Super Admin must verify each
+                  uploaded document.
+                </p>
+                <UploadForm
+                  vendorId={id}
+                  requiredDocuments={getRequiredDocuments(vendor.category.slug)}
+                />
+              </section>
+            ) : (
+              <p
+                role="status"
+                className="rounded-lg border bg-muted p-4 text-sm"
+              >
+                Document uploads are paused while the initial listing submission
+                is under review.
+              </p>
+            ))}
           <DocumentList
             verifications={vendor.verifications}
             requiredDocuments={getRequiredDocuments(vendor.category.slug)}
@@ -339,7 +355,7 @@ export default async function VendorDetail({
           Editors show proposed content. Customers still see the approved
           version.{" "}
           {frozen
-            ? "Your revision is submitted and frozen until a decision or withdrawal. "
+            ? "Your submitted content revision is frozen until a decision or withdrawal. Private document uploads and verification remain available. "
             : "Your revision is a draft and must be submitted for approval. "}
           <Link
             href={`/vendors/${id}?tab=changes`}
