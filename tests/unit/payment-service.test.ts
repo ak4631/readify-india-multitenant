@@ -127,3 +127,20 @@ describe("verified payment state transitions", () => {
     expect(state.bookingUpdate).not.toHaveBeenCalled();
   });
 });
+
+it("validates the customer-selected day-pass hours at the checkout boundary", async () => {
+  const { checkoutSchema } = await import("@/lib/payments");
+  const input = {
+    kind: "flex",
+    vendorId: "vendor",
+    planId: "flex",
+    date: "2030-01-01",
+    startTime: "08:00",
+    days: 14,
+    idempotencyKey: "11111111-1111-4111-8111-111111111111",
+  };
+  for (const hours of [4, 6, 8, 12, 16, 18, 24])
+    expect(checkoutSchema.parse({ ...input, hours })).toMatchObject({ hours });
+  for (const hours of [0, 5, 25, -1])
+    expect(checkoutSchema.safeParse({ ...input, hours }).success).toBe(false);
+});

@@ -21,9 +21,18 @@ export interface NavItem {
   icon: LucideIcon;
   platformOnly?: boolean;
   ownerOnly?: boolean;
+  superAdminOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  {
+    label: "Promotional Banners",
+    href: "/promotions",
+    requiredPermission: "vendor.read",
+    icon: Store,
+    platformOnly: true,
+    superAdminOnly: true,
+  },
   {
     label: "Approvals & Actions",
     href: "/approvals",
@@ -180,6 +189,7 @@ export function visibleNavigation(
   const items = NAV_ITEMS.filter(
     (item) =>
       permissions.includes(item.requiredPermission) &&
+      (!item.superAdminOnly || roles.includes("SUPER_ADMIN")) &&
       (!item.ownerOnly ||
         (roles.includes("PARTNER_ADMIN") &&
           !roles.includes("PARTNER_EMPLOYEE"))) &&
@@ -191,6 +201,7 @@ export function visibleNavigation(
       "/partners",
       "/approvals",
       "/support",
+      "/promotions",
       "/users",
       "/vendor-categories",
       "/facilities",

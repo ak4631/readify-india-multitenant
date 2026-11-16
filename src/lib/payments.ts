@@ -22,6 +22,17 @@ export const checkoutSchema = z.discriminatedUnion("kind", [
     kind: z.literal("flex"),
     startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     days: z.number().int().min(1).max(14),
+    hours: z
+      .union([
+        z.literal(4),
+        z.literal(6),
+        z.literal(8),
+        z.literal(12),
+        z.literal(16),
+        z.literal(18),
+        z.literal(24),
+      ])
+      .optional(),
   }),
   z.object({
     ...purchaseFields,
@@ -113,7 +124,7 @@ export async function createCheckout(
               vendor_id?: string;
             }[]
           >`
-        SELECT * FROM admin.reserve_purchase(${input.kind}, ${input.vendorId}, ${input.planId}, ${input.date}::date, ${input.startTime ?? null}::time, ${input.days ?? null}::integer)`;
+        SELECT * FROM admin.reserve_purchase(${input.kind}, ${input.vendorId}, ${input.planId}, ${input.date}::date, ${input.startTime ?? null}::time, ${input.days ?? null}::integer, ${input.kind === "flex" ? (input.hours ?? null) : null}::integer)`;
     const hold = holds[0];
     if (!hold || !hold.starts_at || hold.starts_at <= new Date())
       throw new Error("Choose a future access window");

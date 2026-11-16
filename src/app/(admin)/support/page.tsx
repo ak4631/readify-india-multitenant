@@ -1,3 +1,5 @@
+import { CustomerTicketList } from "@/components/support/customer-ticket-list";
+import { listCustomerSupportTickets } from "@/server/actions/customer-support.actions";
 import { partnerPath } from "@/lib/partner-path";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListPagination } from "@/components/layout/list-pagination";
@@ -23,6 +25,8 @@ export default async function SupportPage({
     session.user.roles.some((role) =>
       ["SUPER_ADMIN", "ADMIN", "SUPPORT"].includes(role),
     );
+  const customerTickets =
+    canRespond && !params.partnerId ? await listCustomerSupportTickets() : [];
   return (
     <div className="space-y-6">
       <PageHeader
@@ -49,6 +53,9 @@ export default async function SupportPage({
           Revenue.
         </p>
       </details>
+      {canRespond && !params.partnerId && (
+        <CustomerTicketList tickets={customerTickets} />
+      )}
       <TicketList
         tickets={tickets.items}
         canRespond={canRespond}

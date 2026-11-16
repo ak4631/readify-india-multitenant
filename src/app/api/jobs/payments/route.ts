@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { deliverCustomerPushes } from "@/lib/push-delivery";
 import { prisma } from "@/lib/prisma";
 import {
   expireCheckouts,
@@ -18,6 +19,9 @@ export async function POST(request: Request) {
     return new Response(null, { status: 401 });
   await expireCheckouts();
   await expireSubscriptions();
+  const reminders = await prisma.$queryRaw<
+    { count: number }[]
+  >`SELECT admin.enqueue_booking_reminders() AS count`;
   await prisma.requestThrottle.deleteMany({
     where: { expiresAt: { lt: new Date() } },
   });
@@ -32,8 +36,14 @@ export async function POST(request: Request) {
   const failures = results.filter(
     (result) => result.status === "rejected",
   ).length;
+  const push = await deliverCustomerPushes();
   return Response.json(
-    { refundsChecked: pending.length, failures },
-    { status: failures ? 503 : 200 },
+    {
+      push,
+      refundsChecked: pending.length,
+      failures,
+      remindersQueued: reminders[0]?.count ?? 0,
+    },
+    { status: failures || push.failed ? 503 : 200 },
   );
 }
