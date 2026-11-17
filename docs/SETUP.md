@@ -61,3 +61,18 @@ Device tokens refresh automatically and are unregistered/revoked on logout. Supp
 The mobile app currently points to `https://readify-india-multitenant.vercel.app`. In the Vercel project's server environment variables, set `FIREBASE_PROJECT_ID=zerotham`, `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` from the corresponding service-account fields. Paste each value without adding shell quotes in the Vercel dashboard. Remove the old `GOOGLE_APPLICATION_CREDENTIALS` and `FIREBASE_SERVICE_ACCOUNT_JSON` settings. Redeploy the backend with the updated push delivery code; no credential JSON file needs uploading. Restart the local backend after changing its `.env`. Confirm the authenticated minute-by-minute jobs scheduler is configured; a local `.env` change does not configure hosted environment variables or schedule a cloud job.
 
 After deployment, install/rebuild the Android app, sign in, grant notification permission, and check that Notifications reports the device as registered. A real push delivery test requires a registered phone or compatible Google Play emulator.
+
+
+## Super Admin marketing notifications
+
+The Marketing navigation tab (`/marketing`) is available only to Super Admins. Admins and partners cannot access the page or its server mutations. Home banner management remains linked at `/promotions`.
+
+Apply `20261117100000_marketing_notifications` and regenerate Prisma before deploying this backend or rebuilding the customer app. This additive migration was applied to the configured application database on 17 November 2026; table, function and customer-view column checks passed. No campaigns were created or sent during verification.
+
+Campaigns support a title, offer message, optional JPG/PNG/WEBP image up to 4 MB, and exactly one destination: a currently published listing, a service category or an HTTPS offer URL. Leave audience fields blank for all active customer profiles. City and area match whole comma-separated saved-address segments, ignoring case; area requires city. Service audience targeting selects customers with a captured purchase in that service. Filters combine, and customers without saved locations are excluded from location-filtered campaigns.
+
+Send now and scheduled delivery both use the existing authenticated minute job (`POST /api/jobs/payments`); its response includes `marketingRecipientsQueued`. The job queues up to ten due campaigns per invocation. Row locks and unique campaign/customer event keys prevent duplicate inbox entries on retries. Scheduled campaigns can be cancelled until queued. Campaign history shows the recipient count and QUEUED status, which means inbox records exist, not that every push was delivered. Existing delivery retries and device registration rules continue to apply.
+
+The mobile inbox displays campaign images and opens destinations on tap. Android push taps resolve their notification ID through the signed-in customer's inbox before following a destination. Unavailable listings and invalid links are blocked. External offer links open through the OS browser; listing and service destinations open inside the app. Existing automatic notifications continue to use the same inbox and delivery worker. iOS push delivery still requires separate Firebase/APNs configuration.
+
+Release requires deploying the web backend, keeping its authenticated scheduler running, rebuilding/installing the Android customer app and verifying with a registered device. Local unit/integration checks do not establish live device delivery. Browser visual verification was unavailable in this session because computer-use permissions were not granted.

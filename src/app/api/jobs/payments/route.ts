@@ -36,10 +36,14 @@ export async function POST(request: Request) {
   const failures = results.filter(
     (result) => result.status === "rejected",
   ).length;
+  const marketing = await prisma.$queryRaw<
+    { count: number }[]
+  >`SELECT admin.enqueue_marketing_campaigns() AS count`;
   const push = await deliverCustomerPushes();
   return Response.json(
     {
       push,
+      marketingRecipientsQueued: marketing[0]?.count ?? 0,
       refundsChecked: pending.length,
       failures,
       remindersQueued: reminders[0]?.count ?? 0,

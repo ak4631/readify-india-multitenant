@@ -70,8 +70,26 @@ export async function deliverCustomerPushes() {
         }
         await messaging.send({
           token: job.token,
-          notification: { title: notification.title, body: notification.body },
-          data: { notificationId: notification.id, screen: "Notifications" },
+          notification: {
+            title: notification.title,
+            body: notification.body,
+            ...(notification.imageUrl
+              ? { imageUrl: notification.imageUrl }
+              : {}),
+          },
+          data: {
+            notificationId: notification.id,
+            screen: "Notifications",
+            ...(notification.vendorId
+              ? { vendorId: notification.vendorId }
+              : {}),
+            ...(notification.serviceCategory
+              ? { serviceCategory: notification.serviceCategory }
+              : {}),
+            ...(notification.destinationUrl
+              ? { destinationUrl: notification.destinationUrl }
+              : {}),
+          },
           android: {
             priority: "high",
             ttl: Math.max(0, job.expires_at.getTime() - Date.now()),

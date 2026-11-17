@@ -1091,6 +1091,10 @@ model CustomerNotification {
   eventKey  String @unique @map("event_key")
   title     String
   body      String
+  imageUrl String? @map("image_url")
+  vendorId String? @map("vendor_id")
+  serviceCategory String? @map("service_category")
+  destinationUrl String? @map("destination_url")
   readAt    DateTime? @map("read_at")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1245,5 +1249,27 @@ model CustomerPushDelivery {
   @@unique([notificationId,token])
   @@index([status,nextAttemptAt])
   @@map("customer_push_deliveries")
+  @@schema("admin")
+}
+
+model MarketingCampaign {
+  id String @id @default(cuid())
+  title String
+  body String
+  imageUrl String? @map("image_url")
+  vendorId String? @map("vendor_id")
+  serviceCategory String? @map("service_category")
+  destinationUrl String? @map("destination_url")
+  targetCity String? @map("target_city")
+  targetArea String? @map("target_area")
+  targetService String? @map("target_service")
+  scheduledAt DateTime @map("scheduled_at") @db.Timestamptz(3)
+  status String @default("SCHEDULED")
+  queuedAt DateTime? @map("queued_at") @db.Timestamptz(3)
+  recipientCount Int @default(0) @map("recipient_count")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([status, scheduledAt])
+  @@map("marketing_campaigns")
   @@schema("admin")
 }

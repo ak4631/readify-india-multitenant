@@ -26,8 +26,8 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   {
-    label: "Promotional Banners",
-    href: "/promotions",
+    label: "Marketing",
+    href: "/marketing",
     requiredPermission: "vendor.read",
     icon: Store,
     platformOnly: true,
@@ -201,7 +201,7 @@ export function visibleNavigation(
       "/partners",
       "/approvals",
       "/support",
-      "/promotions",
+      "/marketing",
       "/users",
       "/vendor-categories",
       "/facilities",

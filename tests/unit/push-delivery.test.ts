@@ -128,3 +128,20 @@ it("reports missing server credentials without consuming jobs", async () => {
   expect(mocks.update).not.toHaveBeenCalled();
   expect(mocks.send).not.toHaveBeenCalled();
 });
+
+it("includes promotional images and destination data in pushes", async () => {
+  mocks.notification.imageUrl = "https://example.test/offer.png";
+  mocks.notification.vendorId = "listing";
+  await deliverCustomerPushes();
+  expect(mocks.send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      notification: expect.objectContaining({
+        imageUrl: "https://example.test/offer.png",
+      }),
+      data: expect.objectContaining({
+        notificationId: "notice",
+        vendorId: "listing",
+      }),
+    }),
+  );
+});

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
@@ -19,6 +20,9 @@ export default async function PromotionsPage() {
         title="Promotional Banners"
         description="Schedule up to four visible home promotions per customer location. Dates use your browser's local time."
       />
+      <Link href="/marketing" className="text-primary underline">
+        Marketing / Promotional notifications
+      </Link>
       <PromotionManager
         banners={banners.map((b) => ({
           ...b,
