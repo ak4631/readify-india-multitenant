@@ -1,12 +1,14 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { actionClient } from "@/lib/action-client";
 import {
   createMarketingCampaign as serverAction_createMarketingCampaign,
   cancelMarketingCampaign as serverAction_cancelMarketingCampaign,
+  previewMarketingAudience as serverAction_previewMarketingAudience,
 } from "@/server/actions/marketing.actions";
+const preview = actionClient(serverAction_previewMarketingAudience);
 const create = actionClient(serverAction_createMarketingCampaign);
 const cancel = actionClient(serverAction_cancelMarketingCampaign);
 type Campaign = {
@@ -15,6 +17,7 @@ type Campaign = {
   body: string;
   status: string;
   scheduledAt: string;
+  queuedAt: string | null;
   recipientCount: number;
   targetCity: string | null;
   targetArea: string | null;
@@ -24,24 +27,30 @@ export function CampaignManager({
   campaigns,
   listings,
   services,
+  initialAudience,
 }: {
+  initialAudience: { recipients: number; pushUsers: number };
   campaigns: Campaign[];
   listings: { id: string; name: string }[];
   services: { id: string; name: string }[];
 }) {
   const [pending, start] = useTransition();
   const [mode, setMode] = useState("now");
-  const [destination, setDestination] = useState("listing");
+  const [destination, setDestination] = useState("none");
+  const formRef = useRef<HTMLFormElement>(null);
+  const [audience, setAudience] = useState<typeof initialAudience | null>(
+    initialAudience,
+  );
   const [version, setVersion] = useState(0);
   const router = useRouter();
   const input = "mt-1 w-full rounded-lg border bg-background p-3";
   const button =
     "rounded-lg bg-primary px-4 py-3 text-primary-foreground disabled:opacity-50";
-  function run(action: () => Promise<void>, success: string) {
+  function run(action: () => Promise<void>, success?: string) {
     start(async () => {
       try {
         await action();
-        toast.success(success);
+        if (success) toast.success(success);
         router.refresh();
       } catch (e) {
         toast.error(
@@ -54,6 +63,17 @@ export function CampaignManager({
     <div className="space-y-8">
       <form
         key={version}
+        ref={formRef}
+        onChange={(event) => {
+          const target = event.target;
+          const name =
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLSelectElement
+              ? target.name
+              : "";
+          if (["targetCity", "targetArea", "targetService"].includes(name))
+            setAudience(null);
+        }}
         className="grid gap-5 rounded-xl border p-5 md:grid-cols-2"
         onSubmit={(event) => {
           event.preventDefault();
@@ -65,15 +85,24 @@ export function CampaignManager({
               "scheduledAt",
               new Date(String(form.get("scheduledAt"))).toISOString(),
             );
-          run(
-            async () => {
-              await create(form);
-              setVersion((v) => v + 1);
-            },
-            mode === "now"
-              ? "Campaign saved for delivery on the next job run"
-              : "Campaign scheduled",
-          );
+          run(async () => {
+            const receipt = await create(form);
+            toast.success(
+              receipt.status === "QUEUED"
+                ? `One-time notification queued for ${receipt.recipientCount} active users`
+                : "One-time notification scheduled",
+            );
+            if (receipt.pushStatus === "unavailable")
+              toast.message(
+                "Notification is available in app inboxes. Push delivery is not configured on this server.",
+              );
+            if (receipt.pushStatus === "pending")
+              toast.message(
+                "Notification is available in app inboxes. Device delivery will retry through the background worker.",
+              );
+            setVersion((v) => v + 1);
+            setAudience(initialAudience);
+          });
         }}
       >
         <h2 className="text-lg font-semibold md:col-span-2">
@@ -110,12 +139,13 @@ export function CampaignManager({
           />
         </label>
         <label>
-          Tap destination
+          Tap destination (optional)
           <select
             className={input}
             value={destination}
             onChange={(e) => setDestination(e.target.value)}
           >
+            <option value="none">Notification inbox — no link</option>
             <option value="listing">Listing</option>
             <option value="service">Service</option>
             <option value="offer">Offer page (HTTPS link)</option>
@@ -151,7 +181,7 @@ export function CampaignManager({
                 ))}
             </select>
           </label>
-        ) : (
+        ) : destination === "offer" ? (
           <label>
             Offer URL
             <input
@@ -162,8 +192,10 @@ export function CampaignManager({
               required
             />
           </label>
-        )}
-        <h3 className="font-semibold md:col-span-2">Audience</h3>
+        ) : null}
+        <h3 className="font-semibold md:col-span-2">
+          Audience — all active users by default
+        </h3>
         <label>
           City
           <input
@@ -196,8 +228,33 @@ export function CampaignManager({
         <p className="self-center text-sm text-muted-foreground">
           Filters combine. City and area match saved address segments. Service
           matches customers with a captured purchase in that service. Leave
-          filters blank to reach all active customers.
+          filters blank to reach all active app users, including users without
+          bookings.
         </p>
+        <div className="space-y-2 md:col-span-2" aria-live="polite">
+          <p>
+            {audience
+              ? `${audience.recipients} active users match · ${audience.pushUsers} with push-enabled devices`
+              : "Audience filters changed. Check matching users for the current count."}
+          </p>
+          <button
+            type="button"
+            disabled={pending}
+            className="rounded-lg border px-3 py-2 disabled:opacity-50"
+            onClick={() =>
+              run(async () => {
+                if (formRef.current)
+                  setAudience(await preview(new FormData(formRef.current)));
+              })
+            }
+          >
+            Check matching users
+          </button>
+          <p className="text-sm text-muted-foreground">
+            Every matching user receives this once in their app inbox. Push
+            notifications require a registered device.
+          </p>
+        </div>
         <label>
           Delivery
           <select
@@ -207,7 +264,7 @@ export function CampaignManager({
             onChange={(e) => setMode(e.target.value)}
           >
             <option value="now">Send now</option>
-            <option value="schedule">Schedule</option>
+            <option value="schedule">Schedule once</option>
           </select>
         </label>
         {mode === "schedule" && (
@@ -225,9 +282,9 @@ export function CampaignManager({
           </label>
         )}
         <p className="text-sm text-muted-foreground md:col-span-2">
-          Delivery begins on the next scheduled job run. Customers receive an
-          inbox notification; push delivery requires notifications enabled on
-          their device.
+          {mode === "now"
+            ? "Send now creates inbox notifications immediately and starts device delivery. It does not create a future schedule."
+            : "The background job delivers this notification once at or after the selected time."}
         </p>
         <button className={button} type="submit" disabled={pending}>
           {pending
@@ -257,11 +314,18 @@ export function CampaignManager({
           <article key={c.id} className="space-y-2 rounded-xl border p-5">
             <div className="flex justify-between gap-4">
               <h3 className="font-semibold">{c.title}</h3>
-              <span className="text-sm">{c.status}</span>
+              <span className="text-sm">
+                {c.status === "SCHEDULED"
+                  ? "Scheduled once"
+                  : c.status === "QUEUED"
+                    ? "Queued once"
+                    : "Cancelled"}
+              </span>
             </div>
             <p className="whitespace-pre-wrap">{c.body}</p>
             <p className="text-sm text-muted-foreground">
-              {new Date(c.scheduledAt).toLocaleString()} ·{" "}
+              {c.status === "QUEUED" ? "Queued: " : "Delivery: "}
+              {new Date(c.queuedAt ?? c.scheduledAt).toLocaleString()} ·{" "}
               {[c.targetCity, c.targetArea, c.targetService]
                 .filter(Boolean)
                 .join(" / ") || "All active customers"}{" "}

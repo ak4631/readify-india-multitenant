@@ -27,6 +27,7 @@ vi.mock("@/lib/prisma", () => ({
     customerPushToken: { deleteMany: mocks.remove },
   },
 }));
+import { prisma } from "@/lib/prisma";
 import { deliverCustomerPushes } from "@/lib/push-delivery";
 beforeEach(() => {
   vi.clearAllMocks();
@@ -143,5 +144,14 @@ it("includes promotional images and destination data in pushes", async () => {
         vendorId: "listing",
       }),
     }),
+  );
+});
+
+it("scopes an immediate campaign push attempt to that campaign", async () => {
+  await deliverCustomerPushes("current-campaign");
+  const claim = vi.mocked(prisma.$queryRaw).mock.calls[0];
+  expect(claim.slice(1)).toEqual(["current-campaign", "current-campaign"]);
+  expect((claim[0] as TemplateStringsArray).join("")).toContain(
+    "n.event_key='marketing:'",
   );
 });

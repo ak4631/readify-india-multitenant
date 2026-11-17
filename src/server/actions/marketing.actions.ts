@@ -7,38 +7,66 @@ import { PublicActionError } from "@/lib/public-action-error";
 import { uploadVendorPhoto, deleteVendorPhoto } from "@/lib/imagekit";
 import { MAX_UPLOAD_SIZE_BYTES } from "@/lib/upload-limits";
 import { writeAuditLog } from "@/lib/audit";
+import { deliverCustomerPushes } from "@/lib/push-delivery";
 
 const text = z
   .string()
   .trim()
   .max(100)
   .transform((v) => v || null);
+const audienceSchema = z
+  .object({
+    targetCity: text.prefault(""),
+    targetArea: text.prefault(""),
+    targetService: text.prefault(""),
+  })
+  .refine(
+    (v) => !v.targetArea || !!v.targetCity,
+    "Area targeting requires a city",
+  );
+
+export async function previewMarketingAudience(form: FormData) {
+  await requireSuperAdmin();
+  const parsed = audienceSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success)
+    throw new PublicActionError(
+      parsed.error.issues.map((i) => i.message).join(". "),
+    );
+  const { targetCity, targetArea, targetService } = parsed.data;
+  const rows = await prisma.$queryRaw<
+    { recipients: number; pushUsers: number }[]
+  >`SELECT count(*)::int AS recipients, count(*) FILTER(WHERE EXISTS(SELECT 1 FROM admin.customer_push_tokens t WHERE t.user_id=a.user_id))::int AS "pushUsers" FROM admin.marketing_audience(${targetCity},${targetArea},${targetService}) a`;
+  return rows[0] ?? { recipients: 0, pushUsers: 0 };
+}
+
 const schema = z
   .object({
     title: z.string().trim().min(3).max(150),
     body: z.string().trim().min(3).max(1000),
-    vendorId: text,
+    vendorId: text.prefault(""),
     serviceCategory: z
       .union([
         z.literal(""),
         z.enum(["library", "gym", "co_working_space", "exam_hub"]),
       ])
+      .default("")
       .transform((v) => v || null),
     destinationUrl: z
       .string()
       .trim()
       .max(2000)
+      .default("")
       .transform((v) => v || null),
-    targetCity: text,
-    targetArea: text,
-    targetService: text,
+    targetCity: text.prefault(""),
+    targetArea: text.prefault(""),
+    targetService: text.prefault(""),
     scheduledAt: z.coerce.date(),
   })
   .refine(
     (v) =>
       [v.vendorId, v.serviceCategory, v.destinationUrl].filter(Boolean)
-        .length === 1,
-    "Choose exactly one listing, service or HTTPS offer link",
+        .length <= 1,
+    "Choose at most one listing, service or HTTPS offer link",
   )
   .refine(
     (v) => !v.targetArea || !!v.targetCity,
@@ -96,8 +124,13 @@ export async function createMarketingCampaign(form: FormData) {
       throw new PublicActionError("Upload a JPG, PNG or WEBP image up to 4 MB");
     uploaded = await uploadVendorPhoto("marketing", file);
   }
+  let result: {
+    id: string;
+    recipientCount: number;
+    status: "QUEUED" | "SCHEDULED";
+  };
   try {
-    await prisma.$transaction(async (tx) => {
+    result = await prisma.$transaction(async (tx) => {
       const campaign = await tx.marketingCampaign.create({
         data: {
           ...data,
@@ -105,19 +138,56 @@ export async function createMarketingCampaign(form: FormData) {
           createdBy: session.user.id,
         },
       });
+      let recipientCount = 0;
+      if (mode === "now") {
+        const rows = await tx.$queryRaw<
+          { count: number }[]
+        >`SELECT admin.enqueue_marketing_campaign(${campaign.id}) AS count`;
+        recipientCount = rows[0]?.count ?? 0;
+        if (!recipientCount)
+          throw new PublicActionError(
+            "No active users match this audience. Clear the filters to notify all active users.",
+          );
+      }
       await writeAuditLog(tx, {
         userId: session.user.id,
         action: "CREATE_MARKETING_CAMPAIGN",
         entityType: "marketing_campaign",
         entityId: campaign.id,
-        newValue: campaign,
+        newValue: {
+          ...campaign,
+          recipientCount,
+          status: mode === "now" ? "QUEUED" : "SCHEDULED",
+        },
       });
+      return {
+        id: campaign.id,
+        recipientCount,
+        status: mode === "now" ? ("QUEUED" as const) : ("SCHEDULED" as const),
+      };
     });
   } catch (error) {
     if (uploaded) await deleteVendorPhoto(uploaded.fileId).catch(() => {});
     throw error;
   }
+  // Inbox creation has committed. A push-provider failure must not turn a successful
+  // broadcast into a failed form submission and invite the sender to duplicate it.
+  let pushStatus: "pending" | "attempted" | "unavailable" | "scheduled" =
+    "scheduled";
+  if (mode === "now") {
+    try {
+      const push = await deliverCustomerPushes(result.id);
+      pushStatus = !push.configured
+        ? "unavailable"
+        : push.failed
+          ? "pending"
+          : "attempted";
+    } catch {
+      pushStatus = "pending";
+    }
+  }
   revalidatePath("/marketing");
+  return { ...result, pushStatus };
 }
 
 export async function cancelMarketingCampaign(id: string) {

@@ -113,3 +113,71 @@ it("customers cannot read campaigns or invoke the worker and can only read their
   expect(rows).toHaveLength(1);
   await db.exec(`RESET ROLE`);
 });
+
+it("queues a broadcast with no destination once, including active profiles without purchases or locations", async () => {
+  await db.exec(`INSERT INTO public.profiles(id,full_name,role) VALUES('44444444-4444-4444-8444-444444444444','New customer','customer');
+    INSERT INTO admin.marketing_campaigns(id,title,body,scheduled_at,created_by) VALUES('no-link','Announcement','For everyone',now(),'staff'),('other-due','Other','Pending',now(),'staff');`);
+  const audience = await db.query(`SELECT * FROM admin.marketing_audience()`);
+  expect(audience.rows).toHaveLength(3);
+  expect(
+    (
+      await db.query<{ n: number }>(
+        `SELECT admin.enqueue_marketing_campaign('no-link') n`,
+      )
+    ).rows[0].n,
+  ).toBe(3);
+  expect(
+    (
+      await db.query<{ n: number }>(
+        `SELECT admin.enqueue_marketing_campaign('no-link') n`,
+      )
+    ).rows[0].n,
+  ).toBe(0);
+  const records = await db.query<{
+    vendor_id: string | null;
+    destination_url: string | null;
+    service_category: string | null;
+  }>(
+    `SELECT * FROM admin.customer_notifications WHERE event_key LIKE 'marketing:no-link:%'`,
+  );
+  expect(records.rows).toHaveLength(3);
+  expect(
+    records.rows.every(
+      (n) =>
+        n.vendor_id === null &&
+        n.destination_url === null &&
+        n.service_category === null,
+    ),
+  ).toBe(true);
+  expect(
+    (
+      await db.query<{ status: string }>(
+        `SELECT status FROM admin.marketing_campaigns WHERE id='other-due'`,
+      )
+    ).rows[0].status,
+  ).toBe("SCHEDULED");
+  expect(
+    (
+      await db.query<{ status: string }>(
+        `SELECT status FROM admin.marketing_campaigns WHERE id='no-link'`,
+      )
+    ).rows[0].status,
+  ).toBe("QUEUED");
+});
+it("the single-campaign entry point respects future schedules and customer authorization", async () => {
+  expect(
+    (
+      await db.query<{ n: number }>(
+        `SELECT admin.enqueue_marketing_campaign('future') n`,
+      )
+    ).rows[0].n,
+  ).toBe(0);
+  await db.exec(`SET ROLE authenticated`);
+  await expect(
+    db.query(`SELECT * FROM admin.marketing_audience()`),
+  ).rejects.toThrow(/permission denied/);
+  await expect(
+    db.query(`SELECT admin.enqueue_marketing_campaign('future')`),
+  ).rejects.toThrow(/permission denied/);
+  await db.exec(`RESET ROLE`);
+});

@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { previewMarketingAudience } from "@/server/actions/marketing.actions";
 import { requireSuperAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/layout/page-header";
 import { CampaignManager } from "@/components/promotions/campaign-manager";
 export default async function MarketingPage() {
   await requireSuperAdmin();
-  const [campaigns, listings, services] = await Promise.all([
+  const [campaigns, listings, services, audience] = await Promise.all([
     prisma.marketingCampaign.findMany({
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -17,12 +18,13 @@ export default async function MarketingPage() {
       select: { slug: true, name: true },
       orderBy: { name: "asc" },
     }),
+    previewMarketingAudience(new FormData()),
   ]);
   return (
     <div className="space-y-6">
       <PageHeader
         title="Marketing"
-        description="Create promotional notifications, choose your audience and schedule delivery."
+        description="Send one-time notifications to all active users or a filtered audience. Send now or choose a future delivery time."
       />
       <nav aria-label="Marketing sections" className="flex gap-4 border-b pb-3">
         <Link
@@ -35,6 +37,7 @@ export default async function MarketingPage() {
         <Link href="/promotions">Home banners</Link>
       </nav>
       <CampaignManager
+        initialAudience={audience}
         campaigns={campaigns.map((c) => ({
           ...c,
           scheduledAt: c.scheduledAt.toISOString(),

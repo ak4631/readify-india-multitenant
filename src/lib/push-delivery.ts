@@ -6,7 +6,7 @@ const invalidTokenCodes = new Set([
   "messaging/registration-token-not-registered",
   "messaging/invalid-registration-token",
 ]);
-export async function deliverCustomerPushes() {
+export async function deliverCustomerPushes(campaignId?: string) {
   const messaging = firebasePushMessaging();
   if (!messaging) return { configured: false, sent: 0, failed: 0 };
   await prisma.customerPushDelivery.updateMany({
@@ -25,7 +25,7 @@ export async function deliverCustomerPushes() {
     }[]
   >`
     UPDATE admin.customer_push_deliveries SET locked_until=now()+interval '2 minutes',attempts=attempts+1
-    WHERE id IN (SELECT id FROM admin.customer_push_deliveries WHERE status='PENDING' AND attempts<5 AND next_attempt_at<=now() AND expires_at>now() AND (locked_until IS NULL OR locked_until<now()) ORDER BY next_attempt_at LIMIT 20 FOR UPDATE SKIP LOCKED)
+    WHERE id IN (SELECT id FROM admin.customer_push_deliveries WHERE status='PENDING' AND attempts<5 AND next_attempt_at<=now() AND expires_at>now() AND (locked_until IS NULL OR locked_until<now()) AND (${campaignId ?? null}::text IS NULL OR EXISTS(SELECT 1 FROM admin.customer_notifications n WHERE n.id=notification_id AND n.event_key='marketing:'||${campaignId ?? null}::text||':'||n.user_id)) ORDER BY next_attempt_at LIMIT 20 FOR UPDATE SKIP LOCKED)
     RETURNING id,notification_id,token,user_id,expires_at,attempts`;
   let sent = 0,
     failed = 0;
