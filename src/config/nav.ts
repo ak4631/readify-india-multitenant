@@ -207,6 +207,7 @@ export function visibleNavigation(
       "/facilities",
       "/reviews",
       "/audit-logs",
+      "/settings",
     ];
     return items
       .filter((item) => order.includes(item.href))

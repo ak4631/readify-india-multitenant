@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { visibleNavigation } from "@/config/nav";
-import { ROLE_PERMISSIONS, type PermissionKey } from "@/config/permissions";
+import {
+  PERMISSIONS,
+  ROLE_PERMISSIONS,
+  type PermissionKey,
+} from "@/config/permissions";
 describe("Library workspace modules", () => {
+  it("shows payment Settings in the Super Admin sidebar", () => {
+    const items = visibleNavigation(
+      PERMISSIONS.map((permission) => permission.key),
+      ["SUPER_ADMIN"],
+    );
+    expect(items.find((item) => item.href === "/settings")?.label).toBe(
+      "Settings",
+    );
+  });
+
   it("provides all 13 owner modules in roadmap order", () => {
     const items = visibleNavigation(
       ROLE_PERMISSIONS.PARTNER_ADMIN as PermissionKey[],
