@@ -67,7 +67,9 @@ export function MembershipVerification({ targetId }: { targetId?: string }) {
             placeholder="Booking ID / existing QR"
             required
           />
-          <Button disabled={pending}>Find</Button>
+          <Button type="submit" disabled={pending}>
+            Find
+          </Button>
         </form>
       )}
       {review && (
@@ -153,6 +155,7 @@ export function MembershipVerification({ targetId }: { targetId?: string }) {
                 </p>
               )}
               <Button
+                type="submit"
                 disabled={
                   pending ||
                   !["CREATED", "CAPTURED"].includes(review.paymentStatus) ||

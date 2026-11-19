@@ -77,10 +77,17 @@ export function PaymentSettingsForm({
         Unpaid reservations release capacity after their deadline. Changes apply
         to new checkouts; existing payments continue processing.
       </p>
+      {!value.onlineEnabled && !value.offlineEnabled && (
+        <p role="alert" className="text-sm text-destructive">
+          Keep at least one payment method enabled.
+        </p>
+      )}
       <Button
+        type="submit"
+        aria-busy={pending}
         disabled={pending || (!value.onlineEnabled && !value.offlineEnabled)}
       >
-        Save payment options
+        {pending ? "Saving…" : "Save payment options"}
       </Button>
     </form>
   );
