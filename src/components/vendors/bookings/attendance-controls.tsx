@@ -1,4 +1,5 @@
 "use client";
+import { MembershipVerification } from "@/components/subscriptions/membership-verification";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -46,6 +47,7 @@ export function AttendanceControls({
         verified purchases within their reserved time can check in. A no-show is
         not automatically cancelled.
       </p>
+      {canEdit && <MembershipVerification />}
       {canEdit && (
         <form
           className="flex gap-3"

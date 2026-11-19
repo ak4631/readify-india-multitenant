@@ -3,6 +3,7 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { PaymentOrder, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getPaymentSettings } from "@/lib/payment-settings";
 import { paymentConfig, razorpay, type GatewayPayment } from "@/lib/razorpay";
 import {
   captureDisposition,
@@ -14,6 +15,7 @@ const purchaseFields = {
   vendorId: z.string().min(1).max(100),
   planId: z.string().min(1).max(100),
   date: z.iso.date(),
+  paymentMethod: z.enum(["ONLINE", "OFFLINE"]).default("ONLINE"),
   idempotencyKey: z.uuid(),
 };
 export const checkoutSchema = z.discriminatedUnion("kind", [
@@ -45,6 +47,7 @@ export const checkoutSchema = z.discriminatedUnion("kind", [
     targetId: z.string().min(1).max(100),
     planId: z.string().min(1).max(100),
     hours: z.number().int().min(1).max(24),
+    paymentMethod: z.enum(["ONLINE", "OFFLINE"]).default("ONLINE"),
     idempotencyKey: z.uuid(),
   }),
 ]);
@@ -72,7 +75,13 @@ async function setEntitlement(
   else
     await tx.subscription.update({
       where: { id: order.targetId },
-      data: { status: confirmed ? "ACTIVE" : "CANCELLED" },
+      data: {
+        status: confirmed
+          ? order.verificationRequired
+            ? "PENDING"
+            : "ACTIVE"
+          : "CANCELLED",
+      },
     });
 }
 
@@ -80,10 +89,19 @@ export async function createCheckout(
   userId: string,
   input: z.infer<typeof checkoutSchema>,
 ) {
-  paymentConfig();
-  if (!process.env.CHECKOUT_BASE_URL || !process.env.CHECKOUT_SIGNING_SECRET)
-    throw new Error("Checkout is not configured");
-  const { idempotencyKey, ...purchase } = input;
+  const method = input.paymentMethod;
+  if (method === "ONLINE") {
+    paymentConfig();
+    if (!process.env.CHECKOUT_BASE_URL || !process.env.CHECKOUT_SIGNING_SECRET)
+      throw new Error("Checkout is not configured");
+  }
+  const { idempotencyKey, ...purchaseFields } = input;
+  delete (purchaseFields as { paymentMethod?: string }).paymentMethod;
+  // Preserve hashes for gateway checkouts created before payment methods existed.
+  const purchase =
+    method === "ONLINE"
+      ? purchaseFields
+      : { ...purchaseFields, paymentMethod: method };
   const requestHash = createHash("sha256")
     .update(JSON.stringify(purchase))
     .digest("hex");
@@ -101,6 +119,13 @@ export async function createCheckout(
         throw new Error("Checkout key already used for a different request");
       return existing;
     }
+    const settings = await getPaymentSettings(tx);
+    if (
+      !(method === "ONLINE" ? settings.onlineEnabled : settings.offlineEnabled)
+    )
+      throw new Error(
+        "This payment method is currently disabled. Please choose another method.",
+      );
     const active = await tx.$queryRaw<
       { active: boolean }[]
     >`SELECT is_active AS active FROM public.profiles WHERE id::text = ${userId}`;
@@ -128,9 +153,23 @@ export async function createCheckout(
     const hold = holds[0];
     if (!hold || !hold.starts_at || hold.starts_at <= new Date())
       throw new Error("Choose a future access window");
+    const term =
+      input.kind === "subscription"
+        ? await tx.membershipPlan.findUniqueOrThrow({
+            where: { id: input.planId },
+            select: { durationUnit: true, durationValue: true },
+          })
+        : null;
     return tx.paymentOrder.create({
       data: {
         id: randomUUID(),
+        paymentMethod: method,
+        verificationRequired: input.kind !== "extension",
+        membershipMonths: term
+          ? term.durationUnit === "YEARS"
+            ? term.durationValue * 12
+            : term.durationValue
+          : null,
         userId,
         vendorId: input.kind === "extension" ? hold.vendor_id! : input.vendorId,
         targetType: input.kind === "extension" ? "flex" : input.kind,
@@ -138,14 +177,21 @@ export async function createCheckout(
         amountPaise: hold.amount_paise,
         startsAt: hold.starts_at,
         expiresAt: new Date(
-          Math.min(Date.now() + 15 * 60_000, hold.starts_at.getTime()),
+          method === "OFFLINE"
+            ? hold.starts_at.getTime() + settings.offlineHoldHours * 3_600_000
+            : Math.min(Date.now() + 15 * 60_000, hold.starts_at.getTime()),
         ),
         idempotencyKey,
         requestHash,
       },
     });
   });
-  if (order.status !== "CREATED" || order.expiresAt <= new Date()) return order;
+  if (
+    order.paymentMethod === "OFFLINE" ||
+    order.status !== "CREATED" ||
+    order.expiresAt <= new Date()
+  )
+    return order;
   if (order.gatewayOrderId) return order;
   // Receipt is stable. Reconcile by receipt after a network timeout before
   // creating another remote order. Only the locally bound remote id is accepted.
@@ -212,7 +258,7 @@ export async function recordCapture(payment: GatewayPayment, eventId: string) {
   const reference = await prisma.paymentOrder.findUnique({
     where: { gatewayOrderId: payment.order_id },
   });
-  if (!reference) return; // An event for another product/account integration.
+  if (!reference || reference.paymentMethod === "OFFLINE") return; // An event for another product/account integration.
   if (
     payment.status !== "captured" ||
     payment.amount !== reference.amountPaise ||
@@ -277,7 +323,9 @@ export async function recordCapture(payment: GatewayPayment, eventId: string) {
               : "Payment received after reservation expired",
           body:
             disposition === "confirm"
-              ? "Your payment is verified and your seat is reserved. Find the details in My Bookings or My Subscriptions."
+              ? order.verificationRequired
+                ? "Your payment is verified and your seat is reserved. Complete customer verification and selfie upload at the partner location to activate membership."
+                : "Your payment is verified and your seat is reserved. Find the details in My Bookings or My Subscriptions."
               : "Your seat could not be confirmed. A full refund will be processed.",
         },
       });
@@ -315,6 +363,7 @@ export async function cancelPaidPurchase(
         cancelledAt,
         status:
           order.status === "CAPTURED" &&
+          order.paymentMethod !== "OFFLINE" &&
           refundEligible(order.startsAt, cancelledAt, actor.kind)
             ? "REFUND_PENDING"
             : "CANCELLED",
@@ -336,9 +385,12 @@ export async function cancelPaidPurchase(
         title: "Reservation cancelled",
         body:
           order.status === "CAPTURED" &&
+          order.paymentMethod !== "OFFLINE" &&
           refundEligible(order.startsAt, cancelledAt, actor.kind)
             ? "A full refund has been requested."
-            : "Your reservation was cancelled. Refunds are available only before the reserved start.",
+            : order.paymentMethod === "OFFLINE" && order.status === "CAPTURED"
+              ? "Your reservation was cancelled. Contact the partner about any refund for payment made at the location."
+              : "Your reservation was cancelled. Refunds are available only before the reserved start.",
       },
     });
   });
@@ -393,7 +445,7 @@ export async function expireSubscriptions() {
       { id: string; user_id: string; plan_name: string | null }[]
     >`
       UPDATE admin.subscriptions s SET status='EXPIRED',updated_at=now() FROM admin.vendors v
-      WHERE v.id=s.vendor_id AND s.status='ACTIVE' AND s.end_date::date<=(now() AT TIME ZONE v.time_zone)::date
+      WHERE v.id=s.vendor_id AND (s.status='ACTIVE' OR (s.status='PENDING' AND EXISTS(SELECT 1 FROM admin.payment_orders o WHERE o.target_id=s.id AND o.status='CAPTURED'))) AND s.end_date::date<=(now() AT TIME ZONE v.time_zone)::date
       RETURNING s.id,s.user_id,s.plan_name`;
     for (const row of expired)
       await tx.customerNotification.upsert({

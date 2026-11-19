@@ -1040,6 +1040,9 @@ model PaymentOrder {
   commissionPaise   Int? @map("commission_paise")
   currency          String @default("INR")
   status            String @default("CREATED")
+  paymentMethod     String @default("ONLINE") @map("payment_method")
+  membershipMonths Int? @map("membership_months")
+  verificationRequired Boolean @default(false) @map("verification_required")
   gatewayOrderId    String? @unique @map("gateway_order_id")
   gatewayPaymentId  String? @unique @map("gateway_payment_id")
   refundId          String? @unique @map("refund_id")
@@ -1271,5 +1274,27 @@ model MarketingCampaign {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   @@index([status, scheduledAt])
   @@map("marketing_campaigns")
+  @@schema("admin")
+}
+
+model PaymentSettings {
+  id String @id @default("platform")
+  onlineEnabled Boolean @default(true) @map("online_enabled")
+  offlineEnabled Boolean @default(true) @map("offline_enabled")
+  offlineHoldHours Int @default(24) @map("offline_hold_hours")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("payment_settings")
+  @@schema("admin")
+}
+
+model MembershipCard {
+  id String @id @default(cuid())
+  orderId String @unique @map("order_id")
+  customerName String @map("customer_name")
+  photoPath String @map("photo_path")
+  verifiedBy String @map("verified_by")
+  verifiedAt DateTime @default(now()) @map("verified_at") @db.Timestamptz(3)
+  activatedAt DateTime @default(now()) @map("activated_at") @db.Timestamptz(3)
+  @@map("membership_cards")
   @@schema("admin")
 }

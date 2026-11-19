@@ -1,3 +1,6 @@
+import { getCurrentSession, isSuperAdmin } from "@/lib/rbac";
+import { getPaymentSettings } from "@/lib/payment-settings";
+import { PaymentSettingsForm } from "@/components/subscriptions/payment-settings-form";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListPagination } from "@/components/layout/list-pagination";
@@ -10,6 +13,9 @@ export default async function SettingsPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const params = await searchParams;
+  const session = await getCurrentSession();
+  const paymentSettings =
+    session && isSuperAdmin(session) ? await getPaymentSettings() : null;
   const vendors = await listVendorsPage({ page: parsePage(params.page) });
   return (
     <div className="space-y-6">
@@ -17,6 +23,7 @@ export default async function SettingsPage({
         title="Settings"
         description="Business profiles, operating hours and launch policies."
       />
+      {paymentSettings && <PaymentSettingsForm initial={paymentSettings} />}
       <section className="space-y-2 rounded-xl border p-5">
         <h2 className="font-semibold">Booking and cancellation rules</h2>
         <p>
@@ -24,8 +31,9 @@ export default async function SettingsPage({
           refund afterward. Partner cancellations request a full refund.
         </p>
         <p>
-          Checkout holds last up to 15 minutes. Access starts only after payment
-          capture is verified.
+          Online checkout holds last up to 15 minutes. Pay at Partner bookings
+          use their displayed payment deadline. New memberships require payment
+          confirmation and in-person customer verification.
         </p>
         <p>
           Each checkout includes a ₹6 customer fee. Partner commission and

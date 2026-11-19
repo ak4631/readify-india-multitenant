@@ -120,6 +120,25 @@ describe("verified payment state transitions", () => {
     expect(state.order.status).toBe("CANCELLED");
     expect(state.gateway).not.toHaveBeenCalled();
   });
+  it("keeps a newly paid subscription pending until the partner verifies it", async () => {
+    state.order.targetType = "subscription";
+    state.order.verificationRequired = true;
+    await recordCapture(payment, "capture");
+    expect(state.order.status).toBe("CAPTURED");
+    expect(state.bookingUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "PENDING" } }),
+    );
+  });
+  it("records offline cancellation without requesting a gateway refund", async () => {
+    state.order.paymentMethod = "OFFLINE";
+    state.order.status = "CAPTURED";
+    await cancelPaidPurchase("booking", {
+      userId: "customer",
+      kind: "partner",
+    });
+    expect(state.order.status).toBe("CANCELLED");
+    expect(state.gateway).not.toHaveBeenCalled();
+  });
   it("rejects cancellation by a different customer", async () => {
     await expect(
       cancelPaidPurchase("booking", { userId: "intruder", kind: "customer" }),

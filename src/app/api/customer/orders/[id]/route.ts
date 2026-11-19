@@ -42,6 +42,8 @@ export async function GET(
     });
     return Response.json({
       id: order.id,
+      paymentMethod: order.paymentMethod,
+      expiresAt: order.expiresAt,
       targetId: order.targetId,
       status: order.status,
       amountPaise: order.amountPaise,

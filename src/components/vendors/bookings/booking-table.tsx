@@ -1,5 +1,6 @@
 "use client";
 
+import { MembershipVerification } from "@/components/subscriptions/membership-verification";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -106,6 +107,9 @@ export function BookingTable({ bookings }: { bookings: VendorBookingRow[] }) {
               </TableCell>
               {canManage && (
                 <TableCell className="text-right">
+                  {["PENDING", "CONFIRMED"].includes(b.status) && (
+                    <MembershipVerification targetId={b.id} />
+                  )}
                   {(b.status === "PENDING" || b.status === "CONFIRMED") && (
                     <Button
                       variant="outline"

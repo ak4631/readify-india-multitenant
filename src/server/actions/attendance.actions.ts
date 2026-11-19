@@ -28,6 +28,13 @@ export async function checkInByCode(code: string) {
       throw new PublicActionError(
         "Payment has not been verified for this booking",
       );
+    if (
+      order.verificationRequired &&
+      !(await tx.membershipCard.findUnique({ where: { orderId: order.id } }))
+    )
+      throw new PublicActionError(
+        "Complete customer verification and membership activation first.",
+      );
     const active = await tx.$queryRaw<{ date: string }[]>`
       SELECT (now() AT TIME ZONE v.time_zone)::date::text AS date FROM admin.seat_reservations r
       JOIN admin.library_seats s ON s.id=r.seat_id JOIN admin.vendors v ON v.id=s.vendor_id

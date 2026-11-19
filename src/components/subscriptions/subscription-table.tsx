@@ -1,5 +1,6 @@
 "use client";
 
+import { MembershipVerification } from "@/components/subscriptions/membership-verification";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -63,6 +64,7 @@ export function SubscriptionTable({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const canVerify = usePermission("vendor.update");
   const canCancel = usePermission("subscription.cancel");
 
   function handleCancel(subscriptionId: string) {
@@ -78,7 +80,10 @@ export function SubscriptionTable({
   }
 
   const columnCount =
-    4 + (showVendor ? 1 : 0) + (showCustomer ? 1 : 0) + (canCancel ? 1 : 0);
+    6 +
+    (showVendor ? 1 : 0) +
+    (showCustomer ? 1 : 0) +
+    (canCancel || canVerify ? 1 : 0);
 
   return (
     <Table>
@@ -92,7 +97,9 @@ export function SubscriptionTable({
           <TableHead>End date</TableHead>
           <TableHead>Amount</TableHead>
           <TableHead>Status</TableHead>
-          {canCancel && <TableHead className="text-right">Actions</TableHead>}
+          {(canCancel || canVerify) && (
+            <TableHead className="text-right">Actions</TableHead>
+          )}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -131,19 +138,24 @@ export function SubscriptionTable({
                 {subscription.status}
               </Badge>
             </TableCell>
-            {canCancel && (
+            {(canCancel || canVerify) && (
               <TableCell className="text-right">
-                {subscription.status === "ACTIVE" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isPending}
-                    aria-busy={isPending}
-                    onClick={() => handleCancel(subscription.id)}
-                  >
-                    Cancel
-                  </Button>
-                )}
+                {canVerify &&
+                  ["PENDING", "ACTIVE"].includes(subscription.status) && (
+                    <MembershipVerification targetId={subscription.id} />
+                  )}
+                {canCancel &&
+                  ["PENDING", "ACTIVE"].includes(subscription.status) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isPending}
+                      aria-busy={isPending}
+                      onClick={() => handleCancel(subscription.id)}
+                    >
+                      Cancel
+                    </Button>
+                  )}
               </TableCell>
             )}
           </TableRow>

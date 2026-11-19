@@ -90,3 +90,16 @@ export async function deleteVendorPhoto(fileId: string): Promise<void> {
   const client = getClient();
   await client.files.delete(fileId);
 }
+
+export async function uploadMembershipPhoto(orderId: string, file: File) {
+  const response = await getClient().files.upload({
+    file,
+    fileName: `selfie-${Date.now()}.${file.type === "image/png" ? "png" : "jpg"}`,
+    folder: `/membership-photos/${orderId}`,
+    isPrivateFile: true,
+    useUniqueFileName: true,
+  });
+  if (!response.filePath || !response.fileId)
+    throw new Error("Photo upload failed");
+  return { path: response.filePath, fileId: response.fileId };
+}

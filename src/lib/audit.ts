@@ -2,6 +2,8 @@ import { headers } from "next/headers";
 import type { Prisma } from "@/generated/prisma/client";
 
 export const AUDIT_ACTIONS = [
+  "UPDATE_PAYMENT_SETTINGS",
+  "ACTIVATE_MEMBERSHIP",
   "CREATE_MARKETING_CAMPAIGN",
   "CANCEL_MARKETING_CAMPAIGN",
   "SAVE_PROMOTIONAL_BANNER",
@@ -88,6 +90,8 @@ export const AUDIT_ACTIONS = [
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export type AuditEntityType =
+  | "payment_settings"
+  | "membership_card"
   | "marketing_campaign"
   | "promotional_banner"
   | "customer_support"
