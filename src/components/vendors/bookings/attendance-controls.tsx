@@ -1,4 +1,5 @@
 "use client";
+import { QrScanner } from "@/components/qr/qr-scanner";
 import { MembershipVerification } from "@/components/subscriptions/membership-verification";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -43,11 +44,12 @@ export function AttendanceControls({
     <section className="space-y-4 rounded-xl border p-5">
       <h2 className="text-lg font-semibold">Check-in / check-out</h2>
       <p className="text-sm text-muted-foreground">
-        Scan with a keyboard scanner or enter the customer booking code. Only
-        verified purchases within their reserved time can check in. A no-show is
-        not automatically cancelled.
+        Scan the customer QR with your camera, use a keyboard scanner, or enter
+        the Booking ID. Only verified purchases within their reserved time can
+        check in. A no-show is not automatically cancelled.
       </p>
       {canEdit && <MembershipVerification />}
+      {canEdit && <QrScanner disabled={pending} onScan={setCode} />}
       {canEdit && (
         <form
           className="flex gap-3"

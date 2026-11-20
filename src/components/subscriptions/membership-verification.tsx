@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { QrScanner } from "@/components/qr/qr-scanner";
 import { Input } from "@/components/ui/input";
 import { actionClient } from "@/lib/action-client";
 import {
@@ -50,6 +51,16 @@ export function MembershipVerification({ targetId }: { targetId?: string }) {
     <section className="space-y-3 rounded-lg border p-4 text-left min-w-64">
       <h3 className="font-semibold">Customer verification</h3>
       {!targetId && (
+        <QrScanner
+          disabled={pending}
+          onScan={(value) => {
+            setCode(value);
+            setReview(null);
+            run(async () => setReview(await reviewMembershipBooking(value)));
+          }}
+        />
+      )}
+      {!targetId && (
         <form
           className="flex gap-2"
           onSubmit={(e) => {
@@ -77,7 +88,10 @@ export function MembershipVerification({ targetId }: { targetId?: string }) {
           <p className="font-medium">
             {review.customerName} · {review.vendorName}
           </p>
-          <p className="text-sm">Booking: {review.targetId}</p>
+          <p className="text-sm">
+            Booking ID:{" "}
+            <span className="select-all break-all">{review.bookingCode}</span>
+          </p>
           <p className="text-sm">
             {review.planName} · Daily slot:{" "}
             {review.slotLabel ?? "See booking details"}

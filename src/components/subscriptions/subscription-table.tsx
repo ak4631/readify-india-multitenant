@@ -80,7 +80,7 @@ export function SubscriptionTable({
   }
 
   const columnCount =
-    6 +
+    7 +
     (showVendor ? 1 : 0) +
     (showCustomer ? 1 : 0) +
     (canCancel || canVerify ? 1 : 0);
@@ -91,6 +91,7 @@ export function SubscriptionTable({
         <TableRow>
           {showCustomer && <TableHead>Customer</TableHead>}
           {showVendor && <TableHead>Partner listing</TableHead>}
+          <TableHead>Booking ID</TableHead>
           <TableHead>Plan</TableHead>
           <TableHead>Seat &amp; daily slot</TableHead>
           <TableHead>Start date</TableHead>
@@ -113,6 +114,9 @@ export function SubscriptionTable({
                 {subscription.vendorName ?? subscription.vendor?.name}
               </TableCell>
             )}
+            <TableCell>
+              <code className="block max-w-64 select-all break-all text-xs">{`subscription:${subscription.id}`}</code>
+            </TableCell>
             <TableCell>
               {subscription.planName ?? subscription.plan?.name}
             </TableCell>

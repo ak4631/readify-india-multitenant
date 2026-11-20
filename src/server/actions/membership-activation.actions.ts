@@ -54,17 +54,18 @@ export async function reviewMembershipBooking(code: string) {
     select: { name: true, timeZone: true },
   });
   const details = await prisma.$queryRaw<
-    { planName: string; slotLabel: string | null }[]
+    { planName: string; slotLabel: string | null; bookingCode: string }[]
   >`
-    SELECT coalesce(s.plan_name,p.name,'Booking') AS "planName",s.slot_start_time::text AS "slotLabel"
+    SELECT coalesce(s.plan_name,p.name,'Booking') AS "planName",s.slot_start_time::text AS "slotLabel",'subscription:'||s.id AS "bookingCode"
     FROM admin.subscriptions s LEFT JOIN admin.membership_plans p ON p.id=s.plan_id WHERE s.id=${order.targetId}
-    UNION ALL SELECT p.name,f.slot_start::text FROM admin.flex_bookings f JOIN admin.membership_plans p ON p.id=f.plan_id WHERE f.id=${order.targetId}
-    UNION ALL SELECT coalesce(p.name,'Booking'),coalesce(b.time_label,b.start_at::text) FROM admin.bookings b LEFT JOIN admin.membership_plans p ON p.id=b.plan_id WHERE b.id=${order.targetId}`;
+    UNION ALL SELECT p.name,f.slot_start::text,f.booking_code FROM admin.flex_bookings f JOIN admin.membership_plans p ON p.id=f.plan_id WHERE f.id=${order.targetId}
+    UNION ALL SELECT coalesce(p.name,'Booking'),coalesce(b.time_label,b.start_at::text),coalesce(b.booking_code,b.id) FROM admin.bookings b LEFT JOIN admin.membership_plans p ON p.id=b.plan_id WHERE b.id=${order.targetId}`;
   const card = await prisma.membershipCard.findUnique({
     where: { orderId: order.id },
   });
   return {
     targetId: order.targetId,
+    bookingCode: details[0]?.bookingCode ?? order.targetId,
     customerName: profiles.get(order.userId)?.fullName ?? "Customer",
     vendorName: vendor.name,
     timeZone: vendor.timeZone,
@@ -227,6 +228,8 @@ export async function activateMembership(form: FormData) {
   } finally {
     if (!used) await deleteVendorPhoto(photo.fileId).catch(() => {});
   }
+  revalidatePath("/dashboard");
+  revalidatePath("/payments");
   revalidatePath("/subscriptions");
   revalidatePath("/bookings");
   revalidatePath(`/vendors/${reference.vendorId}`);

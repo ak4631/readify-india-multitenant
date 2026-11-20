@@ -1,3 +1,5 @@
+import { PendingPayments } from "@/components/subscriptions/pending-payments";
+import { listPendingPayments } from "@/server/actions/pending-payments.actions";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { PageHeader } from "@/components/layout/page-header";
 import { getDashboardMetrics } from "@/server/actions/dashboard.actions";
@@ -12,13 +14,21 @@ export default async function DashboardPage() {
       ["PARTNER_ADMIN", "PARTNER_EMPLOYEE"].includes(role),
     )
   ) {
+    const [summary, pending] = await Promise.all([
+      getWorkspaceSummary(),
+      listPendingPayments({ pageSize: 5 }),
+    ]);
     return (
       <div className="space-y-6">
         <PageHeader
           title="Partner Dashboard"
           description="Your listings, bookings, physical attendance and verified payments."
         />
-        <WorkspaceSummary data={await getWorkspaceSummary()} />
+        <PendingPayments
+          data={pending}
+          viewAllHref="/payments?status=pending"
+        />
+        <WorkspaceSummary data={summary} />
       </div>
     );
   }

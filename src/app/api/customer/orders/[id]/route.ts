@@ -35,7 +35,7 @@ export async function GET(
     >`
       SELECT s.label AS "seatNumber", b.booking_code AS "bookingCode" FROM admin.bookings b LEFT JOIN admin.library_seats s ON s.id=b.seat_id WHERE b.id=${order.targetId} AND ${order.targetType}='visit'
       UNION ALL SELECT s.label, f.booking_code FROM admin.flex_bookings f JOIN admin.library_seats s ON s.id=f.seat_id WHERE f.id=${order.targetId} AND ${order.targetType}='flex'
-      UNION ALL SELECT s.label, NULL::text FROM admin.subscriptions sub LEFT JOIN admin.library_seats s ON s.id=sub.seat_id WHERE sub.id=${order.targetId} AND ${order.targetType}='subscription'`;
+      UNION ALL SELECT s.label, 'subscription:'||sub.id FROM admin.subscriptions sub LEFT JOIN admin.library_seats s ON s.id=sub.seat_id WHERE sub.id=${order.targetId} AND ${order.targetType}='subscription'`;
     const vendor = await prisma.vendor.findUniqueOrThrow({
       where: { id: order.vendorId },
       select: { timeZone: true },

@@ -15,7 +15,7 @@ export async function checkInByCode(code: string) {
   >`
     SELECT id,vendor_id AS "vendorId",user_id AS "userId" FROM admin.bookings WHERE booking_code=${value}
     UNION ALL SELECT id,vendor_id,user_id FROM admin.flex_bookings WHERE booking_code=${value}
-    UNION ALL SELECT id,vendor_id,user_id FROM admin.subscriptions WHERE 'subscription:'||id=${value}`;
+    UNION ALL SELECT id,vendor_id,user_id FROM admin.subscriptions WHERE 'subscription:'||id=${value} OR id=${value}`;
   const target = references[0];
   if (!target) throw new PublicActionError("Booking code not found");
   const session = await requireVendorAccess(target.vendorId, "vendor.update");
