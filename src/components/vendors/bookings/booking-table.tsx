@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MembershipVerification } from "@/components/subscriptions/membership-verification";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -48,7 +49,13 @@ function formatForDate(date: string) {
   });
 }
 
-export function BookingTable({ bookings }: { bookings: VendorBookingRow[] }) {
+export function BookingTable({
+  bookings,
+  showListing = false,
+}: {
+  bookings: VendorBookingRow[];
+  showListing?: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const canManage = usePermission("vendor.update");
@@ -65,11 +72,19 @@ export function BookingTable({ bookings }: { bookings: VendorBookingRow[] }) {
     });
   }
 
+  if (!bookings.length)
+    return (
+      <p className="py-10 text-center text-sm text-muted-foreground">
+        No bookings match your filters.
+      </p>
+    );
+
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
+            {showListing && <TableHead>Listing</TableHead>}
             <TableHead>Customer</TableHead>
             <TableHead>Placed on</TableHead>
             <TableHead>Booked for</TableHead>
@@ -83,10 +98,23 @@ export function BookingTable({ bookings }: { bookings: VendorBookingRow[] }) {
         <TableBody>
           {bookings.map((b) => (
             <TableRow key={b.id}>
+              {showListing && (
+                <TableCell>
+                  <Link
+                    className="font-medium text-primary hover:underline"
+                    href={`/vendors/${b.vendorId}?tab=bookings`}
+                  >
+                    {b.vendorName}
+                  </Link>
+                </TableCell>
+              )}
               <TableCell>
                 <p className="font-medium">{b.customerName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {b.customerEmail ?? b.bookingCode ?? ""}
+                  {b.customerEmail ?? ""}
+                  {b.bookingCode && (
+                    <span className="block font-mono">{b.bookingCode}</span>
+                  )}
                 </p>
               </TableCell>
               <TableCell>{formatPlaced(b.placedOn)}</TableCell>
@@ -125,16 +153,6 @@ export function BookingTable({ bookings }: { bookings: VendorBookingRow[] }) {
               )}
             </TableRow>
           ))}
-          {bookings.length === 0 && (
-            <TableRow>
-              <TableCell
-                colSpan={canManage ? 8 : 7}
-                className="text-muted-foreground text-center"
-              >
-                No bookings yet.
-              </TableCell>
-            </TableRow>
-          )}
         </TableBody>
       </Table>
     </div>

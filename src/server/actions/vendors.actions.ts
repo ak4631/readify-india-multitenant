@@ -36,6 +36,7 @@ export interface VendorFilters {
   categoryId?: string;
   status?: VendorStatus;
   city?: string;
+  q?: string;
 }
 
 async function vendorWhere(filters: VendorFilters & { categorySlug?: string }) {
@@ -46,6 +47,9 @@ async function vendorWhere(filters: VendorFilters & { categorySlug?: string }) {
   );
   return {
     id: accessibleVendorIds ? { in: accessibleVendorIds } : undefined,
+    name: filters.q
+      ? { contains: filters.q.trim(), mode: "insensitive" as const }
+      : undefined,
     categoryId: filters.categoryId || undefined,
     category: filters.categorySlug ? { slug: filters.categorySlug } : undefined,
     status: filters.status || undefined,

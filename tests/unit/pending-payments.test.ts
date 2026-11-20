@@ -6,6 +6,7 @@ const s = vi.hoisted(() => ({
   find: vi.fn(),
   count: vi.fn(),
   details: vi.fn(),
+  vendors: vi.fn(),
 }));
 vi.mock("@/lib/rbac", () => ({
   requirePermission: async () => {
@@ -17,6 +18,7 @@ vi.mock("@/lib/rbac", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     paymentOrder: { findMany: s.find, count: s.count },
+    vendor: { findMany: s.vendors },
     $queryRaw: s.details,
   },
 }));
@@ -28,6 +30,7 @@ beforeEach(() => {
   s.find.mockResolvedValue([]);
   s.count.mockResolvedValue(0);
   s.details.mockResolvedValue([]);
+  s.vendors.mockResolvedValue([{ id: "other-vendor" }]);
 });
 it("restricts both rows and count to unpaid, uncancelled, unexpired bookings at accessible locations", async () => {
   await listPendingPayments({ page: 2, pageSize: 5 });
@@ -92,4 +95,30 @@ it("returns the subscription booking code and location timezone with a quick act
     paymentMethod: "OFFLINE",
     amountPaise: 100600,
   });
+});
+
+it("applies search, selected listing and IST date without replacing tenant or unpaid constraints", async () => {
+  await listPendingPayments({
+    vendorId: "other-vendor",
+    q: "South",
+    date: "2035-01-05",
+    status: "pending",
+  });
+  const where = s.find.mock.calls[0][0].where;
+  expect(where.vendorId).toEqual({ in: ["own-vendor"] });
+  expect(where.status).toBe("CREATED");
+  expect(where.AND).toContainEqual({ vendorId: "other-vendor" });
+  expect(where.AND).toContainEqual({
+    createdAt: {
+      gte: new Date("2035-01-04T18:30:00Z"),
+      lt: new Date("2035-01-05T18:30:00Z"),
+    },
+  });
+  expect(where.AND).toContainEqual({
+    OR: expect.arrayContaining([
+      { id: { contains: "South", mode: "insensitive" } },
+      { vendorId: { in: ["other-vendor"] } },
+    ]),
+  });
+  expect(s.count.mock.calls[0][0].where).toEqual(where);
 });

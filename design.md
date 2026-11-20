@@ -70,3 +70,11 @@ Use the 4-point named scale in `tokens.css`. App pages should prefer dense verti
 ## Exports
 
 Use `tokens.css` at the project root as the portable token export.
+
+## Record Lists
+
+- Use a compact table with a visible filter toolbar for listing, booking, order, and service-management collections.
+- Show the listing as a column when records span multiple listings; use a listing filter instead of rendering a section per listing.
+- Apply search, status, listing, and date filters before database pagination where relevant. Paginate records, not listing groups.
+- Preserve filter values in pagination links and reset the page when filters change.
+- Keep wide tables scrollable inside their container on mobile. Empty states must remain readable without scrolling.

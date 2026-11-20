@@ -2,12 +2,21 @@
 
 import { prisma } from "@/lib/prisma";
 import { lookupCustomerProfiles } from "@/lib/profiles";
-import { requireVendorAccess } from "@/lib/rbac";
+import { Prisma } from "@/generated/prisma/client";
+import { pageWindow, toPage } from "@/lib/pagination";
+import { bookingListQuery } from "@/lib/booking-list-query";
+import {
+  requirePermission,
+  getAccessibleVendorIds,
+  requireVendorAccess,
+} from "@/lib/rbac";
 
 // A booking ("order") as the partner sees it: who placed it, when, for which
 // seat and which time slot.
 export type VendorBookingRow = {
   id: string;
+  vendorId?: string;
+  vendorName?: string;
   bookingCode: string | null;
   customerName: string;
   customerEmail: string | null;
@@ -101,4 +110,68 @@ export async function listVendorBookings(
   ]
     .sort((a, b) => b.placedOn.localeCompare(a.placedOn))
     .slice(0, MAX_ROWS);
+}
+
+export async function listWorkspaceBookings(
+  filters: import("@/lib/booking-list-query").BookingListFilters = {},
+) {
+  const session = await requirePermission("vendor.read");
+  const ids = await getAccessibleVendorIds(session, filters.partnerId);
+  const window = pageWindow(filters.page ?? 1);
+  const query = bookingListQuery(ids, filters);
+  const [rows, count] = await Promise.all([
+    prisma.$queryRaw<
+      Array<{
+        id: string;
+        vendor_id: string;
+        vendor_name: string;
+        booking_code: string | null;
+        customer_name: string;
+        customer_email: string | null;
+        created_at: Date;
+        for_date: Date;
+        seat_label: string | null;
+        slot_label: string;
+        plan_name: string;
+        hours: unknown;
+        amount: unknown;
+        status: string;
+      }>
+    >(
+      Prisma.sql`${query} SELECT * FROM filtered ORDER BY created_at DESC,id DESC LIMIT ${window.take} OFFSET ${window.skip}`,
+    ),
+    prisma.$queryRaw<{ total: bigint }[]>(
+      Prisma.sql`${query} SELECT count(*) AS total FROM filtered`,
+    ),
+  ]);
+  return toPage(
+    rows.map((r) => ({
+      id: r.id,
+      vendorId: r.vendor_id,
+      vendorName: r.vendor_name,
+      bookingCode: r.booking_code,
+      customerName: r.customer_name,
+      customerEmail: r.customer_email,
+      placedOn: r.created_at.toISOString(),
+      forDate: r.for_date.toISOString().slice(0, 10),
+      seatLabel: r.seat_label,
+      slotLabel: r.slot_label,
+      planName: r.plan_name,
+      hours: r.hours == null ? null : Number(r.hours),
+      amount: Number(r.amount),
+      status: r.status,
+    })),
+    Number(count[0]?.total ?? 0),
+    window,
+  );
+}
+
+export async function listBookingListingOptions(partnerId?: string) {
+  const session = await requirePermission("vendor.read");
+  const ids = await getAccessibleVendorIds(session, partnerId);
+  return prisma.vendor.findMany({
+    where: ids ? { id: { in: ids } } : {},
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 }

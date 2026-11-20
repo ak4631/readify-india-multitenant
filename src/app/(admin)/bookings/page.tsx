@@ -1,97 +1,101 @@
 import { partnerPath } from "@/lib/partner-path";
-import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListPagination } from "@/components/layout/list-pagination";
+import { RecordFilters } from "@/components/layout/record-filters";
 import { parsePage } from "@/lib/pagination";
 import { LiveRefresh } from "@/components/layout/live-refresh";
 import { BookingTable } from "@/components/vendors/bookings/booking-table";
 import { AttendanceControls } from "@/components/vendors/bookings/attendance-controls";
-import { listVendorsPage } from "@/server/actions/vendors.actions";
-import { listVendorBookings } from "@/server/actions/bookings.actions";
+import {
+  listWorkspaceBookings,
+  listBookingListingOptions,
+} from "@/server/actions/bookings.actions";
 import { listWorkspaceAttendance } from "@/server/actions/workspace.actions";
 import { z } from "zod";
-
-const LISTINGS_PER_PAGE = 5;
-const ROWS_PER_LISTING = 20;
 
 export default async function BookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ partnerId?: string; status?: string; page?: string }>;
+  searchParams: Promise<{
+    partnerId?: string;
+    vendorId?: string;
+    q?: string;
+    date?: string;
+    status?: string;
+    page?: string;
+  }>;
 }) {
   const params = await searchParams;
-  const filter = z
-    .enum(["all", "today", "upcoming", "completed", "cancelled"])
+  const status = z
+    .enum([
+      "all",
+      "today",
+      "upcoming",
+      "pending",
+      "confirmed",
+      "completed",
+      "cancelled",
+      "expired",
+    ])
     .catch("all")
     .parse(params.status ?? "all");
-  const vendors = await listVendorsPage({
-    partnerId: params.partnerId,
-    page: parsePage(params.page),
-    pageSize: LISTINGS_PER_PAGE,
-  });
-  const groups = await Promise.all(
-    vendors.items.map(async (vendor) => {
-      const today = new Date().toLocaleDateString("en-CA", {
-        timeZone: vendor.timeZone,
-      });
-      const rows = (await listVendorBookings(vendor.id)).filter(
-        (row) =>
-          filter === "all" ||
-          (filter === "today"
-            ? row.forDate === today
-            : filter === "upcoming"
-              ? row.forDate >= today &&
-                ["PENDING", "CONFIRMED"].includes(row.status)
-              : row.status === filter.toUpperCase()),
-      );
-      return { id: vendor.id, name: vendor.name, rows };
-    }),
-  );
-  const visits = await listWorkspaceAttendance(params.partnerId);
+  const date = z.iso.date().safeParse(params.date);
+  const filters = {
+    ...params,
+    status,
+    date: date.success ? date.data : undefined,
+  };
+  const [bookings, listings, visits] = await Promise.all([
+    listWorkspaceBookings({ ...filters, page: parsePage(params.page) }),
+    listBookingListingOptions(params.partnerId),
+    listWorkspaceAttendance(params.partnerId),
+  ]);
+  const path = partnerPath(params.partnerId, "bookings");
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <LiveRefresh />
       <PageHeader
         title="Bookings"
-        description="Flex and single-visit reservations across your listings. Use Plans & Subscriptions for long-term memberships."
+        description="Flex and single-visit reservations across your listings. Search and filter all bookings in one place."
       />
-      <AttendanceControls visits={visits} />
-      <form className="flex gap-3">
-        <select
-          aria-label="Booking filter"
-          name="status"
-          defaultValue={filter}
-          className="rounded border p-2"
-        >
-          {["all", "today", "upcoming", "completed", "cancelled"].map(
-            (value) => (
-              <option key={value}>{value}</option>
-            ),
-          )}
-        </select>
-        <button className="rounded border px-4">Filter</button>
-      </form>
-      {groups.map((group) => (
-        <section key={group.id} className="space-y-3">
-          <h2 className="text-lg font-semibold">{group.name}</h2>
-          <BookingTable bookings={group.rows.slice(0, ROWS_PER_LISTING)} />
-          {group.rows.length > ROWS_PER_LISTING && (
-            <Link
-              href={`/vendors/${group.id}?tab=bookings`}
-              className="text-sm text-primary underline"
-            >
-              Showing the latest {ROWS_PER_LISTING} of {group.rows.length}. View
-              all bookings for {group.name}
-            </Link>
-          )}
-        </section>
-      ))}
-      <ListPagination
-        page={vendors}
-        path={partnerPath(params.partnerId, "bookings")}
-        params={params}
-        noun="listings"
+      <details className="rounded-xl border bg-card p-4">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Check-in / check-out · {visits.length} checked in now
+        </summary>
+        <div className="mt-4">
+          <AttendanceControls visits={visits} />
+        </div>
+      </details>
+      <RecordFilters
+        path={path}
+        params={filters}
+        listings={listings}
+        searchPlaceholder="Customer, booking ID or listing…"
+        dateLabel="Booked for"
+        statuses={[
+          { value: "all", label: "All statuses" },
+          { value: "today", label: "Today" },
+          { value: "upcoming", label: "Upcoming" },
+          ...["pending", "confirmed", "completed", "cancelled", "expired"].map(
+            (value) => ({
+              value,
+              label: value.charAt(0).toUpperCase() + value.slice(1),
+            }),
+          ),
+        ]}
       />
+      <section
+        aria-label="Bookings"
+        className="min-w-0 rounded-xl border bg-card p-4"
+      >
+        <BookingTable bookings={bookings.items} showListing />
+        <ListPagination
+          page={bookings}
+          path={path}
+          params={filters}
+          noun="bookings"
+        />
+      </section>
     </div>
   );
 }

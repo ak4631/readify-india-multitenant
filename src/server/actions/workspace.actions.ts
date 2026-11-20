@@ -1,5 +1,6 @@
 "use server";
 
+import { paymentListFilters } from "@/lib/payment-list-filters";
 import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import {
@@ -100,10 +101,19 @@ export async function listWorkspaceAttendance(selectedPartnerId?: string) {
   return rows;
 }
 
-export async function listPaymentLedger(page = 1, selectedPartnerId?: string) {
+export async function listPaymentLedger(
+  page = 1,
+  selectedPartnerId?: string,
+  filters: {
+    q?: string;
+    vendorId?: string;
+    status?: string;
+    date?: string;
+  } = {},
+) {
   const session = await requirePermission("subscription.read");
   const partnerId = await getSessionPartnerId(session, selectedPartnerId);
-  const where = partnerId
+  const scope = partnerId
     ? {
         vendorId: {
           in: (
@@ -115,11 +125,15 @@ export async function listPaymentLedger(page = 1, selectedPartnerId?: string) {
         },
       }
     : {};
+  const where = {
+    ...scope,
+    AND: await paymentListFilters(filters),
+  };
   const window = pageWindow(page);
   const [orders, total] = await Promise.all([
     prisma.paymentOrder.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: window.skip,
       take: window.take,
     }),
@@ -140,4 +154,14 @@ export async function listPaymentLedger(page = 1, selectedPartnerId?: string) {
     createdAt: order.createdAt,
   }));
   return toPage(items, total, window);
+}
+
+export async function listPaymentListingOptions(partnerId?: string) {
+  const session = await requirePermission("subscription.read");
+  const ids = await getAccessibleVendorIds(session, partnerId);
+  return prisma.vendor.findMany({
+    where: ids ? { id: { in: ids } } : {},
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 }

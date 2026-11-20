@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { z } from "zod";
+import { RecordFilters } from "@/components/layout/record-filters";
+import { listPaymentListingOptions } from "@/server/actions/workspace.actions";
 import { PendingPayments } from "@/components/subscriptions/pending-payments";
 import { listPendingPayments } from "@/server/actions/pending-payments.actions";
 import { partnerPath } from "@/lib/partner-path";
@@ -19,19 +22,33 @@ import { listPaymentLedger } from "@/server/actions/workspace.actions";
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ partnerId?: string; page?: string; status?: string }>;
+  searchParams: Promise<{
+    partnerId?: string;
+    page?: string;
+    status?: string;
+    q?: string;
+    vendorId?: string;
+    date?: string;
+  }>;
 }) {
   const params = await searchParams;
   const pending = params.status === "pending";
+  const date = z.iso.date().safeParse(params.date);
+  const filters = { ...params, date: date.success ? date.data : undefined };
+  const listings = await listPaymentListingOptions(params.partnerId);
   const queue = pending
     ? await listPendingPayments({
-        partnerId: params.partnerId,
+        ...filters,
         page: parsePage(params.page),
       })
     : null;
   const ledger = pending
     ? null
-    : await listPaymentLedger(parsePage(params.page), params.partnerId);
+    : await listPaymentLedger(
+        parsePage(params.page),
+        params.partnerId,
+        filters,
+      );
   const rows = ledger?.items ?? [];
   return (
     <div className="space-y-6">
@@ -56,6 +73,31 @@ export default async function PaymentsPage({
           Payment Pending
         </Link>
       </nav>
+      {
+        <RecordFilters
+          path={partnerPath(params.partnerId, "payments")}
+          params={filters}
+          listings={listings}
+          searchPlaceholder="Order ID, target ID or listing…"
+          dateLabel="Placed on (IST)"
+          statuses={[
+            { value: "all", label: "All statuses" },
+            { value: "pending", label: "Payment pending" },
+            ...[
+              "CREATED",
+              "CAPTURED",
+              "FAILED",
+              "CANCELLED",
+              "EXPIRED",
+              "REFUND_PENDING",
+              "REFUNDED",
+            ].map((value) => ({
+              value,
+              label: value.toLowerCase().replaceAll("_", " "),
+            })),
+          ]}
+        />
+      }
       {queue ? (
         <>
           <PendingPayments data={queue} />
@@ -72,6 +114,8 @@ export default async function PaymentsPage({
             <TableHeader>
               <TableRow>
                 {[
+                  "Order ID",
+                  "Placed on",
                   "Listing",
                   "Type",
                   "Amount",
@@ -85,6 +129,12 @@ export default async function PaymentsPage({
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
+                  <TableCell className="font-mono text-xs">{row.id}</TableCell>
+                  <TableCell>
+                    {row.createdAt.toLocaleString("en-IN", {
+                      timeZone: "Asia/Kolkata",
+                    })}
+                  </TableCell>
                   <TableCell>{row.vendorName}</TableCell>
                   <TableCell>{row.kind}</TableCell>
                   <TableCell>₹{(row.amountPaise / 100).toFixed(2)}</TableCell>
@@ -94,7 +144,7 @@ export default async function PaymentsPage({
               ))}
             </TableBody>
           </Table>
-          {!rows.length && <p>No checkout transactions yet.</p>}
+          {!rows.length && <p>No orders match your filters.</p>}
           <ListPagination
             page={ledger!}
             path={partnerPath(params.partnerId, "payments")}

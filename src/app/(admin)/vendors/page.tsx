@@ -20,6 +20,7 @@ export default async function VendorsPage({
     categoryId?: string;
     status?: string;
     city?: string;
+    q?: string;
     page?: string;
   }>;
 }) {
@@ -31,6 +32,7 @@ export default async function VendorsPage({
       categoryId: params.categoryId,
       status: params.status as VendorStatus | undefined,
       city: params.city,
+      q: params.q,
       page: parsePage(params.page),
     }),
     listVendorCategories(),

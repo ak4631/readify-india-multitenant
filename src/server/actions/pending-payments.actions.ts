@@ -1,15 +1,24 @@
 "use server";
+import {
+  paymentListFilters,
+  type PaymentListFilters,
+} from "@/lib/payment-list-filters";
 import { prisma } from "@/lib/prisma";
 import { getAccessibleVendorIds, requirePermission } from "@/lib/rbac";
 import { pageWindow, toPage } from "@/lib/pagination";
 
 export async function listPendingPayments(
-  filters: { partnerId?: string; page?: number; pageSize?: number } = {},
+  filters: PaymentListFilters & {
+    partnerId?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
 ) {
   const session = await requirePermission("subscription.read");
   const vendorIds = await getAccessibleVendorIds(session, filters.partnerId);
   const window = pageWindow(filters.page ?? 1, filters.pageSize);
   const where = {
+    AND: await paymentListFilters(filters),
     status: "CREATED",
     cancelledAt: null,
     expiresAt: { gt: new Date() },
