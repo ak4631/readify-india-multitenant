@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import type {
   Vendor,
   VendorAddress,
@@ -76,22 +77,33 @@ export function ServiceTable({
                 <VendorStatusBadge status={listing.status} />
               </TableCell>
               <TableCell>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  <Link
-                    href={`${base}?tab=category`}
-                    className="whitespace-nowrap text-primary hover:underline"
-                    aria-label={`${tool} for ${listing.name}`}
-                  >
-                    {tool}
-                  </Link>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    nativeButton={false}
+                    render={
+                      <Link
+                        href={`${base}?tab=category`}
+                        aria-label={`${tool} for ${listing.name}`}
+                      >
+                        {tool}
+                      </Link>
+                    }
+                  />
                   {listing.category.slug === "library" && (
-                    <Link
-                      href={`${base}?tab=occupancy${date ? `&date=${encodeURIComponent(date)}` : ""}`}
-                      className="whitespace-nowrap text-primary hover:underline"
-                      aria-label={`View occupancy for ${listing.name}`}
-                    >
-                      View occupancy
-                    </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={`${base}?tab=occupancy${date ? `&date=${encodeURIComponent(date)}` : ""}`}
+                          aria-label={`View occupancy for ${listing.name}`}
+                        >
+                          View occupancy
+                        </Link>
+                      }
+                    />
                   )}
                 </div>
               </TableCell>
