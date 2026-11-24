@@ -22,7 +22,7 @@ import {
   type MenuItemInput,
 } from "@/lib/validations/menu.schema";
 
-export async function listMenu(vendorId: string) {
+async function local_listMenu(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const categories = await prisma.menuCategory.findMany({
     where: { vendorId },
@@ -68,7 +68,7 @@ export async function listMenu(vendorId: string) {
 
 export type MenuCategoryRow = Awaited<ReturnType<typeof listMenu>>[number];
 
-export async function createMenuCategory(
+async function local_createMenuCategory(
   vendorId: string,
   input: MenuCategoryInput,
 ) {
@@ -107,7 +107,7 @@ export async function createMenuCategory(
   return category;
 }
 
-export async function deleteMenuCategory(categoryId: string) {
+async function local_deleteMenuCategory(categoryId: string) {
   const record =
     (await prisma.menuCategory.findUnique({ where: { id: categoryId } })) ??
     (await proposedParent(categoryId, "MENU_CATEGORY_CREATE"));
@@ -144,7 +144,7 @@ export async function deleteMenuCategory(categoryId: string) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function createMenuItem(
+async function local_createMenuItem(
   vendorId: string,
   categoryId: string,
   input: MenuItemInput,
@@ -191,7 +191,7 @@ export async function createMenuItem(
   return item ? { ...item, price: Number(item.price) } : undefined;
 }
 
-export async function updateMenuItem(
+async function local_updateMenuItem(
   vendorId: string,
   itemId: string,
   input: MenuItemInput,
@@ -237,7 +237,7 @@ export async function updateMenuItem(
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function deleteMenuItem(vendorId: string, itemId: string) {
+async function local_deleteMenuItem(vendorId: string, itemId: string) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   const item =
     (await prisma.menuItem.findFirst({
@@ -275,4 +275,82 @@ export async function deleteMenuItem(vendorId: string, itemId: string) {
   });
 
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function listMenu(
+  ...args: Parameters<typeof local_listMenu>
+): Promise<Awaited<ReturnType<typeof local_listMenu>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listMenu>>>(
+      "menu.actions.listMenu",
+      args,
+    );
+  }
+  return local_listMenu(...args);
+}
+
+export async function createMenuCategory(
+  ...args: Parameters<typeof local_createMenuCategory>
+): Promise<Awaited<ReturnType<typeof local_createMenuCategory>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createMenuCategory>>>(
+      "menu.actions.createMenuCategory",
+      args,
+    );
+  }
+  return local_createMenuCategory(...args);
+}
+
+export async function deleteMenuCategory(
+  ...args: Parameters<typeof local_deleteMenuCategory>
+): Promise<Awaited<ReturnType<typeof local_deleteMenuCategory>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deleteMenuCategory>>>(
+      "menu.actions.deleteMenuCategory",
+      args,
+    );
+  }
+  return local_deleteMenuCategory(...args);
+}
+
+export async function createMenuItem(
+  ...args: Parameters<typeof local_createMenuItem>
+): Promise<Awaited<ReturnType<typeof local_createMenuItem>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createMenuItem>>>(
+      "menu.actions.createMenuItem",
+      args,
+    );
+  }
+  return local_createMenuItem(...args);
+}
+
+export async function updateMenuItem(
+  ...args: Parameters<typeof local_updateMenuItem>
+): Promise<Awaited<ReturnType<typeof local_updateMenuItem>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateMenuItem>>>(
+      "menu.actions.updateMenuItem",
+      args,
+    );
+  }
+  return local_updateMenuItem(...args);
+}
+
+export async function deleteMenuItem(
+  ...args: Parameters<typeof local_deleteMenuItem>
+): Promise<Awaited<ReturnType<typeof local_deleteMenuItem>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deleteMenuItem>>>(
+      "menu.actions.deleteMenuItem",
+      args,
+    );
+  }
+  return local_deleteMenuItem(...args);
 }

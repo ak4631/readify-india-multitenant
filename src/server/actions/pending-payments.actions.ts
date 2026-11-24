@@ -1,4 +1,5 @@
 "use server";
+
 import {
   paymentListFilters,
   type PaymentListFilters,
@@ -7,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getAccessibleVendorIds, requirePermission } from "@/lib/rbac";
 import { pageWindow, toPage } from "@/lib/pagination";
 
-export async function listPendingPayments(
+async function local_listPendingPayments(
   filters: PaymentListFilters & {
     partnerId?: string;
     page?: number;
@@ -75,4 +76,17 @@ export async function listPendingPayments(
     total,
     window,
   );
+}
+
+export async function listPendingPayments(
+  ...args: Parameters<typeof local_listPendingPayments>
+): Promise<Awaited<ReturnType<typeof local_listPendingPayments>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listPendingPayments>>>(
+      "pending-payments.actions.listPendingPayments",
+      args,
+    );
+  }
+  return local_listPendingPayments(...args);
 }

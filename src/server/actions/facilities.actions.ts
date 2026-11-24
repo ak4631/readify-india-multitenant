@@ -10,7 +10,7 @@ import {
   type FacilityInput,
 } from "@/lib/validations/facility.schema";
 
-export async function listFacilities() {
+async function local_listFacilities() {
   await requirePermission("facility.read");
 
   return prisma.facility.findMany({
@@ -19,7 +19,7 @@ export async function listFacilities() {
   });
 }
 
-export async function listFacilitiesPage(page = 1) {
+async function local_listFacilitiesPage(page = 1) {
   await requirePermission("facility.read");
   const window = pageWindow(page);
   const [items, total] = await Promise.all([
@@ -34,7 +34,7 @@ export async function listFacilitiesPage(page = 1) {
   return toPage(items, total, window);
 }
 
-export async function createFacility(input: FacilityInput) {
+async function local_createFacility(input: FacilityInput) {
   const session = await requirePermission("facility.create");
   const data = facilitySchema.parse(input);
 
@@ -56,7 +56,7 @@ export async function createFacility(input: FacilityInput) {
   return facility;
 }
 
-export async function updateFacility(facilityId: string, input: FacilityInput) {
+async function local_updateFacility(facilityId: string, input: FacilityInput) {
   const session = await requirePermission("facility.update");
   const data = facilitySchema.parse(input);
 
@@ -81,7 +81,7 @@ export async function updateFacility(facilityId: string, input: FacilityInput) {
 
 // Facilities are FK'd from vendor_facilities, so "delete" is a soft-delete —
 // existing vendor mappings keep working, the facility just drops off active pickers.
-export async function deactivateFacility(facilityId: string) {
+async function local_deactivateFacility(facilityId: string) {
   const session = await requirePermission("facility.delete");
 
   await prisma.$transaction(async (tx) => {
@@ -104,4 +104,69 @@ export async function deactivateFacility(facilityId: string) {
   });
 
   revalidatePath("/facilities");
+}
+
+export async function listFacilities(
+  ...args: Parameters<typeof local_listFacilities>
+): Promise<Awaited<ReturnType<typeof local_listFacilities>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listFacilities>>>(
+      "facilities.actions.listFacilities",
+      args,
+    );
+  }
+  return local_listFacilities(...args);
+}
+
+export async function listFacilitiesPage(
+  ...args: Parameters<typeof local_listFacilitiesPage>
+): Promise<Awaited<ReturnType<typeof local_listFacilitiesPage>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listFacilitiesPage>>>(
+      "facilities.actions.listFacilitiesPage",
+      args,
+    );
+  }
+  return local_listFacilitiesPage(...args);
+}
+
+export async function createFacility(
+  ...args: Parameters<typeof local_createFacility>
+): Promise<Awaited<ReturnType<typeof local_createFacility>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createFacility>>>(
+      "facilities.actions.createFacility",
+      args,
+    );
+  }
+  return local_createFacility(...args);
+}
+
+export async function updateFacility(
+  ...args: Parameters<typeof local_updateFacility>
+): Promise<Awaited<ReturnType<typeof local_updateFacility>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateFacility>>>(
+      "facilities.actions.updateFacility",
+      args,
+    );
+  }
+  return local_updateFacility(...args);
+}
+
+export async function deactivateFacility(
+  ...args: Parameters<typeof local_deactivateFacility>
+): Promise<Awaited<ReturnType<typeof local_deactivateFacility>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deactivateFacility>>>(
+      "facilities.actions.deactivateFacility",
+      args,
+    );
+  }
+  return local_deactivateFacility(...args);
 }

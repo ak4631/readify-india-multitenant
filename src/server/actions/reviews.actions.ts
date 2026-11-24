@@ -15,7 +15,7 @@ import {
   requireVendorAccess,
 } from "@/lib/rbac";
 
-export async function listReviews(
+async function local_listReviews(
   filters: {
     partnerId?: string;
     vendorId?: string;
@@ -101,7 +101,7 @@ async function setReviewStatus(
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function replyToReview(reviewId: string, reply: string) {
+async function local_replyToReview(reviewId: string, reply: string) {
   const text = z.string().trim().min(1).max(2000).parse(reply);
   const review = await prisma.review.findUniqueOrThrow({
     where: { id: reviewId },
@@ -142,19 +142,84 @@ export async function replyToReview(reviewId: string, reply: string) {
   revalidatePath(`/vendors/${review.vendorId}`);
 }
 
-export async function hideReview(reviewId: string) {
+async function local_hideReview(reviewId: string) {
   return setReviewStatus(reviewId, "HIDDEN", "review.hide", "HIDE_REVIEW");
 }
 
-export async function deleteReview(reviewId: string) {
+async function local_deleteReview(reviewId: string) {
   return setReviewStatus(reviewId, "DELETED", "review.delete", "DELETE_REVIEW");
 }
 
-export async function restoreReview(reviewId: string) {
+async function local_restoreReview(reviewId: string) {
   return setReviewStatus(
     reviewId,
     "PUBLISHED",
     "review.restore",
     "RESTORE_REVIEW",
   );
+}
+
+export async function listReviews(
+  ...args: Parameters<typeof local_listReviews>
+): Promise<Awaited<ReturnType<typeof local_listReviews>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listReviews>>>(
+      "reviews.actions.listReviews",
+      args,
+    );
+  }
+  return local_listReviews(...args);
+}
+
+export async function replyToReview(
+  ...args: Parameters<typeof local_replyToReview>
+): Promise<Awaited<ReturnType<typeof local_replyToReview>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_replyToReview>>>(
+      "reviews.actions.replyToReview",
+      args,
+    );
+  }
+  return local_replyToReview(...args);
+}
+
+export async function hideReview(
+  ...args: Parameters<typeof local_hideReview>
+): Promise<Awaited<ReturnType<typeof local_hideReview>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_hideReview>>>(
+      "reviews.actions.hideReview",
+      args,
+    );
+  }
+  return local_hideReview(...args);
+}
+
+export async function deleteReview(
+  ...args: Parameters<typeof local_deleteReview>
+): Promise<Awaited<ReturnType<typeof local_deleteReview>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deleteReview>>>(
+      "reviews.actions.deleteReview",
+      args,
+    );
+  }
+  return local_deleteReview(...args);
+}
+
+export async function restoreReview(
+  ...args: Parameters<typeof local_restoreReview>
+): Promise<Awaited<ReturnType<typeof local_restoreReview>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_restoreReview>>>(
+      "reviews.actions.restoreReview",
+      args,
+    );
+  }
+  return local_restoreReview(...args);
 }

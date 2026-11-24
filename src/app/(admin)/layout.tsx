@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
-import { prisma } from "@/lib/prisma";
+import { getAccountOrganization } from "@/server/actions/page-data.actions";
 import { getCurrentSession } from "@/lib/rbac";
 
 export default async function AdminLayout({
@@ -18,12 +18,7 @@ export default async function AdminLayout({
   const isPartnerAccount = session.user.roles.some((role) =>
     ["PARTNER_ADMIN", "PARTNER_EMPLOYEE"].includes(role),
   );
-  const account = isPartnerAccount
-    ? await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { partner: { select: { name: true } } },
-      })
-    : null;
+  const account = isPartnerAccount ? await getAccountOrganization() : null;
 
   return (
     <div className="flex min-h-svh bg-background">

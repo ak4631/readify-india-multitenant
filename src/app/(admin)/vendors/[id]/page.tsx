@@ -2,9 +2,13 @@ import Link from "next/link";
 import { RevisionCorrectionNotice } from "@/components/vendors/revision-correction-notice";
 import { canUploadVerificationDocuments } from "@/lib/verification-upload-policy";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import {
+  getVendorProposalLabels,
+  getVendorFacilities,
+  getVendorPhotos,
+} from "@/server/actions/page-data.actions";
 import { getCurrentSession, hasPermission } from "@/lib/rbac";
-import { proposalLabels, overlayRows } from "@/lib/listing-editor";
+import { overlayRows } from "@/lib/listing-editor";
 import { SETUP_STEPS } from "@/lib/listing-readiness";
 import {
   getVendorById,
@@ -167,7 +171,7 @@ export default async function VendorDetail({
     case "facilities": {
       const [facilities, selected] = await Promise.all([
         listFacilities(),
-        prisma.vendorFacility.findMany({ where: { vendorId: id } }),
+        getVendorFacilities(id),
       ]);
       const proposal = changes.find(
         (c) =>
@@ -207,10 +211,7 @@ export default async function VendorDetail({
       );
       break;
     case "photos": {
-      const rows = await prisma.vendorMedia.findMany({
-        where: { vendorId: id },
-        orderBy: { sortOrder: "asc" },
-      });
+      const rows = await getVendorPhotos(id);
       const media = overlayRows(
         rows,
         changes.filter((c) => ["DRAFT", "PENDING"].includes(c.status)),
@@ -294,7 +295,7 @@ export default async function VendorDetail({
       content = (
         <ListingChangeList
           revisions={await listListingRevisions(id)}
-          labels={await proposalLabels(id)}
+          labels={await getVendorProposalLabels(id)}
         />
       );
       break;

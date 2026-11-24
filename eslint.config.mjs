@@ -6,13 +6,16 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["scripts/*.js"],
+    files: ["scripts/*.js", "scripts/*.cjs"],
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    "backend/src/**",
+    "backend/.next/**",
+    "backend/next-env.d.ts",
     "out/**",
     "build/**",
     "next-env.d.ts",

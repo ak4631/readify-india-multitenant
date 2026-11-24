@@ -17,7 +17,7 @@ import {
   type TeacherInput,
 } from "@/lib/validations/academics.schema";
 
-export async function listTeachers(vendorId: string) {
+async function local_listTeachers(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const rows = await prisma.teacher.findMany({
     where: { vendorId },
@@ -33,7 +33,7 @@ export async function listTeachers(vendorId: string) {
   });
 }
 
-export async function createTeacher(vendorId: string, input: TeacherInput) {
+async function local_createTeacher(vendorId: string, input: TeacherInput) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   const data = teacherSchema.parse(input);
 
@@ -66,7 +66,7 @@ export async function createTeacher(vendorId: string, input: TeacherInput) {
   return teacher;
 }
 
-export async function updateTeacher(teacherId: string, input: TeacherInput) {
+async function local_updateTeacher(teacherId: string, input: TeacherInput) {
   const record =
     (await prisma.teacher.findUnique({ where: { id: teacherId } })) ??
     (await proposedParent(teacherId, "TEACHER_CREATE"));
@@ -105,7 +105,7 @@ export async function updateTeacher(teacherId: string, input: TeacherInput) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function deactivateTeacher(teacherId: string) {
+async function local_deactivateTeacher(teacherId: string) {
   const record =
     (await prisma.teacher.findUnique({ where: { id: teacherId } })) ??
     (await proposedParent(teacherId, "TEACHER_CREATE"));
@@ -144,4 +144,56 @@ export async function deactivateTeacher(teacherId: string) {
   });
 
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function listTeachers(
+  ...args: Parameters<typeof local_listTeachers>
+): Promise<Awaited<ReturnType<typeof local_listTeachers>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listTeachers>>>(
+      "teachers.actions.listTeachers",
+      args,
+    );
+  }
+  return local_listTeachers(...args);
+}
+
+export async function createTeacher(
+  ...args: Parameters<typeof local_createTeacher>
+): Promise<Awaited<ReturnType<typeof local_createTeacher>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createTeacher>>>(
+      "teachers.actions.createTeacher",
+      args,
+    );
+  }
+  return local_createTeacher(...args);
+}
+
+export async function updateTeacher(
+  ...args: Parameters<typeof local_updateTeacher>
+): Promise<Awaited<ReturnType<typeof local_updateTeacher>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateTeacher>>>(
+      "teachers.actions.updateTeacher",
+      args,
+    );
+  }
+  return local_updateTeacher(...args);
+}
+
+export async function deactivateTeacher(
+  ...args: Parameters<typeof local_deactivateTeacher>
+): Promise<Awaited<ReturnType<typeof local_deactivateTeacher>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deactivateTeacher>>>(
+      "teachers.actions.deactivateTeacher",
+      args,
+    );
+  }
+  return local_deactivateTeacher(...args);
 }

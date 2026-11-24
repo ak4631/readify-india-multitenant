@@ -1,4 +1,5 @@
 "use server";
+
 import { lockListing, ListingChangeConflict } from "@/lib/listing-changes";
 import { canUploadVerificationDocuments } from "@/lib/verification-upload-policy";
 
@@ -20,7 +21,7 @@ export type VerificationUploadResult =
 const uploadFrozenMessage =
   "This listing's initial submission is under review. Wait for a decision before uploading another document.";
 
-export async function uploadVerificationDocument(
+async function local_uploadVerificationDocument(
   formData: FormData,
 ): Promise<VerificationUploadResult> {
   const parsed = uploadVerificationDocumentSchema.safeParse({
@@ -93,7 +94,7 @@ export async function uploadVerificationDocument(
   return { ok: true };
 }
 
-export async function reviewVerificationDocument(input: {
+async function local_reviewVerificationDocument(input: {
   verificationId: string;
   decision: "VERIFIED" | "REJECTED";
   rejectionReason?: string;
@@ -138,11 +139,47 @@ export async function reviewVerificationDocument(input: {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function getVerificationDocumentUrl(verificationId: string) {
+async function local_getVerificationDocumentUrl(verificationId: string) {
   const verification = await prisma.vendorVerification.findUniqueOrThrow({
     where: { id: verificationId },
     select: { vendorId: true, documentUrl: true },
   });
   await requireVendorAccess(verification.vendorId, "verification.read");
   return getSignedDocumentUrl(verification.documentUrl);
+}
+
+export async function uploadVerificationDocument(
+  ...args: Parameters<typeof local_uploadVerificationDocument>
+): Promise<Awaited<ReturnType<typeof local_uploadVerificationDocument>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_uploadVerificationDocument>>
+    >("vendor-verification.actions.uploadVerificationDocument", args);
+  }
+  return local_uploadVerificationDocument(...args);
+}
+
+export async function reviewVerificationDocument(
+  ...args: Parameters<typeof local_reviewVerificationDocument>
+): Promise<Awaited<ReturnType<typeof local_reviewVerificationDocument>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_reviewVerificationDocument>>
+    >("vendor-verification.actions.reviewVerificationDocument", args);
+  }
+  return local_reviewVerificationDocument(...args);
+}
+
+export async function getVerificationDocumentUrl(
+  ...args: Parameters<typeof local_getVerificationDocumentUrl>
+): Promise<Awaited<ReturnType<typeof local_getVerificationDocumentUrl>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_getVerificationDocumentUrl>>
+    >("vendor-verification.actions.getVerificationDocumentUrl", args);
+  }
+  return local_getVerificationDocumentUrl(...args);
 }

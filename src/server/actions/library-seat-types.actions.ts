@@ -16,7 +16,7 @@ import {
   type LibrarySeatTypeInput,
 } from "@/lib/validations/library-seat-type.schema";
 
-export async function listLibrarySeatTypes(vendorId: string) {
+async function local_listLibrarySeatTypes(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const rows = await prisma.librarySeatType.findMany({
     where: { vendorId },
@@ -29,7 +29,7 @@ export async function listLibrarySeatTypes(vendorId: string) {
   });
 }
 
-export async function createLibrarySeatType(
+async function local_createLibrarySeatType(
   vendorId: string,
   input: LibrarySeatTypeInput,
 ) {
@@ -67,7 +67,7 @@ export async function createLibrarySeatType(
   return seatType;
 }
 
-export async function updateLibrarySeatType(
+async function local_updateLibrarySeatType(
   seatTypeId: string,
   input: LibrarySeatTypeInput,
 ) {
@@ -115,7 +115,7 @@ export async function updateLibrarySeatType(
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function deleteLibrarySeatType(seatTypeId: string) {
+async function local_deleteLibrarySeatType(seatTypeId: string) {
   const seatTypeRecord =
     (await prisma.librarySeatType.findUnique({ where: { id: seatTypeId } })) ??
     (await proposedParent(seatTypeId, "SEAT_CREATE"));
@@ -153,4 +153,56 @@ export async function deleteLibrarySeatType(seatTypeId: string) {
   });
 
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function listLibrarySeatTypes(
+  ...args: Parameters<typeof local_listLibrarySeatTypes>
+): Promise<Awaited<ReturnType<typeof local_listLibrarySeatTypes>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listLibrarySeatTypes>>>(
+      "library-seat-types.actions.listLibrarySeatTypes",
+      args,
+    );
+  }
+  return local_listLibrarySeatTypes(...args);
+}
+
+export async function createLibrarySeatType(
+  ...args: Parameters<typeof local_createLibrarySeatType>
+): Promise<Awaited<ReturnType<typeof local_createLibrarySeatType>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createLibrarySeatType>>>(
+      "library-seat-types.actions.createLibrarySeatType",
+      args,
+    );
+  }
+  return local_createLibrarySeatType(...args);
+}
+
+export async function updateLibrarySeatType(
+  ...args: Parameters<typeof local_updateLibrarySeatType>
+): Promise<Awaited<ReturnType<typeof local_updateLibrarySeatType>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateLibrarySeatType>>>(
+      "library-seat-types.actions.updateLibrarySeatType",
+      args,
+    );
+  }
+  return local_updateLibrarySeatType(...args);
+}
+
+export async function deleteLibrarySeatType(
+  ...args: Parameters<typeof local_deleteLibrarySeatType>
+): Promise<Awaited<ReturnType<typeof local_deleteLibrarySeatType>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deleteLibrarySeatType>>>(
+      "library-seat-types.actions.deleteLibrarySeatType",
+      args,
+    );
+  }
+  return local_deleteLibrarySeatType(...args);
 }

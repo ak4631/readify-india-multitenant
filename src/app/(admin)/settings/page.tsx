@@ -1,5 +1,5 @@
 import { getCurrentSession, isSuperAdmin } from "@/lib/rbac";
-import { getPaymentSettings } from "@/lib/payment-settings";
+import { getAdminPaymentSettings } from "@/server/actions/page-data.actions";
 import { PaymentSettingsForm } from "@/components/subscriptions/payment-settings-form";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
@@ -15,7 +15,7 @@ export default async function SettingsPage({
   const params = await searchParams;
   const session = await getCurrentSession();
   const paymentSettings =
-    session && isSuperAdmin(session) ? await getPaymentSettings() : null;
+    session && isSuperAdmin(session) ? await getAdminPaymentSettings() : null;
   const vendors = await listVendorsPage({ page: parsePage(params.page) });
   return (
     <div className="space-y-6">

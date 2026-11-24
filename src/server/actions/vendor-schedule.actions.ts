@@ -15,7 +15,7 @@ function toTime(hhmm: string): Date {
   return new Date(`1970-01-01T${hhmm}:00.000Z`);
 }
 
-export async function getVendorSchedule(vendorId: string) {
+async function local_getVendorSchedule(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const rows = await prisma.vendorSchedule.findMany({ where: { vendorId } });
   const proposed = (await editorChanges(vendorId)).find(
@@ -32,7 +32,7 @@ export async function getVendorSchedule(vendorId: string) {
   }));
 }
 
-export async function updateVendorSchedule(
+async function local_updateVendorSchedule(
   vendorId: string,
   input: VendorScheduleInput,
 ) {
@@ -82,4 +82,30 @@ export async function updateVendorSchedule(
   });
 
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function getVendorSchedule(
+  ...args: Parameters<typeof local_getVendorSchedule>
+): Promise<Awaited<ReturnType<typeof local_getVendorSchedule>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getVendorSchedule>>>(
+      "vendor-schedule.actions.getVendorSchedule",
+      args,
+    );
+  }
+  return local_getVendorSchedule(...args);
+}
+
+export async function updateVendorSchedule(
+  ...args: Parameters<typeof local_updateVendorSchedule>
+): Promise<Awaited<ReturnType<typeof local_updateVendorSchedule>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateVendorSchedule>>>(
+      "vendor-schedule.actions.updateVendorSchedule",
+      args,
+    );
+  }
+  return local_updateVendorSchedule(...args);
 }

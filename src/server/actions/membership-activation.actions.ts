@@ -1,4 +1,5 @@
 "use server";
+
 import type { PaymentOrder } from "@/generated/prisma/client";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -46,7 +47,7 @@ async function accessibleOrder(code: string) {
   return { order, session };
 }
 
-export async function reviewMembershipBooking(code: string) {
+async function local_reviewMembershipBooking(code: string) {
   const { order } = await accessibleOrder(code);
   const profiles = await lookupCustomerProfiles([order.userId]);
   const vendor = await prisma.vendor.findUniqueOrThrow({
@@ -81,7 +82,7 @@ export async function reviewMembershipBooking(code: string) {
   };
 }
 
-export async function activateMembership(form: FormData) {
+async function local_activateMembership(form: FormData) {
   const { order: reference, session } = await accessibleOrder(
     String(form.get("targetId") ?? ""),
   );
@@ -233,4 +234,29 @@ export async function activateMembership(form: FormData) {
   revalidatePath("/subscriptions");
   revalidatePath("/bookings");
   revalidatePath(`/vendors/${reference.vendorId}`);
+}
+
+export async function reviewMembershipBooking(
+  ...args: Parameters<typeof local_reviewMembershipBooking>
+): Promise<Awaited<ReturnType<typeof local_reviewMembershipBooking>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_reviewMembershipBooking>>
+    >("membership-activation.actions.reviewMembershipBooking", args);
+  }
+  return local_reviewMembershipBooking(...args);
+}
+
+export async function activateMembership(
+  ...args: Parameters<typeof local_activateMembership>
+): Promise<Awaited<ReturnType<typeof local_activateMembership>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_activateMembership>>>(
+      "membership-activation.actions.activateMembership",
+      args,
+    );
+  }
+  return local_activateMembership(...args);
 }

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { requirePartnerAccess } from "@/lib/rbac";
-import { pageWindow, toPage, parsePage } from "@/lib/pagination";
+import { getPartnerHistory } from "@/server/actions/page-data.actions";
+import { toPage, parsePage } from "@/lib/pagination";
 import { ListPagination } from "@/components/layout/list-pagination";
 export async function PartnerHistory({
   partnerId,
@@ -10,19 +9,10 @@ export async function PartnerHistory({
   partnerId: string;
   searchParams: Record<string, string | undefined>;
 }) {
-  await requirePartnerAccess(partnerId, "auditLog.read");
-  const window = pageWindow(parsePage(searchParams.page));
-  const where = { partnerId };
-  const [rows, count] = await Promise.all([
-    prisma.auditLog.findMany({
-      where,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip: window.skip,
-      take: window.take,
-      include: { user: { select: { name: true } } },
-    }),
-    prisma.auditLog.count({ where }),
-  ]);
+  const { rows, count, window } = await getPartnerHistory(
+    partnerId,
+    parsePage(searchParams.page),
+  );
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">Partner activity</h2>

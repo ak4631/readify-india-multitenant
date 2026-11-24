@@ -101,6 +101,10 @@ export async function resolveDataScope(
   session: Session,
   selectedPartnerId?: string,
 ): Promise<DataScope> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend("access.resolveDataScope", [selectedPartnerId]);
+  }
   if (
     selectedPartnerId !== undefined &&
     (typeof selectedPartnerId !== "string" ||
@@ -183,6 +187,10 @@ export async function getAccessibleVendorIds(
   session: Session,
   selectedPartnerId?: string,
 ): Promise<string[] | null> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend("access.getAccessibleVendorIds", [selectedPartnerId]);
+  }
   const scope = await resolveDataScope(session, selectedPartnerId);
   if (scope.kind === "platform") return null;
   const vendors = await prisma.vendor.findMany({

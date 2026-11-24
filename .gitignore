@@ -43,3 +43,9 @@ next-env.d.ts
 
 # prisma generated client
 /src/generated/
+
+# Generated standalone backend application
+/backend/src/
+/backend/.next/
+/backend/next-env.d.ts
+/backend/tsconfig.tsbuildinfo

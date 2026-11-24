@@ -23,12 +23,12 @@ import {
   type LectureInput,
 } from "@/lib/validations/academics.schema";
 
-export async function listSubjects() {
+async function local_listSubjects() {
   await requirePermission("vendor.read");
   return prisma.subject.findMany({ orderBy: { name: "asc" } });
 }
 
-export async function listCourses(vendorId: string) {
+async function local_listCourses(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const courses = await prisma.course.findMany({
     where: { vendorId },
@@ -111,7 +111,7 @@ export async function listCourses(vendorId: string) {
 
 export type CourseRow = Awaited<ReturnType<typeof listCourses>>[number];
 
-export async function createCourse(vendorId: string, input: CourseInput) {
+async function local_createCourse(vendorId: string, input: CourseInput) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   const data = courseSchema.parse(input);
 
@@ -157,7 +157,7 @@ export async function createCourse(vendorId: string, input: CourseInput) {
   return course ? { ...course, price: Number(course.price) } : undefined;
 }
 
-export async function updateCourse(courseId: string, input: CourseInput) {
+async function local_updateCourse(courseId: string, input: CourseInput) {
   const record =
     (await prisma.course.findUnique({ where: { id: courseId } })) ??
     (await proposedParent(courseId, "COURSE_CREATE"));
@@ -207,7 +207,7 @@ export async function updateCourse(courseId: string, input: CourseInput) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function archiveCourse(courseId: string) {
+async function local_archiveCourse(courseId: string) {
   const record =
     (await prisma.course.findUnique({ where: { id: courseId } })) ??
     (await proposedParent(courseId, "COURSE_CREATE"));
@@ -248,10 +248,7 @@ export async function archiveCourse(courseId: string) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function setCourseTeachers(
-  courseId: string,
-  teacherIds: string[],
-) {
+async function local_setCourseTeachers(courseId: string, teacherIds: string[]) {
   const record =
     (await prisma.course.findUnique({ where: { id: courseId } })) ??
     (await proposedParent(courseId, "COURSE_CREATE"));
@@ -302,7 +299,7 @@ export async function setCourseTeachers(
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function createLecture(
+async function local_createLecture(
   vendorId: string,
   courseId: string,
   input: LectureInput,
@@ -367,7 +364,7 @@ export async function createLecture(
   return lecture;
 }
 
-export async function cancelLecture(vendorId: string, lectureId: string) {
+async function local_cancelLecture(vendorId: string, lectureId: string) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   const lecture =
     (await prisma.lecture.findFirst({
@@ -407,4 +404,108 @@ export async function cancelLecture(vendorId: string, lectureId: string) {
   });
 
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function listSubjects(
+  ...args: Parameters<typeof local_listSubjects>
+): Promise<Awaited<ReturnType<typeof local_listSubjects>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listSubjects>>>(
+      "courses.actions.listSubjects",
+      args,
+    );
+  }
+  return local_listSubjects(...args);
+}
+
+export async function listCourses(
+  ...args: Parameters<typeof local_listCourses>
+): Promise<Awaited<ReturnType<typeof local_listCourses>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listCourses>>>(
+      "courses.actions.listCourses",
+      args,
+    );
+  }
+  return local_listCourses(...args);
+}
+
+export async function createCourse(
+  ...args: Parameters<typeof local_createCourse>
+): Promise<Awaited<ReturnType<typeof local_createCourse>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createCourse>>>(
+      "courses.actions.createCourse",
+      args,
+    );
+  }
+  return local_createCourse(...args);
+}
+
+export async function updateCourse(
+  ...args: Parameters<typeof local_updateCourse>
+): Promise<Awaited<ReturnType<typeof local_updateCourse>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateCourse>>>(
+      "courses.actions.updateCourse",
+      args,
+    );
+  }
+  return local_updateCourse(...args);
+}
+
+export async function archiveCourse(
+  ...args: Parameters<typeof local_archiveCourse>
+): Promise<Awaited<ReturnType<typeof local_archiveCourse>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_archiveCourse>>>(
+      "courses.actions.archiveCourse",
+      args,
+    );
+  }
+  return local_archiveCourse(...args);
+}
+
+export async function setCourseTeachers(
+  ...args: Parameters<typeof local_setCourseTeachers>
+): Promise<Awaited<ReturnType<typeof local_setCourseTeachers>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_setCourseTeachers>>>(
+      "courses.actions.setCourseTeachers",
+      args,
+    );
+  }
+  return local_setCourseTeachers(...args);
+}
+
+export async function createLecture(
+  ...args: Parameters<typeof local_createLecture>
+): Promise<Awaited<ReturnType<typeof local_createLecture>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createLecture>>>(
+      "courses.actions.createLecture",
+      args,
+    );
+  }
+  return local_createLecture(...args);
+}
+
+export async function cancelLecture(
+  ...args: Parameters<typeof local_cancelLecture>
+): Promise<Awaited<ReturnType<typeof local_cancelLecture>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_cancelLecture>>>(
+      "courses.actions.cancelLecture",
+      args,
+    );
+  }
+  return local_cancelLecture(...args);
 }

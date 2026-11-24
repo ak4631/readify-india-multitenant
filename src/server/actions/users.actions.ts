@@ -14,7 +14,7 @@ import {
   type VendorAccountInput,
 } from "@/lib/validations/user.schema";
 
-export async function createVendorAccount(input: VendorAccountInput) {
+async function local_createVendorAccount(input: VendorAccountInput) {
   const session = await requireSuperAdmin();
   const data = vendorAccountSchema.parse(input);
   const passwordHash = await bcrypt.hash(data.password, 12);
@@ -54,7 +54,7 @@ export async function createVendorAccount(input: VendorAccountInput) {
   return { id: user.id, email: user.email };
 }
 
-export async function listUsers(page = 1) {
+async function local_listUsers(page = 1) {
   await requireSuperAdmin();
   const window = pageWindow(page);
   const [items, total] = await Promise.all([
@@ -73,7 +73,7 @@ export async function listUsers(page = 1) {
   return toPage(items, total, window);
 }
 
-export async function getUserById(userId: string) {
+async function local_getUserById(userId: string) {
   await requireSuperAdmin();
 
   return prisma.user.findUnique({
@@ -83,7 +83,7 @@ export async function getUserById(userId: string) {
   });
 }
 
-export async function suspendUser(input: { userId: string }) {
+async function local_suspendUser(input: { userId: string }) {
   const session = await requireSuperAdmin();
   const { userId } = suspendUserSchema.parse(input);
 
@@ -134,7 +134,7 @@ export async function suspendUser(input: { userId: string }) {
   revalidatePath("/users");
 }
 
-export async function activateUser(input: { userId: string }) {
+async function local_activateUser(input: { userId: string }) {
   const session = await requireSuperAdmin();
   const { userId } = suspendUserSchema.parse(input);
 
@@ -157,4 +157,69 @@ export async function activateUser(input: { userId: string }) {
   });
 
   revalidatePath("/users");
+}
+
+export async function createVendorAccount(
+  ...args: Parameters<typeof local_createVendorAccount>
+): Promise<Awaited<ReturnType<typeof local_createVendorAccount>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createVendorAccount>>>(
+      "users.actions.createVendorAccount",
+      args,
+    );
+  }
+  return local_createVendorAccount(...args);
+}
+
+export async function listUsers(
+  ...args: Parameters<typeof local_listUsers>
+): Promise<Awaited<ReturnType<typeof local_listUsers>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listUsers>>>(
+      "users.actions.listUsers",
+      args,
+    );
+  }
+  return local_listUsers(...args);
+}
+
+export async function getUserById(
+  ...args: Parameters<typeof local_getUserById>
+): Promise<Awaited<ReturnType<typeof local_getUserById>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getUserById>>>(
+      "users.actions.getUserById",
+      args,
+    );
+  }
+  return local_getUserById(...args);
+}
+
+export async function suspendUser(
+  ...args: Parameters<typeof local_suspendUser>
+): Promise<Awaited<ReturnType<typeof local_suspendUser>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_suspendUser>>>(
+      "users.actions.suspendUser",
+      args,
+    );
+  }
+  return local_suspendUser(...args);
+}
+
+export async function activateUser(
+  ...args: Parameters<typeof local_activateUser>
+): Promise<Awaited<ReturnType<typeof local_activateUser>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_activateUser>>>(
+      "users.actions.activateUser",
+      args,
+    );
+  }
+  return local_activateUser(...args);
 }

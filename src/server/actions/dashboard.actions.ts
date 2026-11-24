@@ -4,7 +4,7 @@ import { LIVE_LISTING_WHERE } from "@/lib/live-listing";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformPermission } from "@/lib/rbac";
 
-export async function getDashboardMetrics() {
+async function local_getDashboardMetrics() {
   await requirePlatformPermission("dashboard.read");
 
   const [
@@ -90,3 +90,16 @@ export async function getDashboardMetrics() {
 }
 
 export type DashboardMetrics = Awaited<ReturnType<typeof getDashboardMetrics>>;
+
+export async function getDashboardMetrics(
+  ...args: Parameters<typeof local_getDashboardMetrics>
+): Promise<Awaited<ReturnType<typeof local_getDashboardMetrics>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getDashboardMetrics>>>(
+      "dashboard.actions.getDashboardMetrics",
+      args,
+    );
+  }
+  return local_getDashboardMetrics(...args);
+}

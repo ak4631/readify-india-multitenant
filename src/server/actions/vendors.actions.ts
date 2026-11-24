@@ -59,7 +59,7 @@ async function vendorWhere(filters: VendorFilters & { categorySlug?: string }) {
   };
 }
 
-export async function listVendors(filters: VendorFilters = {}) {
+async function local_listVendors(filters: VendorFilters = {}) {
   return prisma.vendor.findMany({
     where: await vendorWhere(filters),
     orderBy: { createdAt: "desc" },
@@ -67,7 +67,7 @@ export async function listVendors(filters: VendorFilters = {}) {
   });
 }
 
-export async function listVendorsPage(
+async function local_listVendorsPage(
   filters: VendorFilters & {
     categorySlug?: string;
     page?: number;
@@ -89,7 +89,7 @@ export async function listVendorsPage(
   return toPage(items, total, window);
 }
 
-export async function getVendorById(vendorId: string) {
+async function local_getVendorById(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
 
   const vendor = await prisma.vendor.findUnique({
@@ -164,7 +164,7 @@ async function uniqueSlug(name: string): Promise<string> {
   return candidate;
 }
 
-export async function createVendorDraft(input: VendorBasicInfoInput) {
+async function local_createVendorDraft(input: VendorBasicInfoInput) {
   const session = await requirePermission("vendor.create");
   const data = vendorBasicInfoSchema.parse(input);
   const category = await prisma.vendorCategory.findUniqueOrThrow({
@@ -216,7 +216,7 @@ export async function createVendorDraft(input: VendorBasicInfoInput) {
   return vendor;
 }
 
-export async function updateVendorProfile(
+async function local_updateVendorProfile(
   vendorId: string,
   input: VendorBasicInfoInput,
 ) {
@@ -275,7 +275,7 @@ export async function updateVendorProfile(
 // Owner-set capacity for categories without a per-seat model (gym, co-working-space,
 // exam-hub). Library ignores this -- its capacity comes from LibrarySeat rows,
 // so this is only meaningful/shown for other categories.
-export async function updateVendorCapacity(
+async function local_updateVendorCapacity(
   vendorId: string,
   input: VendorCapacityInput,
 ) {
@@ -316,7 +316,7 @@ export async function updateVendorCapacity(
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function updateVendorAddress(
+async function local_updateVendorAddress(
   vendorId: string,
   input: VendorAddressInput,
 ) {
@@ -459,7 +459,7 @@ async function transitionVendor(
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function submitVendorForReview(vendorId: string) {
+async function local_submitVendorForReview(vendorId: string) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   await prisma.$transaction(async (tx) => {
     const vendor = await lockListing(tx, vendorId);
@@ -518,7 +518,7 @@ export async function submitVendorForReview(vendorId: string) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function approveVendor(vendorId: string, expectedVersion: number) {
+async function local_approveVendor(vendorId: string, expectedVersion: number) {
   const session = await requireSuperAdminPermission("vendor.approve");
   await transitionVendor(
     vendorId,
@@ -532,7 +532,7 @@ export async function approveVendor(vendorId: string, expectedVersion: number) {
   );
 }
 
-export async function rejectVendor(
+async function local_rejectVendor(
   vendorId: string,
   reason: string,
   expectedVersion: number,
@@ -557,7 +557,7 @@ export async function rejectVendor(
   );
 }
 
-export async function publishVendor(vendorId: string, expectedVersion: number) {
+async function local_publishVendor(vendorId: string, expectedVersion: number) {
   const session = await requireSuperAdminPermission("vendor.publish");
   await transitionVendor(
     vendorId,
@@ -571,7 +571,7 @@ export async function publishVendor(vendorId: string, expectedVersion: number) {
   );
 }
 
-export async function suspendVendor(vendorId: string) {
+async function local_suspendVendor(vendorId: string) {
   const session = await requireSuperAdminPermission("vendor.suspend");
   await transitionVendor(
     vendorId,
@@ -581,7 +581,7 @@ export async function suspendVendor(vendorId: string) {
   );
 }
 
-export async function reviseRejectedVendor(vendorId: string) {
+async function local_reviseRejectedVendor(vendorId: string) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   await transitionVendor(
     vendorId,
@@ -592,15 +592,15 @@ export async function reviseRejectedVendor(vendorId: string) {
   );
 }
 
-export async function requestListingReactivation(vendorId: string) {
+async function local_requestListingReactivation(vendorId: string) {
   await submitVendorForReview(vendorId);
 }
-export async function getListingReadiness(vendorId: string) {
+async function local_getListingReadiness(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   return getReadiness(prisma, vendorId);
 }
 
-export async function reopenLegacyListing(vendorId: string) {
+async function local_reopenLegacyListing(vendorId: string) {
   const session = await requireSuperAdminPermission("vendor.reject");
   await prisma.$transaction(async (tx) => {
     const vendor = await lockListing(tx, vendorId);
@@ -628,4 +628,211 @@ export async function reopenLegacyListing(vendorId: string) {
   });
   revalidatePath(`/vendors/${vendorId}`);
   revalidatePath("/dashboard");
+}
+
+export async function listVendors(
+  ...args: Parameters<typeof local_listVendors>
+): Promise<Awaited<ReturnType<typeof local_listVendors>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listVendors>>>(
+      "vendors.actions.listVendors",
+      args,
+    );
+  }
+  return local_listVendors(...args);
+}
+
+export async function listVendorsPage(
+  ...args: Parameters<typeof local_listVendorsPage>
+): Promise<Awaited<ReturnType<typeof local_listVendorsPage>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listVendorsPage>>>(
+      "vendors.actions.listVendorsPage",
+      args,
+    );
+  }
+  return local_listVendorsPage(...args);
+}
+
+export async function getVendorById(
+  ...args: Parameters<typeof local_getVendorById>
+): Promise<Awaited<ReturnType<typeof local_getVendorById>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getVendorById>>>(
+      "vendors.actions.getVendorById",
+      args,
+    );
+  }
+  return local_getVendorById(...args);
+}
+
+export async function createVendorDraft(
+  ...args: Parameters<typeof local_createVendorDraft>
+): Promise<Awaited<ReturnType<typeof local_createVendorDraft>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createVendorDraft>>>(
+      "vendors.actions.createVendorDraft",
+      args,
+    );
+  }
+  return local_createVendorDraft(...args);
+}
+
+export async function updateVendorProfile(
+  ...args: Parameters<typeof local_updateVendorProfile>
+): Promise<Awaited<ReturnType<typeof local_updateVendorProfile>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateVendorProfile>>>(
+      "vendors.actions.updateVendorProfile",
+      args,
+    );
+  }
+  return local_updateVendorProfile(...args);
+}
+
+export async function updateVendorCapacity(
+  ...args: Parameters<typeof local_updateVendorCapacity>
+): Promise<Awaited<ReturnType<typeof local_updateVendorCapacity>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateVendorCapacity>>>(
+      "vendors.actions.updateVendorCapacity",
+      args,
+    );
+  }
+  return local_updateVendorCapacity(...args);
+}
+
+export async function updateVendorAddress(
+  ...args: Parameters<typeof local_updateVendorAddress>
+): Promise<Awaited<ReturnType<typeof local_updateVendorAddress>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateVendorAddress>>>(
+      "vendors.actions.updateVendorAddress",
+      args,
+    );
+  }
+  return local_updateVendorAddress(...args);
+}
+
+export async function submitVendorForReview(
+  ...args: Parameters<typeof local_submitVendorForReview>
+): Promise<Awaited<ReturnType<typeof local_submitVendorForReview>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_submitVendorForReview>>>(
+      "vendors.actions.submitVendorForReview",
+      args,
+    );
+  }
+  return local_submitVendorForReview(...args);
+}
+
+export async function approveVendor(
+  ...args: Parameters<typeof local_approveVendor>
+): Promise<Awaited<ReturnType<typeof local_approveVendor>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_approveVendor>>>(
+      "vendors.actions.approveVendor",
+      args,
+    );
+  }
+  return local_approveVendor(...args);
+}
+
+export async function rejectVendor(
+  ...args: Parameters<typeof local_rejectVendor>
+): Promise<Awaited<ReturnType<typeof local_rejectVendor>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_rejectVendor>>>(
+      "vendors.actions.rejectVendor",
+      args,
+    );
+  }
+  return local_rejectVendor(...args);
+}
+
+export async function publishVendor(
+  ...args: Parameters<typeof local_publishVendor>
+): Promise<Awaited<ReturnType<typeof local_publishVendor>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_publishVendor>>>(
+      "vendors.actions.publishVendor",
+      args,
+    );
+  }
+  return local_publishVendor(...args);
+}
+
+export async function suspendVendor(
+  ...args: Parameters<typeof local_suspendVendor>
+): Promise<Awaited<ReturnType<typeof local_suspendVendor>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_suspendVendor>>>(
+      "vendors.actions.suspendVendor",
+      args,
+    );
+  }
+  return local_suspendVendor(...args);
+}
+
+export async function reviseRejectedVendor(
+  ...args: Parameters<typeof local_reviseRejectedVendor>
+): Promise<Awaited<ReturnType<typeof local_reviseRejectedVendor>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_reviseRejectedVendor>>>(
+      "vendors.actions.reviseRejectedVendor",
+      args,
+    );
+  }
+  return local_reviseRejectedVendor(...args);
+}
+
+export async function requestListingReactivation(
+  ...args: Parameters<typeof local_requestListingReactivation>
+): Promise<Awaited<ReturnType<typeof local_requestListingReactivation>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_requestListingReactivation>>
+    >("vendors.actions.requestListingReactivation", args);
+  }
+  return local_requestListingReactivation(...args);
+}
+
+export async function getListingReadiness(
+  ...args: Parameters<typeof local_getListingReadiness>
+): Promise<Awaited<ReturnType<typeof local_getListingReadiness>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getListingReadiness>>>(
+      "vendors.actions.getListingReadiness",
+      args,
+    );
+  }
+  return local_getListingReadiness(...args);
+}
+
+export async function reopenLegacyListing(
+  ...args: Parameters<typeof local_reopenLegacyListing>
+): Promise<Awaited<ReturnType<typeof local_reopenLegacyListing>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_reopenLegacyListing>>>(
+      "vendors.actions.reopenLegacyListing",
+      args,
+    );
+  }
+  return local_reopenLegacyListing(...args);
 }

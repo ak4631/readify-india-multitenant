@@ -17,7 +17,13 @@
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio",
     "prisma:apply": "node scripts/apply-migration.js",
-    "brand:sync": "node scripts/sync-brand-kit.js"
+    "brand:sync": "node scripts/sync-brand-kit.js",
+    "backend:prepare": "node scripts/connect-backend.cjs && node scripts/prepare-backend.mjs",
+    "backend:dev": "npm run backend:prepare && npm --prefix backend run dev",
+    "backend:build": "npm run backend:prepare && npm --prefix backend run build",
+    "backend:start": "npm --prefix backend start",
+    "backend:migrate": "node --env-file=backend/.env scripts/backend-migrate.mjs",
+    "backend:seed": "node --env-file=backend/.env --import tsx prisma/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { prisma } from "@/lib/prisma";
 
 export async function requireCustomer(request: Request) {
   const authorization = request.headers.get("authorization");
@@ -16,7 +17,27 @@ export async function requireCustomer(request: Request) {
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error("Not authenticated");
-  return z.object({ id: z.uuid() }).parse(await response.json());
+  const identity = z
+    .object({
+      id: z.uuid(),
+      email: z.string().max(320).nullish(),
+      user_metadata: z
+        .object({ full_name: z.string().max(200).nullish() })
+        .passthrough()
+        .optional(),
+    })
+    .parse(await response.json());
+  if (process.env.CUSTOMER_IDENTITY_STORAGE === "postgres") {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`INSERT INTO auth.users(id,email) VALUES(${identity.id}::uuid,${identity.email ?? null}) ON CONFLICT(id) DO UPDATE SET email=EXCLUDED.email`;
+      await tx.$executeRaw`INSERT INTO public.profiles(id,full_name) VALUES(${identity.id}::uuid,${identity.user_metadata?.full_name ?? null}) ON CONFLICT(id) DO NOTHING`;
+    });
+    const active = await prisma.$queryRaw<
+      { is_active: boolean }[]
+    >`SELECT is_active FROM public.profiles WHERE id=${identity.id}::uuid`;
+    if (!active[0]?.is_active) throw new Error("Not authenticated");
+  }
+  return { id: identity.id };
 }
 
 // Business-rule messages are safe to show: RAISE EXCEPTION (SQLSTATE P0001)

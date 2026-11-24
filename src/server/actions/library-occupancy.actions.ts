@@ -101,7 +101,7 @@ function addRevenue(map: Map<string, RevenueRow>, key: string, amount: number) {
   map.set(key, row);
 }
 
-export async function getLibraryOccupancy(
+async function local_getLibraryOccupancy(
   vendorId: string,
   date: string,
 ): Promise<LibraryOccupancy> {
@@ -404,7 +404,7 @@ async function getRevenue(
   };
 }
 
-export async function cancelLibraryBooking(bookingId: string) {
+async function local_cancelLibraryBooking(bookingId: string) {
   const payment = await prisma.paymentOrder.findUnique({
     where: { targetId: bookingId },
   });
@@ -459,7 +459,7 @@ export async function cancelLibraryBooking(bookingId: string) {
   revalidatePath(`/vendors/${record.vendorId}`);
 }
 
-export async function setLibrarySeatActive(seatId: string, isActive: boolean) {
+async function local_setLibrarySeatActive(seatId: string, isActive: boolean) {
   const seat = await prisma.librarySeat.findUniqueOrThrow({
     where: { id: seatId },
     select: { vendorId: true },
@@ -509,4 +509,43 @@ export async function setLibrarySeatActive(seatId: string, isActive: boolean) {
   });
 
   revalidatePath(`/vendors/${seat.vendorId}`);
+}
+
+export async function getLibraryOccupancy(
+  ...args: Parameters<typeof local_getLibraryOccupancy>
+): Promise<Awaited<ReturnType<typeof local_getLibraryOccupancy>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getLibraryOccupancy>>>(
+      "library-occupancy.actions.getLibraryOccupancy",
+      args,
+    );
+  }
+  return local_getLibraryOccupancy(...args);
+}
+
+export async function cancelLibraryBooking(
+  ...args: Parameters<typeof local_cancelLibraryBooking>
+): Promise<Awaited<ReturnType<typeof local_cancelLibraryBooking>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_cancelLibraryBooking>>>(
+      "library-occupancy.actions.cancelLibraryBooking",
+      args,
+    );
+  }
+  return local_cancelLibraryBooking(...args);
+}
+
+export async function setLibrarySeatActive(
+  ...args: Parameters<typeof local_setLibrarySeatActive>
+): Promise<Awaited<ReturnType<typeof local_setLibrarySeatActive>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_setLibrarySeatActive>>>(
+      "library-occupancy.actions.setLibrarySeatActive",
+      args,
+    );
+  }
+  return local_setLibrarySeatActive(...args);
 }

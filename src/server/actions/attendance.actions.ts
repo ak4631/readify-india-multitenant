@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireVendorAccess } from "@/lib/rbac";
 import { writeAuditLog } from "@/lib/audit";
 
-export async function checkInByCode(code: string) {
+async function local_checkInByCode(code: string) {
   const value = z.string().trim().min(3).max(100).parse(code);
   const references = await prisma.$queryRaw<
     { id: string; vendorId: string; userId: string }[]
@@ -69,7 +69,7 @@ export async function checkInByCode(code: string) {
   revalidatePath("/service-management");
 }
 
-export async function checkOutVisit(visitId: string) {
+async function local_checkOutVisit(visitId: string) {
   const visit = await prisma.attendanceVisit.findUniqueOrThrow({
     where: { id: visitId },
   });
@@ -90,4 +90,30 @@ export async function checkOutVisit(visitId: string) {
   revalidatePath("/customers");
   revalidatePath("/bookings");
   revalidatePath("/service-management");
+}
+
+export async function checkInByCode(
+  ...args: Parameters<typeof local_checkInByCode>
+): Promise<Awaited<ReturnType<typeof local_checkInByCode>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_checkInByCode>>>(
+      "attendance.actions.checkInByCode",
+      args,
+    );
+  }
+  return local_checkInByCode(...args);
+}
+
+export async function checkOutVisit(
+  ...args: Parameters<typeof local_checkOutVisit>
+): Promise<Awaited<ReturnType<typeof local_checkOutVisit>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_checkOutVisit>>>(
+      "attendance.actions.checkOutVisit",
+      args,
+    );
+  }
+  return local_checkOutVisit(...args);
 }

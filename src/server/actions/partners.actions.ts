@@ -25,7 +25,7 @@ import {
   type PartnerUserUpdateInput,
 } from "@/lib/validations/partner.schema";
 
-export async function listPartners(
+async function local_listPartners(
   options: { page?: number; approval?: "PENDING" } = {},
 ) {
   const session = await requirePermission("partner.read");
@@ -48,7 +48,7 @@ export async function listPartners(
   return { ...toPage(items, total, window), pending };
 }
 
-export async function getPartnerById(partnerId: string) {
+async function local_getPartnerById(partnerId: string) {
   await requirePartnerAccess(partnerId, "partner.read");
   return prisma.partner.findUnique({
     where: { id: partnerId },
@@ -61,7 +61,7 @@ export async function getPartnerById(partnerId: string) {
   });
 }
 
-export async function listPartnerUsers(partnerId: string, page = 1) {
+async function local_listPartnerUsers(partnerId: string, page = 1) {
   await requirePartnerAccess(partnerId, "partnerUser.read");
   const where = { partnerId };
   const window = pageWindow(page);
@@ -81,7 +81,7 @@ export async function listPartnerUsers(partnerId: string, page = 1) {
 
 // Platform view of the Team Members page: partner-side staff across every
 // organization. Platform accounts themselves are managed under Users.
-export async function listAllPartnerUsers(page = 1) {
+async function local_listAllPartnerUsers(page = 1) {
   await requirePlatformPermission("partnerUser.read");
   const where = { partnerId: { not: null } };
   const window = pageWindow(page);
@@ -102,7 +102,7 @@ export async function listAllPartnerUsers(page = 1) {
   return toPage(items, total, window);
 }
 
-export async function createPartner(input: PartnerInput) {
+async function local_createPartner(input: PartnerInput) {
   const session = await requireSuperAdmin();
   const data = partnerSchema.parse(input);
   const partner = await prisma.$transaction(async (tx) => {
@@ -127,7 +127,7 @@ export async function createPartner(input: PartnerInput) {
   return partner;
 }
 
-export async function updatePartner(partnerId: string, input: PartnerInput) {
+async function local_updatePartner(partnerId: string, input: PartnerInput) {
   const session = await requirePartnerAccess(partnerId, "partner.update");
   const data = partnerSchema.parse(input);
   await prisma.$transaction(async (tx) => {
@@ -155,7 +155,7 @@ export async function updatePartner(partnerId: string, input: PartnerInput) {
   revalidatePath(`/partners/${partnerId}`);
 }
 
-export async function setPartnerActive(partnerId: string, active: boolean) {
+async function local_setPartnerActive(partnerId: string, active: boolean) {
   const session = await requireSuperAdmin();
   await prisma.$transaction(async (tx) => {
     const before = await tx.partner.findUniqueOrThrow({
@@ -182,7 +182,7 @@ export async function setPartnerActive(partnerId: string, active: boolean) {
   revalidatePath(`/partners/${partnerId}`);
 }
 
-export async function createPartnerUser(input: PartnerUserInput) {
+async function local_createPartnerUser(input: PartnerUserInput) {
   const data = partnerUserSchema.parse(input);
   const permission =
     data.role === "PARTNER_ADMIN"
@@ -222,7 +222,7 @@ export async function createPartnerUser(input: PartnerUserInput) {
   return { id: user.id, email: user.email };
 }
 
-export async function setPartnerUserActive(userId: string, active: boolean) {
+async function local_setPartnerUserActive(userId: string, active: boolean) {
   const actorSession = await getCurrentSession();
   if (!actorSession?.user) throw new PublicActionError("Not authenticated");
   if (actorSession.user.id === userId)
@@ -276,7 +276,7 @@ export async function setPartnerUserActive(userId: string, active: boolean) {
   revalidatePath(`/partners/${target.partnerId}`);
 }
 
-export async function updatePartnerUser(input: PartnerUserUpdateInput) {
+async function local_updatePartnerUser(input: PartnerUserUpdateInput) {
   const data = partnerUserUpdateSchema.parse(input);
   const target = await prisma.user.findUniqueOrThrow({
     where: { id: data.userId },
@@ -314,7 +314,7 @@ export async function updatePartnerUser(input: PartnerUserUpdateInput) {
   revalidatePath(`/partners/${target.partnerId}`);
 }
 
-export async function reviewPartnerApplication(
+async function local_reviewPartnerApplication(
   partnerId: string,
   approve: boolean,
   reason?: string,
@@ -375,4 +375,146 @@ export async function reviewPartnerApplication(
   });
   revalidatePath("/partners");
   revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function listPartners(
+  ...args: Parameters<typeof local_listPartners>
+): Promise<Awaited<ReturnType<typeof local_listPartners>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listPartners>>>(
+      "partners.actions.listPartners",
+      args,
+    );
+  }
+  return local_listPartners(...args);
+}
+
+export async function getPartnerById(
+  ...args: Parameters<typeof local_getPartnerById>
+): Promise<Awaited<ReturnType<typeof local_getPartnerById>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getPartnerById>>>(
+      "partners.actions.getPartnerById",
+      args,
+    );
+  }
+  return local_getPartnerById(...args);
+}
+
+export async function listPartnerUsers(
+  ...args: Parameters<typeof local_listPartnerUsers>
+): Promise<Awaited<ReturnType<typeof local_listPartnerUsers>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listPartnerUsers>>>(
+      "partners.actions.listPartnerUsers",
+      args,
+    );
+  }
+  return local_listPartnerUsers(...args);
+}
+
+export async function listAllPartnerUsers(
+  ...args: Parameters<typeof local_listAllPartnerUsers>
+): Promise<Awaited<ReturnType<typeof local_listAllPartnerUsers>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listAllPartnerUsers>>>(
+      "partners.actions.listAllPartnerUsers",
+      args,
+    );
+  }
+  return local_listAllPartnerUsers(...args);
+}
+
+export async function createPartner(
+  ...args: Parameters<typeof local_createPartner>
+): Promise<Awaited<ReturnType<typeof local_createPartner>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createPartner>>>(
+      "partners.actions.createPartner",
+      args,
+    );
+  }
+  return local_createPartner(...args);
+}
+
+export async function updatePartner(
+  ...args: Parameters<typeof local_updatePartner>
+): Promise<Awaited<ReturnType<typeof local_updatePartner>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updatePartner>>>(
+      "partners.actions.updatePartner",
+      args,
+    );
+  }
+  return local_updatePartner(...args);
+}
+
+export async function setPartnerActive(
+  ...args: Parameters<typeof local_setPartnerActive>
+): Promise<Awaited<ReturnType<typeof local_setPartnerActive>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_setPartnerActive>>>(
+      "partners.actions.setPartnerActive",
+      args,
+    );
+  }
+  return local_setPartnerActive(...args);
+}
+
+export async function createPartnerUser(
+  ...args: Parameters<typeof local_createPartnerUser>
+): Promise<Awaited<ReturnType<typeof local_createPartnerUser>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createPartnerUser>>>(
+      "partners.actions.createPartnerUser",
+      args,
+    );
+  }
+  return local_createPartnerUser(...args);
+}
+
+export async function setPartnerUserActive(
+  ...args: Parameters<typeof local_setPartnerUserActive>
+): Promise<Awaited<ReturnType<typeof local_setPartnerUserActive>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_setPartnerUserActive>>>(
+      "partners.actions.setPartnerUserActive",
+      args,
+    );
+  }
+  return local_setPartnerUserActive(...args);
+}
+
+export async function updatePartnerUser(
+  ...args: Parameters<typeof local_updatePartnerUser>
+): Promise<Awaited<ReturnType<typeof local_updatePartnerUser>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updatePartnerUser>>>(
+      "partners.actions.updatePartnerUser",
+      args,
+    );
+  }
+  return local_updatePartnerUser(...args);
+}
+
+export async function reviewPartnerApplication(
+  ...args: Parameters<typeof local_reviewPartnerApplication>
+): Promise<Awaited<ReturnType<typeof local_reviewPartnerApplication>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_reviewPartnerApplication>>
+    >("partners.actions.reviewPartnerApplication", args);
+  }
+  return local_reviewPartnerApplication(...args);
 }

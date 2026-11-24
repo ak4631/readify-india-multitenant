@@ -37,7 +37,7 @@ export type VendorBookingRow = {
 
 const MAX_ROWS = 200;
 
-export async function listVendorBookings(
+async function local_listVendorBookings(
   vendorId: string,
 ): Promise<VendorBookingRow[]> {
   await requireVendorAccess(vendorId, "vendor.read");
@@ -125,7 +125,7 @@ export async function listVendorBookings(
     .slice(0, MAX_ROWS);
 }
 
-export async function listWorkspaceBookings(
+async function local_listWorkspaceBookings(
   filters: import("@/lib/booking-list-query").BookingListFilters = {},
 ) {
   const session = await requirePermission("vendor.read");
@@ -181,7 +181,7 @@ export async function listWorkspaceBookings(
   );
 }
 
-export async function listBookingListingOptions(partnerId?: string) {
+async function local_listBookingListingOptions(partnerId?: string) {
   const session = await requirePermission("vendor.read");
   const ids = await getAccessibleVendorIds(session, partnerId);
   return prisma.vendor.findMany({
@@ -189,4 +189,42 @@ export async function listBookingListingOptions(partnerId?: string) {
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+}
+
+export async function listVendorBookings(
+  ...args: Parameters<typeof local_listVendorBookings>
+): Promise<Awaited<ReturnType<typeof local_listVendorBookings>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listVendorBookings>>>(
+      "bookings.actions.listVendorBookings",
+      args,
+    );
+  }
+  return local_listVendorBookings(...args);
+}
+
+export async function listWorkspaceBookings(
+  ...args: Parameters<typeof local_listWorkspaceBookings>
+): Promise<Awaited<ReturnType<typeof local_listWorkspaceBookings>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listWorkspaceBookings>>>(
+      "bookings.actions.listWorkspaceBookings",
+      args,
+    );
+  }
+  return local_listWorkspaceBookings(...args);
+}
+
+export async function listBookingListingOptions(
+  ...args: Parameters<typeof local_listBookingListingOptions>
+): Promise<Awaited<ReturnType<typeof local_listBookingListingOptions>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_listBookingListingOptions>>
+    >("bookings.actions.listBookingListingOptions", args);
+  }
+  return local_listBookingListingOptions(...args);
 }

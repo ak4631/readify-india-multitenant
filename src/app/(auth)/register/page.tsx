@@ -1,13 +1,9 @@
 import { BrandLogo } from "@/components/layout/brand-logo";
-import { prisma } from "@/lib/prisma";
+import { getRegistrationServices } from "@/server/actions/page-data.actions";
 import { RegistrationForm } from "./registration-form";
 export const dynamic = "force-dynamic";
 export default async function RegistrationPage() {
-  const services = await prisma.vendorCategory.findMany({
-    where: { status: "ACTIVE" },
-    select: { slug: true, name: true },
-    orderBy: { sortOrder: "asc" },
-  });
+  const services = await getRegistrationServices();
   return (
     <main className="mx-auto max-w-lg space-y-6 px-6 py-12">
       <BrandLogo className="w-44" />

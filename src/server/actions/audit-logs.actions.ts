@@ -4,7 +4,7 @@ import { pageWindow, toPage } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac";
 
-export async function listAuditLogs(
+async function local_listAuditLogs(
   filters: { entityType?: string; page?: number } = {},
 ) {
   await requirePermission("auditLog.read");
@@ -22,4 +22,17 @@ export async function listAuditLogs(
     prisma.auditLog.count({ where }),
   ]);
   return toPage(items, total, window);
+}
+
+export async function listAuditLogs(
+  ...args: Parameters<typeof local_listAuditLogs>
+): Promise<Awaited<ReturnType<typeof local_listAuditLogs>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listAuditLogs>>>(
+      "audit-logs.actions.listAuditLogs",
+      args,
+    );
+  }
+  return local_listAuditLogs(...args);
 }

@@ -36,7 +36,7 @@ export type CustomersResult = {
 
 export type CustomerType = "all" | "new" | "active" | "permanent" | "flexible";
 
-export async function listCustomers(
+async function local_listCustomers(
   options: { partnerId?: string; page?: number; type?: CustomerType } = {},
 ): Promise<CustomersResult> {
   const session = await requirePermission("customer.read");
@@ -221,4 +221,17 @@ async function listPartnerCustomers(partnerId: string): Promise<CustomerRow[]> {
       // booking or subscription event, and both branches above call widen().
       .map((row) => ({ ...row, joinedAt: row.joinedAt as Date }))
   );
+}
+
+export async function listCustomers(
+  ...args: Parameters<typeof local_listCustomers>
+): Promise<Awaited<ReturnType<typeof local_listCustomers>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listCustomers>>>(
+      "customers.actions.listCustomers",
+      args,
+    );
+  }
+  return local_listCustomers(...args);
 }

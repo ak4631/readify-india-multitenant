@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { getPartnerDetails } from "@/server/actions/page-data.actions";
 import { requirePartnerAccess, hasPermission } from "@/lib/rbac";
 import { PARTNER_MODULES } from "@/config/partner-modules";
 import { PageHeader } from "@/components/layout/page-header";
@@ -17,7 +17,7 @@ export default async function PartnerLayout({
 }) {
   const { id } = await params;
   const session = await requirePartnerAccess(id, "partner.read");
-  const partner = await prisma.partner.findUnique({ where: { id } });
+  const partner = await getPartnerDetails(id);
   if (!partner) notFound();
   const modules = PARTNER_MODULES.filter((m) =>
     hasPermission(session, m.permission),

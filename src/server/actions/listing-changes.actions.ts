@@ -33,14 +33,14 @@ import {
   type ReadinessIssue,
 } from "@/lib/listing-readiness";
 
-export async function listListingChanges(vendorId: string) {
+async function local_listListingChanges(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   return prisma.listingChange.findMany({
     where: { vendorId, status: { in: ["DRAFT", "PENDING"] } },
     orderBy: { createdAt: "asc" },
   });
 }
-export async function listListingRevisions(vendorId: string) {
+async function local_listListingRevisions(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const rows = await prisma.listingRevision.findMany({
     where: { vendorId },
@@ -65,7 +65,7 @@ export async function listListingRevisions(vendorId: string) {
     }),
   }));
 }
-export async function submitListingRevision(revisionId: string) {
+async function local_submitListingRevision(revisionId: string) {
   const ref = await prisma.listingRevision.findUniqueOrThrow({
     where: { id: revisionId },
   });
@@ -119,7 +119,7 @@ export async function submitListingRevision(revisionId: string) {
   revalidatePath(`/vendors/${ref.vendorId}`);
   revalidatePath("/dashboard");
 }
-export async function withdrawListingRevision(revisionId: string) {
+async function local_withdrawListingRevision(revisionId: string) {
   const ref = await prisma.listingRevision.findUniqueOrThrow({
     where: { id: revisionId },
   });
@@ -149,7 +149,7 @@ export async function withdrawListingRevision(revisionId: string) {
   });
   revalidatePath(`/vendors/${ref.vendorId}`);
 }
-export async function reviseListingRevision(revisionId: string) {
+async function local_reviseListingRevision(revisionId: string) {
   const ref = await prisma.listingRevision.findUniqueOrThrow({
     where: { id: revisionId },
   });
@@ -225,7 +225,7 @@ async function copyRevisionForCorrection(
   });
 }
 
-export async function reopenListingRevisionForCorrection(revisionId: string) {
+async function local_reopenListingRevisionForCorrection(revisionId: string) {
   const ref = await prisma.listingRevision.findUniqueOrThrow({
     where: { id: revisionId },
   });
@@ -277,7 +277,7 @@ export async function reopenListingRevisionForCorrection(revisionId: string) {
 export type RevisionReviewResult =
   { ok: true } | { ok: false; message: string; issues: ReadinessIssue[] };
 
-export async function reviewListingRevision(
+async function local_reviewListingRevision(
   revisionId: string,
   expectedDigest: string,
   approve: boolean,
@@ -653,7 +653,7 @@ function approvedValues(
   );
 }
 
-export async function discardDraftChange(changeId: string) {
+async function local_discardDraftChange(changeId: string) {
   const ref = await prisma.listingChange.findUniqueOrThrow({
     where: { id: changeId },
   });
@@ -705,4 +705,108 @@ export async function discardDraftChange(changeId: string) {
     });
   });
   revalidatePath(`/vendors/${ref.vendorId}`);
+}
+
+export async function listListingChanges(
+  ...args: Parameters<typeof local_listListingChanges>
+): Promise<Awaited<ReturnType<typeof local_listListingChanges>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listListingChanges>>>(
+      "listing-changes.actions.listListingChanges",
+      args,
+    );
+  }
+  return local_listListingChanges(...args);
+}
+
+export async function listListingRevisions(
+  ...args: Parameters<typeof local_listListingRevisions>
+): Promise<Awaited<ReturnType<typeof local_listListingRevisions>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listListingRevisions>>>(
+      "listing-changes.actions.listListingRevisions",
+      args,
+    );
+  }
+  return local_listListingRevisions(...args);
+}
+
+export async function submitListingRevision(
+  ...args: Parameters<typeof local_submitListingRevision>
+): Promise<Awaited<ReturnType<typeof local_submitListingRevision>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_submitListingRevision>>>(
+      "listing-changes.actions.submitListingRevision",
+      args,
+    );
+  }
+  return local_submitListingRevision(...args);
+}
+
+export async function withdrawListingRevision(
+  ...args: Parameters<typeof local_withdrawListingRevision>
+): Promise<Awaited<ReturnType<typeof local_withdrawListingRevision>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_withdrawListingRevision>>
+    >("listing-changes.actions.withdrawListingRevision", args);
+  }
+  return local_withdrawListingRevision(...args);
+}
+
+export async function reviseListingRevision(
+  ...args: Parameters<typeof local_reviseListingRevision>
+): Promise<Awaited<ReturnType<typeof local_reviseListingRevision>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_reviseListingRevision>>>(
+      "listing-changes.actions.reviseListingRevision",
+      args,
+    );
+  }
+  return local_reviseListingRevision(...args);
+}
+
+export async function reopenListingRevisionForCorrection(
+  ...args: Parameters<typeof local_reopenListingRevisionForCorrection>
+): Promise<
+  Awaited<ReturnType<typeof local_reopenListingRevisionForCorrection>>
+> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_reopenListingRevisionForCorrection>>
+    >("listing-changes.actions.reopenListingRevisionForCorrection", args);
+  }
+  return local_reopenListingRevisionForCorrection(...args);
+}
+
+export async function reviewListingRevision(
+  ...args: Parameters<typeof local_reviewListingRevision>
+): Promise<Awaited<ReturnType<typeof local_reviewListingRevision>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_reviewListingRevision>>>(
+      "listing-changes.actions.reviewListingRevision",
+      args,
+    );
+  }
+  return local_reviewListingRevision(...args);
+}
+
+export async function discardDraftChange(
+  ...args: Parameters<typeof local_discardDraftChange>
+): Promise<Awaited<ReturnType<typeof local_discardDraftChange>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_discardDraftChange>>>(
+      "listing-changes.actions.discardDraftChange",
+      args,
+    );
+  }
+  return local_discardDraftChange(...args);
 }

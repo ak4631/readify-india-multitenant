@@ -16,7 +16,7 @@ import { deleteVendorPhoto, uploadVendorPhoto } from "@/lib/imagekit";
 const MAX_PHOTO_SIZE_BYTES = MAX_UPLOAD_SIZE_BYTES;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-export async function uploadVendorMedia(formData: FormData) {
+async function local_uploadVendorMedia(formData: FormData) {
   const vendorId = formData.get("vendorId");
   const file = formData.get("file");
 
@@ -74,7 +74,7 @@ export async function uploadVendorMedia(formData: FormData) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function deleteVendorMedia(mediaId: string) {
+async function local_deleteVendorMedia(mediaId: string) {
   const mediaRecord =
     (await prisma.vendorMedia.findUnique({ where: { id: mediaId } })) ??
     (await proposedParent(mediaId, "MEDIA_CREATE"));
@@ -118,7 +118,7 @@ export async function deleteVendorMedia(mediaId: string) {
   revalidatePath(`/vendors/${mediaRecord.vendorId}`);
 }
 
-export async function setPrimaryVendorMedia(mediaId: string) {
+async function local_setPrimaryVendorMedia(mediaId: string) {
   const mediaRecord =
     (await prisma.vendorMedia.findUnique({ where: { id: mediaId } })) ??
     (await proposedParent(mediaId, "MEDIA_CREATE"));
@@ -163,4 +163,43 @@ export async function setPrimaryVendorMedia(mediaId: string) {
   });
 
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function uploadVendorMedia(
+  ...args: Parameters<typeof local_uploadVendorMedia>
+): Promise<Awaited<ReturnType<typeof local_uploadVendorMedia>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_uploadVendorMedia>>>(
+      "vendor-media.actions.uploadVendorMedia",
+      args,
+    );
+  }
+  return local_uploadVendorMedia(...args);
+}
+
+export async function deleteVendorMedia(
+  ...args: Parameters<typeof local_deleteVendorMedia>
+): Promise<Awaited<ReturnType<typeof local_deleteVendorMedia>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deleteVendorMedia>>>(
+      "vendor-media.actions.deleteVendorMedia",
+      args,
+    );
+  }
+  return local_deleteVendorMedia(...args);
+}
+
+export async function setPrimaryVendorMedia(
+  ...args: Parameters<typeof local_setPrimaryVendorMedia>
+): Promise<Awaited<ReturnType<typeof local_setPrimaryVendorMedia>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_setPrimaryVendorMedia>>>(
+      "vendor-media.actions.setPrimaryVendorMedia",
+      args,
+    );
+  }
+  return local_setPrimaryVendorMedia(...args);
 }

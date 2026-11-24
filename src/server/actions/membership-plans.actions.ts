@@ -25,7 +25,7 @@ import {
 // round trips and the audit write to finish together on the deployed runtime.
 const PLAN_TRANSACTION_TIMEOUT_MS = 15_000;
 
-export async function listMembershipPlans(vendorId: string) {
+async function local_listMembershipPlans(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const [plans, changes] = await Promise.all([
     prisma.membershipPlan.findMany({
@@ -92,7 +92,7 @@ function planSaveFailure(
   };
 }
 
-export async function createMembershipPlan(
+async function local_createMembershipPlan(
   vendorId: string,
   input: MembershipPlanInput,
 ): Promise<PlanSaveResult> {
@@ -140,7 +140,7 @@ export async function createMembershipPlan(
   return { ok: true, outcome };
 }
 
-export async function updateMembershipPlan(
+async function local_updateMembershipPlan(
   planId: string,
   input: MembershipPlanInput,
 ): Promise<PlanSaveResult> {
@@ -197,7 +197,7 @@ export async function updateMembershipPlan(
   return { ok: true, outcome };
 }
 
-export async function archiveMembershipPlan(planId: string) {
+async function local_archiveMembershipPlan(planId: string) {
   const planRecord =
     (await prisma.membershipPlan.findUnique({ where: { id: planId } })) ??
     (await proposedParent(planId, "PLAN_CREATE"));
@@ -242,4 +242,56 @@ export async function archiveMembershipPlan(planId: string) {
   );
 
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function listMembershipPlans(
+  ...args: Parameters<typeof local_listMembershipPlans>
+): Promise<Awaited<ReturnType<typeof local_listMembershipPlans>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listMembershipPlans>>>(
+      "membership-plans.actions.listMembershipPlans",
+      args,
+    );
+  }
+  return local_listMembershipPlans(...args);
+}
+
+export async function createMembershipPlan(
+  ...args: Parameters<typeof local_createMembershipPlan>
+): Promise<Awaited<ReturnType<typeof local_createMembershipPlan>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createMembershipPlan>>>(
+      "membership-plans.actions.createMembershipPlan",
+      args,
+    );
+  }
+  return local_createMembershipPlan(...args);
+}
+
+export async function updateMembershipPlan(
+  ...args: Parameters<typeof local_updateMembershipPlan>
+): Promise<Awaited<ReturnType<typeof local_updateMembershipPlan>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateMembershipPlan>>>(
+      "membership-plans.actions.updateMembershipPlan",
+      args,
+    );
+  }
+  return local_updateMembershipPlan(...args);
+}
+
+export async function archiveMembershipPlan(
+  ...args: Parameters<typeof local_archiveMembershipPlan>
+): Promise<Awaited<ReturnType<typeof local_archiveMembershipPlan>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_archiveMembershipPlan>>>(
+      "membership-plans.actions.archiveMembershipPlan",
+      args,
+    );
+  }
+  return local_archiveMembershipPlan(...args);
 }

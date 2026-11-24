@@ -1,11 +1,12 @@
 "use server";
+
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 
-export async function savePaymentSettings(input: unknown) {
+async function local_savePaymentSettings(input: unknown) {
   const session = await requireSuperAdmin();
   const data = z
     .object({
@@ -36,4 +37,17 @@ export async function savePaymentSettings(input: unknown) {
     });
   });
   revalidatePath("/settings");
+}
+
+export async function savePaymentSettings(
+  ...args: Parameters<typeof local_savePaymentSettings>
+): Promise<Awaited<ReturnType<typeof local_savePaymentSettings>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_savePaymentSettings>>>(
+      "payment-settings.actions.savePaymentSettings",
+      args,
+    );
+  }
+  return local_savePaymentSettings(...args);
 }

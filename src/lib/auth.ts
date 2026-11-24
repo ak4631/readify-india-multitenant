@@ -35,6 +35,10 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
+        if (process.env.BACKEND_URL) {
+          const { callBackend } = await import("@/lib/backend-client");
+          return callBackend("identity.authenticate", [credentials]);
+        }
         if (!credentials?.email || !credentials?.password) return null;
 
         const user = await prisma.user.findUnique({
@@ -86,6 +90,11 @@ export const authOptions: NextAuthOptions = {
         token.roles = user.roles;
         token.permissions = user.permissions;
         return token;
+      }
+
+      if (process.env.BACKEND_URL && token.id) {
+        const { callBackend } = await import("@/lib/backend-client");
+        return callBackend("identity.refresh", [token]);
       }
 
       // Revalidate on every authenticated request: removed staff must lose access

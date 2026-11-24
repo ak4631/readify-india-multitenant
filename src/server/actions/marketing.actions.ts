@@ -1,4 +1,5 @@
 "use server";
+
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -25,7 +26,7 @@ const audienceSchema = z
     "Area targeting requires a city",
   );
 
-export async function previewMarketingAudience(form: FormData) {
+async function local_previewMarketingAudience(form: FormData) {
   await requireSuperAdmin();
   const parsed = audienceSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success)
@@ -82,7 +83,7 @@ const schema = z
     }
   }, "Use a valid HTTPS offer link");
 
-export async function createMarketingCampaign(form: FormData) {
+async function local_createMarketingCampaign(form: FormData) {
   const session = await requireSuperAdmin();
   const mode = form.get("mode");
   if (mode !== "now" && mode !== "schedule")
@@ -190,7 +191,7 @@ export async function createMarketingCampaign(form: FormData) {
   return { ...result, pushStatus };
 }
 
-export async function cancelMarketingCampaign(id: string) {
+async function local_cancelMarketingCampaign(id: string) {
   const session = await requireSuperAdmin();
   await prisma.$transaction(async (tx) => {
     const result = await tx.marketingCampaign.updateMany({
@@ -207,4 +208,40 @@ export async function cancelMarketingCampaign(id: string) {
     });
   });
   revalidatePath("/marketing");
+}
+
+export async function previewMarketingAudience(
+  ...args: Parameters<typeof local_previewMarketingAudience>
+): Promise<Awaited<ReturnType<typeof local_previewMarketingAudience>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_previewMarketingAudience>>
+    >("marketing.actions.previewMarketingAudience", args);
+  }
+  return local_previewMarketingAudience(...args);
+}
+
+export async function createMarketingCampaign(
+  ...args: Parameters<typeof local_createMarketingCampaign>
+): Promise<Awaited<ReturnType<typeof local_createMarketingCampaign>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_createMarketingCampaign>>
+    >("marketing.actions.createMarketingCampaign", args);
+  }
+  return local_createMarketingCampaign(...args);
+}
+
+export async function cancelMarketingCampaign(
+  ...args: Parameters<typeof local_cancelMarketingCampaign>
+): Promise<Awaited<ReturnType<typeof local_cancelMarketingCampaign>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_cancelMarketingCampaign>>
+    >("marketing.actions.cancelMarketingCampaign", args);
+  }
+  return local_cancelMarketingCampaign(...args);
 }

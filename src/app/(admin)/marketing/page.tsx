@@ -1,23 +1,13 @@
 import Link from "next/link";
 import { previewMarketingAudience } from "@/server/actions/marketing.actions";
 import { requireSuperAdmin } from "@/lib/rbac";
-import { prisma } from "@/lib/prisma";
+import { getMarketingPageData } from "@/server/actions/page-data.actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { CampaignManager } from "@/components/promotions/campaign-manager";
 export default async function MarketingPage() {
   await requireSuperAdmin();
-  const [campaigns, listings, services, audience] = await Promise.all([
-    prisma.marketingCampaign.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    }),
-    prisma.$queryRaw<
-      { id: string; name: string }[]
-    >`SELECT id,name FROM public.published_listings ORDER BY name`,
-    prisma.vendorCategory.findMany({
-      select: { slug: true, name: true },
-      orderBy: { name: "asc" },
-    }),
+  const [[campaigns, listings, services], audience] = await Promise.all([
+    getMarketingPageData(),
     previewMarketingAudience(new FormData()),
   ]);
   return (

@@ -1,4 +1,5 @@
 "use server";
+
 import { prisma } from "@/lib/prisma";
 import type { VendorStatus } from "@/generated/prisma/enums";
 import { getSessionPartnerId, requirePermission } from "@/lib/rbac";
@@ -20,7 +21,7 @@ export type QueueRow = {
   href: string;
   createdAt: Date;
 };
-export async function listApprovalQueue(
+async function local_listApprovalQueue(
   options: { partnerId?: string; kind?: string; page?: number } = {},
 ) {
   const session = await requirePermission("vendor.read");
@@ -227,4 +228,17 @@ export async function listApprovalQueue(
     total = count;
   }
   return { ...toPage(items, total, window), kind };
+}
+
+export async function listApprovalQueue(
+  ...args: Parameters<typeof local_listApprovalQueue>
+): Promise<Awaited<ReturnType<typeof local_listApprovalQueue>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listApprovalQueue>>>(
+      "approval-queue.actions.listApprovalQueue",
+      args,
+    );
+  }
+  return local_listApprovalQueue(...args);
 }

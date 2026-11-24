@@ -14,7 +14,7 @@ export type FacilitiesSaveResult =
   | { ok: true; outcome: "saved" | "queued"; facilityIds: string[] }
   | { ok: false; message: string };
 
-export async function setVendorFacilities(
+async function local_setVendorFacilities(
   vendorId: string,
   facilityIds: string[],
 ): Promise<FacilitiesSaveResult> {
@@ -75,4 +75,17 @@ export async function setVendorFacilities(
 
   revalidatePath(`/vendors/${vendorId}`);
   return { ok: true, outcome, facilityIds };
+}
+
+export async function setVendorFacilities(
+  ...args: Parameters<typeof local_setVendorFacilities>
+): Promise<Awaited<ReturnType<typeof local_setVendorFacilities>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_setVendorFacilities>>>(
+      "vendor-facilities.actions.setVendorFacilities",
+      args,
+    );
+  }
+  return local_setVendorFacilities(...args);
 }

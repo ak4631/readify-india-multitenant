@@ -1,4 +1,5 @@
 "use server";
+
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -17,14 +18,14 @@ async function requireSupport() {
     throw new PublicActionError("Support staff access required");
   return session;
 }
-export async function listCustomerSupportTickets() {
+async function local_listCustomerSupportTickets() {
   await requireSupport();
   return prisma.customerSupportTicket.findMany({
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     take: 100,
   });
 }
-export async function respondToCustomerTicket(id: string, response: string) {
+async function local_respondToCustomerTicket(id: string, response: string) {
   const session = await requireSupport();
   const text = z.string().trim().min(3).max(5000).parse(response);
   await prisma.$transaction(async (tx) => {
@@ -56,4 +57,28 @@ export async function respondToCustomerTicket(id: string, response: string) {
     });
   });
   revalidatePath("/support");
+}
+
+export async function listCustomerSupportTickets(
+  ...args: Parameters<typeof local_listCustomerSupportTickets>
+): Promise<Awaited<ReturnType<typeof local_listCustomerSupportTickets>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_listCustomerSupportTickets>>
+    >("customer-support.actions.listCustomerSupportTickets", args);
+  }
+  return local_listCustomerSupportTickets(...args);
+}
+
+export async function respondToCustomerTicket(
+  ...args: Parameters<typeof local_respondToCustomerTicket>
+): Promise<Awaited<ReturnType<typeof local_respondToCustomerTicket>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_respondToCustomerTicket>>
+    >("customer-support.actions.respondToCustomerTicket", args);
+  }
+  return local_respondToCustomerTicket(...args);
 }

@@ -1,7 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { assertCheckoutToken } from "@/lib/payments";
-import { paymentConfig } from "@/lib/razorpay";
+import { getHostedCheckout } from "@/server/actions/page-data.actions";
 import { HostedCheckout } from "./checkout";
 
 export const dynamic = "force-dynamic";
@@ -20,18 +18,15 @@ export default async function CheckoutPage({
 }) {
   const { id } = await params;
   const { token = "" } = await searchParams;
-  const order = await prisma.paymentOrder.findUnique({ where: { id } });
+  const order = await getHostedCheckout(id, token);
   if (!order) notFound();
-  try {
-    assertCheckoutToken(order, token);
-  } catch {
+  if (order.expired)
     return (
       <main className="p-8">
         This checkout link has expired. Return to the app to check your payment
         status.
       </main>
     );
-  }
   if (order.status !== "CREATED" || !order.gatewayOrderId)
     return (
       <main className="p-8">
@@ -43,7 +38,7 @@ export default async function CheckoutPage({
     <HostedCheckout
       id={id}
       token={token}
-      keyId={paymentConfig().keyId}
+      keyId={order.keyId}
       gatewayOrderId={order.gatewayOrderId}
       amount={order.amountPaise}
     />

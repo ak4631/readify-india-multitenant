@@ -11,7 +11,7 @@ import {
   type VendorCategoryInput,
 } from "@/lib/validations/vendor-category.schema";
 
-export async function listVendorCategories() {
+async function local_listVendorCategories() {
   await requirePermission("vendorCategory.read");
 
   return prisma.vendorCategory.findMany({
@@ -20,7 +20,7 @@ export async function listVendorCategories() {
   });
 }
 
-export async function listVendorCategoriesPage(page = 1) {
+async function local_listVendorCategoriesPage(page = 1) {
   await requirePermission("vendorCategory.read");
   const window = pageWindow(page);
   const [items, total] = await Promise.all([
@@ -35,7 +35,7 @@ export async function listVendorCategoriesPage(page = 1) {
   return toPage(items, total, window);
 }
 
-export async function createVendorCategory(input: VendorCategoryInput) {
+async function local_createVendorCategory(input: VendorCategoryInput) {
   const session = await requirePermission("vendorCategory.create");
   const data = vendorCategorySchema.parse(input);
   const slug = slugify(data.name);
@@ -60,7 +60,7 @@ export async function createVendorCategory(input: VendorCategoryInput) {
   return category;
 }
 
-export async function updateVendorCategory(
+async function local_updateVendorCategory(
   categoryId: string,
   input: VendorCategoryInput,
 ) {
@@ -92,7 +92,7 @@ export async function updateVendorCategory(
 
 // Categories are FK'd from vendors, so "delete" is always a soft-delete —
 // existing vendors keep their reference, the category just drops off active pickers.
-export async function deactivateVendorCategory(categoryId: string) {
+async function local_deactivateVendorCategory(categoryId: string) {
   const session = await requirePermission("vendorCategory.delete");
 
   await prisma.$transaction(async (tx) => {
@@ -116,4 +116,67 @@ export async function deactivateVendorCategory(categoryId: string) {
   });
 
   revalidatePath("/vendor-categories");
+}
+
+export async function listVendorCategories(
+  ...args: Parameters<typeof local_listVendorCategories>
+): Promise<Awaited<ReturnType<typeof local_listVendorCategories>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listVendorCategories>>>(
+      "vendor-categories.actions.listVendorCategories",
+      args,
+    );
+  }
+  return local_listVendorCategories(...args);
+}
+
+export async function listVendorCategoriesPage(
+  ...args: Parameters<typeof local_listVendorCategoriesPage>
+): Promise<Awaited<ReturnType<typeof local_listVendorCategoriesPage>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_listVendorCategoriesPage>>
+    >("vendor-categories.actions.listVendorCategoriesPage", args);
+  }
+  return local_listVendorCategoriesPage(...args);
+}
+
+export async function createVendorCategory(
+  ...args: Parameters<typeof local_createVendorCategory>
+): Promise<Awaited<ReturnType<typeof local_createVendorCategory>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createVendorCategory>>>(
+      "vendor-categories.actions.createVendorCategory",
+      args,
+    );
+  }
+  return local_createVendorCategory(...args);
+}
+
+export async function updateVendorCategory(
+  ...args: Parameters<typeof local_updateVendorCategory>
+): Promise<Awaited<ReturnType<typeof local_updateVendorCategory>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateVendorCategory>>>(
+      "vendor-categories.actions.updateVendorCategory",
+      args,
+    );
+  }
+  return local_updateVendorCategory(...args);
+}
+
+export async function deactivateVendorCategory(
+  ...args: Parameters<typeof local_deactivateVendorCategory>
+): Promise<Awaited<ReturnType<typeof local_deactivateVendorCategory>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_deactivateVendorCategory>>
+    >("vendor-categories.actions.deactivateVendorCategory", args);
+  }
+  return local_deactivateVendorCategory(...args);
 }

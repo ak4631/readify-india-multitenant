@@ -12,7 +12,7 @@ import {
   isPlatformStaff,
 } from "@/lib/rbac";
 
-export async function listSupportTickets(page = 1, selectedPartnerId?: string) {
+async function local_listSupportTickets(page = 1, selectedPartnerId?: string) {
   const session = await getCurrentSession();
   if (!session?.user) throw new PublicActionError("Not authenticated");
   const staff = isPlatformStaff(session);
@@ -34,7 +34,7 @@ export async function listSupportTickets(page = 1, selectedPartnerId?: string) {
   ]);
   return toPage(items, total, window);
 }
-export async function createSupportTicket(input: {
+async function local_createSupportTicket(input: {
   subject: string;
   message: string;
   partnerId?: string;
@@ -62,7 +62,7 @@ export async function createSupportTicket(input: {
   });
   revalidatePath("/support");
 }
-export async function resolveSupportTicket(id: string, response: string) {
+async function local_resolveSupportTicket(id: string, response: string) {
   const session = await getCurrentSession();
   if (
     !session?.user ||
@@ -99,4 +99,43 @@ export async function resolveSupportTicket(id: string, response: string) {
     });
   });
   revalidatePath("/support");
+}
+
+export async function listSupportTickets(
+  ...args: Parameters<typeof local_listSupportTickets>
+): Promise<Awaited<ReturnType<typeof local_listSupportTickets>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listSupportTickets>>>(
+      "support.actions.listSupportTickets",
+      args,
+    );
+  }
+  return local_listSupportTickets(...args);
+}
+
+export async function createSupportTicket(
+  ...args: Parameters<typeof local_createSupportTicket>
+): Promise<Awaited<ReturnType<typeof local_createSupportTicket>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createSupportTicket>>>(
+      "support.actions.createSupportTicket",
+      args,
+    );
+  }
+  return local_createSupportTicket(...args);
+}
+
+export async function resolveSupportTicket(
+  ...args: Parameters<typeof local_resolveSupportTicket>
+): Promise<Awaited<ReturnType<typeof local_resolveSupportTicket>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_resolveSupportTicket>>>(
+      "support.actions.resolveSupportTicket",
+      args,
+    );
+  }
+  return local_resolveSupportTicket(...args);
 }

@@ -26,7 +26,7 @@ function toTime(hhmm: string): Date {
   return new Date(`1970-01-01T${hhmm}:00.000Z`);
 }
 
-export async function listTrainers(vendorId: string) {
+async function local_listTrainers(vendorId: string) {
   await requireVendorAccess(vendorId, "vendor.read");
   const trainers = await prisma.trainer.findMany({
     where: { vendorId },
@@ -97,12 +97,12 @@ export async function listTrainers(vendorId: string) {
 
 export type TrainerRow = Awaited<ReturnType<typeof listTrainers>>[number];
 
-export async function listTrainerSpecializations() {
+async function local_listTrainerSpecializations() {
   await requirePermission("vendor.read");
   return prisma.trainerSpecialization.findMany({ orderBy: { name: "asc" } });
 }
 
-export async function createTrainer(vendorId: string, input: TrainerInput) {
+async function local_createTrainer(vendorId: string, input: TrainerInput) {
   const session = await requireVendorAccess(vendorId, "vendor.update");
   const data = trainerSchema.parse(input);
 
@@ -135,7 +135,7 @@ export async function createTrainer(vendorId: string, input: TrainerInput) {
   return trainer;
 }
 
-export async function updateTrainer(trainerId: string, input: TrainerInput) {
+async function local_updateTrainer(trainerId: string, input: TrainerInput) {
   const record =
     (await prisma.trainer.findUnique({ where: { id: trainerId } })) ??
     (await proposedParent(trainerId, "TRAINER_CREATE"));
@@ -174,7 +174,7 @@ export async function updateTrainer(trainerId: string, input: TrainerInput) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function deactivateTrainer(trainerId: string) {
+async function local_deactivateTrainer(trainerId: string) {
   const record =
     (await prisma.trainer.findUnique({ where: { id: trainerId } })) ??
     (await proposedParent(trainerId, "TRAINER_CREATE"));
@@ -215,7 +215,7 @@ export async function deactivateTrainer(trainerId: string) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function setTrainerSpecializations(
+async function local_setTrainerSpecializations(
   trainerId: string,
   specializationIds: string[],
 ) {
@@ -269,7 +269,7 @@ export async function setTrainerSpecializations(
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function addTrainerPricing(
+async function local_addTrainerPricing(
   trainerId: string,
   input: TrainerPricingInput,
 ) {
@@ -312,7 +312,7 @@ export async function addTrainerPricing(
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function deleteTrainerPricing(pricingId: string) {
+async function local_deleteTrainerPricing(pricingId: string) {
   const priceRecord = await prisma.trainerPricing.findUnique({
     where: { id: pricingId },
     include: { trainer: true },
@@ -364,7 +364,7 @@ export async function deleteTrainerPricing(pricingId: string) {
   revalidatePath(`/vendors/${vendorId}`);
 }
 
-export async function setTrainerAvailability(
+async function local_setTrainerAvailability(
   trainerId: string,
   slots: TrainerAvailabilitySlotInput[],
 ) {
@@ -418,4 +418,118 @@ export async function setTrainerAvailability(
   });
 
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function listTrainers(
+  ...args: Parameters<typeof local_listTrainers>
+): Promise<Awaited<ReturnType<typeof local_listTrainers>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listTrainers>>>(
+      "trainers.actions.listTrainers",
+      args,
+    );
+  }
+  return local_listTrainers(...args);
+}
+
+export async function listTrainerSpecializations(
+  ...args: Parameters<typeof local_listTrainerSpecializations>
+): Promise<Awaited<ReturnType<typeof local_listTrainerSpecializations>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_listTrainerSpecializations>>
+    >("trainers.actions.listTrainerSpecializations", args);
+  }
+  return local_listTrainerSpecializations(...args);
+}
+
+export async function createTrainer(
+  ...args: Parameters<typeof local_createTrainer>
+): Promise<Awaited<ReturnType<typeof local_createTrainer>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_createTrainer>>>(
+      "trainers.actions.createTrainer",
+      args,
+    );
+  }
+  return local_createTrainer(...args);
+}
+
+export async function updateTrainer(
+  ...args: Parameters<typeof local_updateTrainer>
+): Promise<Awaited<ReturnType<typeof local_updateTrainer>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_updateTrainer>>>(
+      "trainers.actions.updateTrainer",
+      args,
+    );
+  }
+  return local_updateTrainer(...args);
+}
+
+export async function deactivateTrainer(
+  ...args: Parameters<typeof local_deactivateTrainer>
+): Promise<Awaited<ReturnType<typeof local_deactivateTrainer>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deactivateTrainer>>>(
+      "trainers.actions.deactivateTrainer",
+      args,
+    );
+  }
+  return local_deactivateTrainer(...args);
+}
+
+export async function setTrainerSpecializations(
+  ...args: Parameters<typeof local_setTrainerSpecializations>
+): Promise<Awaited<ReturnType<typeof local_setTrainerSpecializations>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_setTrainerSpecializations>>
+    >("trainers.actions.setTrainerSpecializations", args);
+  }
+  return local_setTrainerSpecializations(...args);
+}
+
+export async function addTrainerPricing(
+  ...args: Parameters<typeof local_addTrainerPricing>
+): Promise<Awaited<ReturnType<typeof local_addTrainerPricing>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_addTrainerPricing>>>(
+      "trainers.actions.addTrainerPricing",
+      args,
+    );
+  }
+  return local_addTrainerPricing(...args);
+}
+
+export async function deleteTrainerPricing(
+  ...args: Parameters<typeof local_deleteTrainerPricing>
+): Promise<Awaited<ReturnType<typeof local_deleteTrainerPricing>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_deleteTrainerPricing>>>(
+      "trainers.actions.deleteTrainerPricing",
+      args,
+    );
+  }
+  return local_deleteTrainerPricing(...args);
+}
+
+export async function setTrainerAvailability(
+  ...args: Parameters<typeof local_setTrainerAvailability>
+): Promise<Awaited<ReturnType<typeof local_setTrainerAvailability>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_setTrainerAvailability>>
+    >("trainers.actions.setTrainerAvailability", args);
+  }
+  return local_setTrainerAvailability(...args);
 }

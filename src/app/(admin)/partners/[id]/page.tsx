@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requirePartnerAccess } from "@/lib/rbac";
-import { prisma } from "@/lib/prisma";
+import { getPartnerServices } from "@/server/actions/page-data.actions";
 import { getWorkspaceSummary } from "@/server/actions/workspace.actions";
 import { WorkspaceSummary } from "@/components/dashboard/workspace-summary";
 
@@ -13,11 +13,7 @@ export default async function PartnerOverview({
   await requirePartnerAccess(id, "partner.read");
   const [summary, services] = await Promise.all([
     getWorkspaceSummary(id),
-    prisma.vendor.findMany({
-      where: { partnerId: id },
-      select: { category: { select: { name: true } } },
-      distinct: ["categoryId"],
-    }),
+    getPartnerServices(id),
   ]);
   return (
     <div className="space-y-6">

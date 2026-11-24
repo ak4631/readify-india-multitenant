@@ -1,4 +1,5 @@
 "use server";
+
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -67,7 +68,7 @@ const schema = z
   )
   .refine((v) => v.endsAt > v.startsAt, "End must be after start");
 
-export async function savePromotionalBanner(form: FormData) {
+async function local_savePromotionalBanner(form: FormData) {
   const session = await requireSuperAdmin();
   const parsed = schema.safeParse({
     ...Object.fromEntries(form),
@@ -130,7 +131,7 @@ export async function savePromotionalBanner(form: FormData) {
   // Existing image URLs can still be displayed on clients until their next refresh.
   revalidatePath("/promotions");
 }
-export async function deactivatePromotionalBanner(id: string) {
+async function local_deactivatePromotionalBanner(id: string) {
   const session = await requireSuperAdmin();
   await prisma.$transaction(async (tx) => {
     await tx.promotionalBanner.update({
@@ -145,4 +146,29 @@ export async function deactivatePromotionalBanner(id: string) {
     });
   });
   revalidatePath("/promotions");
+}
+
+export async function savePromotionalBanner(
+  ...args: Parameters<typeof local_savePromotionalBanner>
+): Promise<Awaited<ReturnType<typeof local_savePromotionalBanner>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_savePromotionalBanner>>>(
+      "promotions.actions.savePromotionalBanner",
+      args,
+    );
+  }
+  return local_savePromotionalBanner(...args);
+}
+
+export async function deactivatePromotionalBanner(
+  ...args: Parameters<typeof local_deactivatePromotionalBanner>
+): Promise<Awaited<ReturnType<typeof local_deactivatePromotionalBanner>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_deactivatePromotionalBanner>>
+    >("promotions.actions.deactivatePromotionalBanner", args);
+  }
+  return local_deactivatePromotionalBanner(...args);
 }

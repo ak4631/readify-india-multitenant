@@ -1,19 +1,11 @@
 import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/rbac";
-import { prisma } from "@/lib/prisma";
+import { getPromotionsPageData } from "@/server/actions/page-data.actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { PromotionManager } from "@/components/promotions/promotion-manager";
 export default async function PromotionsPage() {
   await requireSuperAdmin();
-  const [banners, listings] = await Promise.all([
-    prisma.promotionalBanner.findMany({
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
-      take: 100,
-    }),
-    prisma.$queryRaw<
-      { id: string; name: string }[]
-    >`SELECT id,name FROM public.published_listings ORDER BY name`,
-  ]);
+  const [banners, listings] = await getPromotionsPageData();
   return (
     <div className="space-y-6">
       <PageHeader

@@ -12,7 +12,7 @@ import {
   requireVendorAccess,
 } from "@/lib/rbac";
 
-export async function listSubscriptions(
+async function local_listSubscriptions(
   filters: {
     partnerId?: string;
     vendorId?: string;
@@ -73,7 +73,7 @@ export type SubscriptionRow = Awaited<
   ReturnType<typeof listSubscriptions>
 >["items"][number];
 
-export async function cancelSubscription(subscriptionId: string) {
+async function local_cancelSubscription(subscriptionId: string) {
   const subscription = await prisma.subscription.findUniqueOrThrow({
     where: { id: subscriptionId },
     select: { vendorId: true },
@@ -118,4 +118,30 @@ export async function cancelSubscription(subscriptionId: string) {
 
   revalidatePath("/subscriptions");
   revalidatePath(`/vendors/${vendorId}`);
+}
+
+export async function listSubscriptions(
+  ...args: Parameters<typeof local_listSubscriptions>
+): Promise<Awaited<ReturnType<typeof local_listSubscriptions>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listSubscriptions>>>(
+      "subscriptions.actions.listSubscriptions",
+      args,
+    );
+  }
+  return local_listSubscriptions(...args);
+}
+
+export async function cancelSubscription(
+  ...args: Parameters<typeof local_cancelSubscription>
+): Promise<Awaited<ReturnType<typeof local_cancelSubscription>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_cancelSubscription>>>(
+      "subscriptions.actions.cancelSubscription",
+      args,
+    );
+  }
+  return local_cancelSubscription(...args);
 }

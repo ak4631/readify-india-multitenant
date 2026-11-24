@@ -76,12 +76,12 @@ async function summary(vendorIds: string[] | null) {
   };
 }
 
-export async function getWorkspaceSummary(selectedPartnerId?: string) {
+async function local_getWorkspaceSummary(selectedPartnerId?: string) {
   const session = await requirePermission("vendor.read");
   return summary(await getAccessibleVendorIds(session, selectedPartnerId));
 }
 
-export async function getOwnerControlPanel() {
+async function local_getOwnerControlPanel() {
   const { partnerId } = await requireOwner();
   const vendors = await prisma.vendor.findMany({
     where: { partnerId },
@@ -90,7 +90,7 @@ export async function getOwnerControlPanel() {
   return summary(vendors.map((vendor) => vendor.id));
 }
 
-export async function listWorkspaceAttendance(selectedPartnerId?: string) {
+async function local_listWorkspaceAttendance(selectedPartnerId?: string) {
   const session = await requirePermission("vendor.read");
   const ids = await getAccessibleVendorIds(session, selectedPartnerId);
   const rows = await prisma.attendanceVisit.findMany({
@@ -101,7 +101,7 @@ export async function listWorkspaceAttendance(selectedPartnerId?: string) {
   return rows;
 }
 
-export async function listPaymentLedger(
+async function local_listPaymentLedger(
   page = 1,
   selectedPartnerId?: string,
   filters: {
@@ -156,7 +156,7 @@ export async function listPaymentLedger(
   return toPage(items, total, window);
 }
 
-export async function listPaymentListingOptions(partnerId?: string) {
+async function local_listPaymentListingOptions(partnerId?: string) {
   const session = await requirePermission("subscription.read");
   const ids = await getAccessibleVendorIds(session, partnerId);
   return prisma.vendor.findMany({
@@ -164,4 +164,67 @@ export async function listPaymentListingOptions(partnerId?: string) {
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+}
+
+export async function getWorkspaceSummary(
+  ...args: Parameters<typeof local_getWorkspaceSummary>
+): Promise<Awaited<ReturnType<typeof local_getWorkspaceSummary>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getWorkspaceSummary>>>(
+      "workspace.actions.getWorkspaceSummary",
+      args,
+    );
+  }
+  return local_getWorkspaceSummary(...args);
+}
+
+export async function getOwnerControlPanel(
+  ...args: Parameters<typeof local_getOwnerControlPanel>
+): Promise<Awaited<ReturnType<typeof local_getOwnerControlPanel>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_getOwnerControlPanel>>>(
+      "workspace.actions.getOwnerControlPanel",
+      args,
+    );
+  }
+  return local_getOwnerControlPanel(...args);
+}
+
+export async function listWorkspaceAttendance(
+  ...args: Parameters<typeof local_listWorkspaceAttendance>
+): Promise<Awaited<ReturnType<typeof local_listWorkspaceAttendance>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_listWorkspaceAttendance>>
+    >("workspace.actions.listWorkspaceAttendance", args);
+  }
+  return local_listWorkspaceAttendance(...args);
+}
+
+export async function listPaymentLedger(
+  ...args: Parameters<typeof local_listPaymentLedger>
+): Promise<Awaited<ReturnType<typeof local_listPaymentLedger>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<Awaited<ReturnType<typeof local_listPaymentLedger>>>(
+      "workspace.actions.listPaymentLedger",
+      args,
+    );
+  }
+  return local_listPaymentLedger(...args);
+}
+
+export async function listPaymentListingOptions(
+  ...args: Parameters<typeof local_listPaymentListingOptions>
+): Promise<Awaited<ReturnType<typeof local_listPaymentListingOptions>>> {
+  if (process.env.BACKEND_URL) {
+    const { callBackend } = await import("@/lib/backend-client");
+    return callBackend<
+      Awaited<ReturnType<typeof local_listPaymentListingOptions>>
+    >("workspace.actions.listPaymentListingOptions", args);
+  }
+  return local_listPaymentListingOptions(...args);
 }

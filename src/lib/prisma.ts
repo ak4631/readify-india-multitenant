@@ -3,13 +3,16 @@ import { PrismaClient } from "@/generated/prisma/client";
 
 // Pooled (pgbouncer transaction-mode) connection for app runtime queries.
 // Schema changes (migrate/db push) use DIRECT_URL instead — see prisma.config.ts.
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 5_000,
+});
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma =
+const localPrisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     adapter,
@@ -17,5 +20,15 @@ export const prisma =
   });
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+  globalForPrisma.prisma = localPrisma;
 }
+
+export const prisma: PrismaClient = new Proxy(localPrisma, {
+  get(target, property, receiver) {
+    if (process.env.BACKEND_URL)
+      throw new Error(
+        "Database access belongs to the backend. Use a backend action.",
+      );
+    return Reflect.get(target, property, receiver);
+  },
+});
