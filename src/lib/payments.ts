@@ -1,4 +1,8 @@
 import "server-only";
+import {
+  requireBookingDetails,
+  snapshotBookingDetails,
+} from "@/lib/booking-details";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { PaymentOrder, Prisma } from "@/generated/prisma/client";
@@ -119,6 +123,7 @@ export async function createCheckout(
         throw new Error("Checkout key already used for a different request");
       return existing;
     }
+    const details = await requireBookingDetails(tx, userId);
     const settings = await getPaymentSettings(tx);
     if (
       !(method === "ONLINE" ? settings.onlineEnabled : settings.offlineEnabled)
@@ -153,6 +158,7 @@ export async function createCheckout(
     const hold = holds[0];
     if (!hold || !hold.starts_at || hold.starts_at <= new Date())
       throw new Error("Choose a future access window");
+    await snapshotBookingDetails(tx, userId, hold.target_id, details);
     const term =
       input.kind === "subscription"
         ? await tx.membershipPlan.findUniqueOrThrow({

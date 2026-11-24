@@ -1298,3 +1298,37 @@ model MembershipCard {
   @@map("membership_cards")
   @@schema("admin")
 }
+
+// Server-owned booking details: never expose OTP evidence through public.profiles.
+model CustomerBookingDetails {
+  userId             String    @id @map("user_id")
+  fullName           String    @default("") @map("full_name")
+  phone              String    @default("")
+  education          String    @default("")
+  purpose            String    @default("")
+  requirements       String    @default("")
+  phoneVerifiedAt    DateTime? @map("phone_verified_at") @db.Timestamptz(6)
+  verificationMethod String?   @map("verification_method")
+  challengeId        String?   @map("challenge_id")
+  challengeExpiresAt DateTime? @map("challenge_expires_at") @db.Timestamptz(6)
+  requestedAt        DateTime? @map("requested_at") @db.Timestamptz(6)
+  attempts           Int       @default(0)
+
+  @@map("customer_booking_details")
+  @@schema("admin")
+}
+
+model BookingCustomerSnapshot {
+  targetId           String   @id @map("target_id")
+  userId             String   @map("user_id")
+  fullName           String   @map("full_name")
+  phone              String
+  education          String
+  purpose            String
+  requirements       String
+  phoneVerifiedAt    DateTime @map("phone_verified_at") @db.Timestamptz(6)
+  verificationMethod String   @map("verification_method")
+
+  @@map("booking_customer_snapshots")
+  @@schema("admin")
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { BookingCustomerInfo } from "./booking-customer-info";
 import { MembershipVerification } from "@/components/subscriptions/membership-verification";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -107,7 +108,12 @@ export function SubscriptionTable({
         {subscriptions.map((subscription) => (
           <TableRow key={subscription.id}>
             {showCustomer && (
-              <TableCell>{subscription.customerName ?? "—"}</TableCell>
+              <TableCell>
+                {subscription.customerDetails?.fullName ??
+                  subscription.customerName ??
+                  "—"}
+                <BookingCustomerInfo details={subscription.customerDetails} />
+              </TableCell>
             )}
             {showVendor && (
               <TableCell>

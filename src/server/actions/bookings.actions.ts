@@ -1,5 +1,9 @@
 "use server";
 
+import {
+  lookupBookingCustomerSnapshots,
+  type BookingCustomerSnapshot,
+} from "@/lib/booking-customer-snapshots";
 import { prisma } from "@/lib/prisma";
 import { lookupCustomerProfiles } from "@/lib/profiles";
 import { Prisma } from "@/generated/prisma/client";
@@ -19,6 +23,7 @@ export type VendorBookingRow = {
   vendorName?: string;
   bookingCode: string | null;
   customerName: string;
+  customerDetails?: BookingCustomerSnapshot;
   customerEmail: string | null;
   placedOn: string; // ISO timestamp
   forDate: string; // YYYY-MM-DD
@@ -84,6 +89,9 @@ export async function listVendorBookings(
     amount: Number(b.amount),
     status: b.status,
   }));
+  const snapshots = await lookupBookingCustomerSnapshots(
+    [...bookings, ...flexBookings].map((b) => b.id),
+  );
   return [
     ...flexRows,
     ...bookings.map((b) => {
@@ -108,6 +116,11 @@ export async function listVendorBookings(
       };
     }),
   ]
+    .map((row) => ({
+      ...row,
+      customerName: snapshots.get(row.id)?.fullName ?? row.customerName,
+      customerDetails: snapshots.get(row.id),
+    }))
     .sort((a, b) => b.placedOn.localeCompare(a.placedOn))
     .slice(0, MAX_ROWS);
 }
@@ -144,13 +157,15 @@ export async function listWorkspaceBookings(
       Prisma.sql`${query} SELECT count(*) AS total FROM filtered`,
     ),
   ]);
+  const snapshots = await lookupBookingCustomerSnapshots(rows.map((r) => r.id));
   return toPage(
     rows.map((r) => ({
       id: r.id,
       vendorId: r.vendor_id,
       vendorName: r.vendor_name,
       bookingCode: r.booking_code,
-      customerName: r.customer_name,
+      customerName: snapshots.get(r.id)?.fullName ?? r.customer_name,
+      customerDetails: snapshots.get(r.id),
       customerEmail: r.customer_email,
       placedOn: r.created_at.toISOString(),
       forDate: r.for_date.toISOString().slice(0, 10),

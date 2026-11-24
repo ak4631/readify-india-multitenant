@@ -1,5 +1,6 @@
 "use server";
 
+import { lookupBookingCustomerSnapshots } from "@/lib/booking-customer-snapshots";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { pageWindow, toPage } from "@/lib/pagination";
@@ -48,8 +49,12 @@ export async function listSubscriptions(
   // the client for cancellation refreshes). Three fields here are Decimal:
   // the subscription's own amountPaid, plus vendor.averageRating and
   // plan.price pulled in by the includes above.
+  const snapshots = await lookupBookingCustomerSnapshots(
+    subscriptions.map((sub) => sub.id),
+  );
   const items = subscriptions.map((sub) => ({
     ...sub,
+    customerDetails: snapshots.get(sub.id),
     amountPaid: Number(sub.amountPaid),
     vendor: sub.vendor
       ? {

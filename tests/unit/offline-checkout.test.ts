@@ -7,8 +7,14 @@ const s = vi.hoisted(() => ({
   config: vi.fn(),
   existing: null as Partial<PaymentOrder> | null,
   raw: vi.fn(),
+  details: vi.fn(),
+  snapshot: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/booking-details", () => ({
+  requireBookingDetails: s.details,
+  snapshotBookingDetails: s.snapshot,
+}));
 vi.mock("@/lib/razorpay", () => ({
   razorpay: s.gateway,
   paymentConfig: s.config,
@@ -56,6 +62,7 @@ describe("offline checkout", () => {
       offlineHoldHours: 24,
     };
     s.existing = null;
+    s.details.mockResolvedValue({ phone: "+919876543210" });
     s.create.mockImplementation(async ({ data }: { data: PaymentOrder }) => ({
       ...data,
       status: "CREATED",
@@ -72,6 +79,20 @@ describe("offline checkout", () => {
         : [{ active: true }],
     );
   });
+  it("blocks incomplete details before reserving capacity", async () => {
+    s.details.mockRejectedValueOnce(
+      new Error("Complete your customer details"),
+    );
+    await expect(createCheckout("customer", input())).rejects.toThrow(
+      "Complete your customer details",
+    );
+    expect(
+      s.raw.mock.calls.some(([sql]) =>
+        sql.join("").includes("reserve_purchase"),
+      ),
+    ).toBe(false);
+    expect(s.create).not.toHaveBeenCalled();
+  });
   it("creates a priced pending reservation without any gateway configuration or call", async () => {
     s.settings.onlineEnabled = false;
     const result = await createCheckout("customer", input());
@@ -81,6 +102,12 @@ describe("offline checkout", () => {
     expect(result.expiresAt).toEqual(new Date("2035-01-02T04:30Z"));
     expect(s.config).not.toHaveBeenCalled();
     expect(s.gateway).not.toHaveBeenCalled();
+    expect(s.snapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "customer",
+      "target",
+      expect.objectContaining({ phone: "+919876543210" }),
+    );
   });
   it("rejects disabled offline payment before reserving capacity", async () => {
     s.settings.offlineEnabled = false;

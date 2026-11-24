@@ -1,5 +1,6 @@
 "use client";
 
+import { BookingCustomerInfo } from "@/components/subscriptions/booking-customer-info";
 import Link from "next/link";
 import { MembershipVerification } from "@/components/subscriptions/membership-verification";
 import { useRouter } from "next/navigation";
@@ -110,6 +111,7 @@ export function BookingTable({
               )}
               <TableCell>
                 <p className="font-medium">{b.customerName}</p>
+                <BookingCustomerInfo details={b.customerDetails} />
                 <p className="text-xs text-muted-foreground">
                   {b.customerEmail ?? ""}
                   {b.bookingCode && (
