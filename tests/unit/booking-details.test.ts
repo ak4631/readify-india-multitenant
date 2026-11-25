@@ -9,7 +9,12 @@ vi.mock("@/lib/prisma", () => ({
     $transaction: async (fn: (tx: unknown) => unknown) =>
       fn({
         $executeRaw: s.execute,
-        $queryRaw: async () => (s.row ? [s.row] : []),
+        $queryRaw: async (sql: TemplateStringsArray) =>
+          sql.join("").includes('user_id AS "userId"')
+            ? []
+            : s.row
+              ? [s.row]
+              : [],
       }),
   },
 }));

@@ -53,10 +53,29 @@ export function publicBookingDetails(row?: BookingDetails) {
     testMode: otpMode() === "static",
   };
 }
+const PHONE_ALREADY_LINKED =
+  "This mobile number is already linked to another account. Sign in to that account or use a different number.";
+
+async function phoneIsLinked(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  phone: string,
+) {
+  // Different accounts have different user locks. Serialize attempts for the
+  // same normalized phone as well; the unique index is the final backstop.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"booking-phone:" + phone}, 0))`;
+  const owners = await tx.$queryRaw<{ userId: string }[]>`
+    SELECT user_id AS "userId" FROM admin.customer_booking_details
+    WHERE phone=${phone} AND user_id<>${userId} AND phone_verified_at IS NOT NULL LIMIT 1`;
+  return owners.length > 0;
+}
+
 export async function saveBookingDetails(userId: string, body: unknown) {
   const v = bookingDetailsSchema.parse(body);
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
+    if (await phoneIsLinked(tx, userId, v.phone))
+      throw new Error(PHONE_ALREADY_LINKED);
     await tx.$executeRaw`
       INSERT INTO admin.customer_booking_details(user_id,full_name,phone,education,purpose,requirements)
       VALUES (${userId},${v.fullName},${v.phone},${v.education},${v.purpose},${v.requirements})
@@ -90,6 +109,8 @@ export async function bookingOtp(userId: string, body: unknown) {
       return {
         error: "Save your customer details before verifying this number.",
       };
+    if (await phoneIsLinked(tx, userId, input.phone))
+      return { error: PHONE_ALREADY_LINKED };
     if (input.action === "request") {
       if (row.requestedAt && Date.now() - row.requestedAt.getTime() < 60_000)
         return {

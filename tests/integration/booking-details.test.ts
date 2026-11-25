@@ -79,6 +79,12 @@ describe("persisted booking OTP lifecycle", () => {
         "utf8",
       ),
     );
+    await state.db.exec(
+      readFileSync(
+        "prisma/migrations/20261125010000_unique_verified_customer_phone/migration.sql",
+        "utf8",
+      ),
+    );
   });
   beforeEach(async () => {
     vi.stubEnv("BOOKING_OTP_MODE", "static");
@@ -201,5 +207,65 @@ describe("persisted booking OTP lifecycle", () => {
       "SELECT has_table_privilege('authenticated','admin.customer_booking_details','UPDATE') AS allowed",
     );
     expect(result.rows[0].allowed).toBe(false);
+  });
+  it("rejects linking a verified number to another account, including formatting variants", async () => {
+    await verified();
+    await expect(
+      saveBookingDetails("other", { ...details, phone: "+91 98765-43210" }),
+    ).rejects.toThrow("already linked");
+    expect((await saveBookingDetails("customer", details)).complete).toBe(true);
+  });
+  it("rejects an outstanding challenge when another account verified the phone first", async () => {
+    await saveBookingDetails("other", details);
+    const pending = await bookingOtp("other", {
+      action: "request",
+      phone: details.phone,
+    });
+    await verified();
+    await expect(
+      bookingOtp("other", {
+        action: "verify",
+        phone: details.phone,
+        challengeId: pending.challengeId,
+        code: "123456",
+      }),
+    ).rejects.toThrow("already linked");
+    await expect(
+      bookingOtp("other", { action: "request", phone: details.phone }),
+    ).rejects.toThrow("already linked");
+    expect(
+      (await readBookingDetails(prisma, "other"))?.phoneVerifiedAt,
+    ).toBeNull();
+  });
+  it("enforces uniqueness even when a writer bypasses the service", async () => {
+    await saveBookingDetails("other", details);
+    await verified();
+    await expect(
+      state.db!.exec(
+        "UPDATE admin.customer_booking_details SET phone_verified_at=now(),verification_method='static' WHERE user_id='other'",
+      ),
+    ).rejects.toMatchObject({ code: "23505" });
+  });
+  it("releases the old number after its owner changes phone", async () => {
+    await verified();
+    await saveBookingDetails("customer", {
+      ...details,
+      phone: "+919999999999",
+    });
+    await expect(saveBookingDetails("other", details)).resolves.toMatchObject({
+      phoneVerified: false,
+    });
+    const pending = await bookingOtp("other", {
+      action: "request",
+      phone: details.phone,
+    });
+    await expect(
+      bookingOtp("other", {
+        action: "verify",
+        phone: details.phone,
+        challengeId: pending.challengeId,
+        code: "123456",
+      }),
+    ).resolves.toMatchObject({ verified: true });
   });
 });

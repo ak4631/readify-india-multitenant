@@ -1300,6 +1300,8 @@ model MembershipCard {
 }
 
 // Server-owned booking details: never expose OTP evidence through public.profiles.
+// Partial unique index on phone WHERE phone_verified_at IS NOT NULL is maintained
+// by 20261125010000_unique_verified_customer_phone (Prisma cannot express it).
 model CustomerBookingDetails {
   userId             String    @id @map("user_id")
   fullName           String    @default("") @map("full_name")
