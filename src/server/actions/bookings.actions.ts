@@ -53,36 +53,66 @@ async function local_listVendorBookings(
     hour12: false,
   });
 
-  const bookings = await prisma.booking.findMany({
-    where: { vendorId },
-    orderBy: { createdAt: "desc" },
-    take: MAX_ROWS,
-    include: {
-      plan: { select: { name: true } },
-      seat: { select: { label: true } },
-    },
-  });
-  const profiles = await lookupCustomerProfiles(bookings.map((b) => b.userId));
-  const flexBookings = await prisma.flexBooking.findMany({
-    where: { vendorId },
-    orderBy: { createdAt: "desc" },
-    take: MAX_ROWS,
-  });
-  const flexProfiles = await lookupCustomerProfiles(
-    flexBookings.map((b) => b.userId),
+  const [bookings, flexBookings] = await Promise.all([
+    prisma.booking.findMany({
+      where: { vendorId },
+      orderBy: { createdAt: "desc" },
+      take: MAX_ROWS,
+      select: {
+        id: true,
+        userId: true,
+        bookingCode: true,
+        createdAt: true,
+        bookingDate: true,
+        startAt: true,
+        endAt: true,
+        timeLabel: true,
+        durationHours: true,
+        seatLabel: true,
+        amount: true,
+        status: true,
+        plan: { select: { name: true } },
+        seat: { select: { label: true } },
+      },
+    }),
+    prisma.flexBooking.findMany({
+      where: { vendorId },
+      orderBy: { createdAt: "desc" },
+      take: MAX_ROWS,
+      select: {
+        id: true,
+        userId: true,
+        bookingCode: true,
+        createdAt: true,
+        startDate: true,
+        seatId: true,
+        slotStart: true,
+        slotHours: true,
+        days: true,
+        amount: true,
+        status: true,
+      },
+    }),
+  ]);
+  const profiles = await lookupCustomerProfiles(
+    [...bookings, ...flexBookings].map((b) => b.userId),
   );
   const seatIds = [...new Set(flexBookings.map((b) => b.seatId))];
-  const seats = await prisma.librarySeat.findMany({
-    where: { id: { in: seatIds } },
-  });
+  const seats = seatIds.length
+    ? await prisma.librarySeat.findMany({
+        where: { id: { in: seatIds } },
+        select: { id: true, label: true },
+      })
+    : [];
+  const seatLabels = new Map(seats.map((seat) => [seat.id, seat.label]));
   const flexRows: VendorBookingRow[] = flexBookings.map((b) => ({
     id: b.id,
     bookingCode: b.bookingCode,
-    customerName: flexProfiles.get(b.userId)?.fullName ?? "Customer",
-    customerEmail: flexProfiles.get(b.userId)?.email ?? null,
+    customerName: profiles.get(b.userId)?.fullName ?? "Customer",
+    customerEmail: profiles.get(b.userId)?.email ?? null,
     placedOn: b.createdAt.toISOString(),
     forDate: b.startDate.toISOString().slice(0, 10),
-    seatLabel: seats.find((s) => s.id === b.seatId)?.label ?? null,
+    seatLabel: seatLabels.get(b.seatId) ?? null,
     slotLabel: `${b.slotStart.toISOString().slice(11, 16)} · ${b.slotHours}h/day · ${b.days} days`,
     hours: b.slotHours * b.days,
     planName: "Flex Booking",

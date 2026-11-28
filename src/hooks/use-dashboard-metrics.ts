@@ -21,6 +21,8 @@ export function useDashboardMetrics(initialData: DashboardMetrics) {
     ],
     queryFn: () => getDashboardMetrics(),
     initialData,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     refetchInterval: 30_000,
   });
 }

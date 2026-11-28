@@ -27,7 +27,9 @@ export type MembershipCardDetails = {
 };
 export async function customerMembershipCards(userId: string) {
   const rows = await prisma.$queryRaw<MembershipCardDetails[]>`
-    SELECT * FROM admin.membership_card_details WHERE user_id=${userId} ORDER BY activated_at DESC`;
+    SELECT id,order_id,user_id,vendor_id,target_id,customer_name,vendor_name,category,
+      plan_name,valid_from,valid_until,slot_start,slot_hours,qr_value,status,photo_path,
+      verified_by,verified_at,activated_at,time_zone,captured_at FROM admin.membership_card_details WHERE user_id=${userId} ORDER BY activated_at DESC`;
   return Promise.all(
     rows.map(async ({ photo_path, ...row }) => ({
       ...row,

@@ -57,7 +57,7 @@ async function summary(vendorIds: string[] | null) {
     `,
     prisma.$queryRaw<
       { total_seat_hours: unknown; reserved_seat_hours: unknown }[]
-    >`SELECT * FROM admin.library_occupancy_summary(${vendorIds}::text[])`,
+    >`SELECT total_seat_hours, reserved_seat_hours FROM admin.library_occupancy_summary(${vendorIds}::text[])`,
   ]);
   return {
     listings,
@@ -136,16 +136,33 @@ async function local_listPaymentLedger(
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: window.skip,
       take: window.take,
+      select: {
+        id: true,
+        vendorId: true,
+        targetType: true,
+        amountPaise: true,
+        status: true,
+        capturedAt: true,
+        refundId: true,
+        createdAt: true,
+      },
     }),
     prisma.paymentOrder.count({ where }),
   ]);
-  const vendors = await prisma.vendor.findMany({
-    where: { id: { in: [...new Set(orders.map((order) => order.vendorId))] } },
-    select: { id: true, name: true },
-  });
+  const vendors = orders.length
+    ? await prisma.vendor.findMany({
+        where: {
+          id: { in: [...new Set(orders.map((order) => order.vendorId))] },
+        },
+        select: { id: true, name: true },
+      })
+    : [];
+  const vendorNames = new Map(
+    vendors.map((vendor) => [vendor.id, vendor.name]),
+  );
   const items = orders.map((order) => ({
     id: order.id,
-    vendorName: vendors.find((v) => v.id === order.vendorId)?.name ?? "Listing",
+    vendorName: vendorNames.get(order.vendorId) ?? "Listing",
     kind: order.targetType,
     amountPaise: order.amountPaise,
     status: order.status,

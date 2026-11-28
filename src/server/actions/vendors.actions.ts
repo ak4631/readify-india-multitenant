@@ -80,7 +80,15 @@ async function local_listVendorsPage(
     prisma.vendor.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: { category: true, address: true },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        verificationStatus: true,
+        capacity: true,
+        category: { select: { name: true, slug: true } },
+        address: { select: { city: true } },
+      },
       skip: window.skip,
       take: window.take,
     }),

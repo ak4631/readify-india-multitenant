@@ -372,6 +372,8 @@ model Vendor {
   submissionVersion Int @default(0) @map("submission_version")
   assignments      ListingAssignment[]
 
+  // Partial top-rated discovery index (including NULLS LAST ordering) lives in
+  // 20261127120000_query_efficiency_indexes; Prisma cannot express that predicate.
   @@index([partnerId])
   @@index([categoryId])
   @@index([status])
@@ -586,6 +588,7 @@ model Booking {
   @@index([userId])
   @@index([vendorId])
   @@index([status])
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("bookings")
   @@schema("admin")
 }
@@ -626,6 +629,7 @@ model Subscription {
   @@index([userId])
   @@index([vendorId])
   @@index([status])
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("subscriptions")
   @@schema("admin")
 }
@@ -643,6 +647,7 @@ model VendorMedia {
   vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([vendorId])
+  @@index([vendorId, mediaType, isPrimary(sort: Desc), sortOrder, createdAt], map: "vendor_media_listing_image_idx")
   @@map("vendor_media")
   @@schema("admin")
 }
@@ -1013,6 +1018,7 @@ model FlexBooking {
 
   @@index([vendorId, startDate])
   @@index([userId])
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("flex_bookings")
   @@schema("admin")
 }
@@ -1057,6 +1063,8 @@ model PaymentOrder {
 
   @@unique([userId, idempotencyKey])
   @@index([vendorId, status])
+  @@index([status, expiresAt, id])
+  @@index([vendorId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("payment_orders")
   @@schema("admin")
 }
@@ -1084,6 +1092,7 @@ model AttendanceVisit {
 
   @@index([targetId, serviceDate])
   @@index([vendorId, checkedOutAt])
+  @@index([userId, checkedOutAt, vendorId])
   @@map("attendance_visits")
   @@schema("admin")
 }

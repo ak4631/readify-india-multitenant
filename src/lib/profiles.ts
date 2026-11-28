@@ -32,7 +32,7 @@ export async function listCustomerProfiles(window: {
         p."created_at" AS "createdAt"
       FROM "public"."profiles" p
       LEFT JOIN "auth"."users" u ON u."id" = p."id"
-      ORDER BY p."created_at" DESC
+      ORDER BY p."created_at" DESC, p."id" DESC
       LIMIT ${window.take} OFFSET ${window.skip}
     `,
     prisma.$queryRaw<{ total: bigint }[]>`
@@ -44,8 +44,14 @@ export async function listCustomerProfiles(window: {
 
 // Names/emails for a set of customer ids (booking.userId etc.), keyed by id.
 export async function lookupCustomerProfiles(userIds: string[]) {
-  const map = new Map<string, { fullName: string | null; email: string | null }>();
-  const ids = [...new Set(userIds)];
+  const map = new Map<
+    string,
+    { fullName: string | null; email: string | null }
+  >();
+  // Legacy booking IDs may be arbitrary text; only UUIDs can match profiles.
+  const ids = [...new Set(userIds)].filter((id) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+  );
   if (ids.length === 0) return map;
 
   const rows = await prisma.$queryRaw<
@@ -54,7 +60,7 @@ export async function lookupCustomerProfiles(userIds: string[]) {
     SELECT p."id"::text AS "id", p."full_name" AS "fullName", u."email" AS "email"
     FROM "public"."profiles" p
     LEFT JOIN "auth"."users" u ON u."id" = p."id"
-    WHERE p."id"::text = ANY(${ids}::text[])
+    WHERE p."id" = ANY(${ids}::uuid[])
   `;
   for (const row of rows) map.set(row.id, row);
   return map;

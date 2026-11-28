@@ -133,7 +133,7 @@ export async function createCheckout(
       );
     const active = await tx.$queryRaw<
       { active: boolean }[]
-    >`SELECT is_active AS active FROM public.profiles WHERE id::text = ${userId}`;
+    >`SELECT is_active AS active FROM public.profiles WHERE id = ${userId}::uuid`;
     if (!active[0]?.active) throw new Error("Customer account is not active");
     await tx.$queryRaw`SELECT set_config('request.jwt.claim.sub', ${userId}, true)`;
     const holds =
@@ -427,11 +427,16 @@ export async function processRefund(orderId: string) {
   });
 }
 
-export async function expireCheckouts() {
+export async function expireCheckouts(orderId?: string) {
   const orders = await prisma.paymentOrder.findMany({
-    where: { status: "CREATED", expiresAt: { lte: new Date() } },
+    where: {
+      ...(orderId ? { id: orderId } : {}),
+      status: "CREATED",
+      expiresAt: { lte: new Date() },
+    },
     select: { id: true },
-    take: 100,
+    take: orderId ? 1 : 100,
+    orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
   });
   for (const reference of orders)
     await prisma.$transaction(async (tx) => {

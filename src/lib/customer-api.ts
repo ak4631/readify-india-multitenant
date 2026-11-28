@@ -29,7 +29,7 @@ export async function requireCustomer(request: Request) {
     .parse(await response.json());
   if (process.env.CUSTOMER_IDENTITY_STORAGE === "postgres") {
     await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`INSERT INTO auth.users(id,email) VALUES(${identity.id}::uuid,${identity.email ?? null}) ON CONFLICT(id) DO UPDATE SET email=EXCLUDED.email`;
+      await tx.$executeRaw`INSERT INTO auth.users(id,email) VALUES(${identity.id}::uuid,${identity.email ?? null}) ON CONFLICT(id) DO UPDATE SET email=EXCLUDED.email WHERE auth.users.email IS DISTINCT FROM EXCLUDED.email`;
       await tx.$executeRaw`INSERT INTO public.profiles(id,full_name) VALUES(${identity.id}::uuid,${identity.user_metadata?.full_name ?? null}) ON CONFLICT(id) DO NOTHING`;
     });
     const active = await prisma.$queryRaw<

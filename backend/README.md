@@ -25,6 +25,7 @@ Run commands from `readify-india-multitenant`, using Node.js 24 or later and the
    ```
 
    Start the frontend with `npm run dev`. Restart/rebuild after changing `BACKEND_URL`; the public API rewrites are part of Next.js configuration. The frontend proxies the existing `/api/customer/*`, `/api/payments/*`, `/api/jobs/*` and `/api/registration` paths to preserve existing URLs. Browser staff auth remains at frontend `/api/auth/*`.
+
 9. In `application-readify/.env`, set `API_BASE_URL` to the externally reachable backend URL and retain the Supabase Auth URL/publishable key. A physical device needs your development machine's LAN address or a test HTTPS URL, rather than `localhost`. Rebuild the native bundle after changing embedded environment values. `CHECKOUT_BASE_URL` on the backend must point to the frontend, which renders `/checkout/[id]`.
 
 For the complete container service, use `POSTGRES_PASSWORD=PASSWORD docker compose -f compose.backend.yaml up --build -d backend` after migrations. Container database connections use the `postgres` hostname automatically. Apply migrations and seed through the host commands above before exposing the backend.
@@ -88,3 +89,29 @@ npm test -- --runInBand
 ```
 
 `tests/integration/separate-backend.test.ts` runs the actual bootstrap and portable migration chain on disposable PostgreSQL-compatible PGlite, then checks customer isolation and write restrictions. Transport tests cover signatures, stale requests, dates and multipart files. Native Jest tests cover the API data adapter. A real RDS/container staging smoke test is still required before production cutover.
+
+## Query efficiency audit (2026-11-27)
+
+The customer history read path is now `GET /api/customer/history?kind=bookings|subscriptions&limit=50&offset=0`. Limits are validated (maximum 100), ordering is deterministic, and ownership comes from the verified customer token. The mobile histories initially fetch 50 rows and expose Load more. Booking tabs filter in SQL before pagination so older upcoming bookings are not hidden behind recent completed bookings. Payment metadata is joined only for the selected history targets. Deploy the backend before releasing the mobile changes; older mobile builds can continue using the existing data/RPC endpoints.
+
+Implemented reductions:
+
+| Read path                        | Before                                                                                                  | After                                                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer booking history         | Three sequential API requests, three token verifications, up to 500 rows per source, all payment orders | One API request and token verification; one transaction-context query plus one paginated SQL query with payment metadata                    |
+| Customer subscription history    | Two sequential API requests and all customer payment metadata                                           | One authenticated request; payment metadata for the current page only                                                                       |
+| Active subscription lookup       | Load subscription/payment history and filter on the device                                              | Filter vendor and active status in SQL, limit one                                                                                           |
+| Platform dashboard               | 16 logical database queries, including unused recent listings                                           | Nine logical queries; vendor counts and live category distribution share one grouped scan; initial client data remains fresh for 30 seconds |
+| Partner customers                | Six business queries plus a profile lookup; load all subscriptions and paginate in JavaScript           | One SQL statement returns totals and the current page, with profile/payment details for that page                                           |
+| Order-status polling             | Global expiry batch could update 100 unrelated checkouts                                                | Expiry work restricted to the requested order; scheduled jobs retain the global batch                                                       |
+| Admin lists                      | Full vendor, related plan/vendor, and payment-order records                                             | Explicit fields for listing, subscription, review, pending-payment and payment-ledger tables                                                |
+| Vendor bookings                  | Two profile lookups; full seat rows                                                                     | One combined profile lookup and only seat IDs/labels; skip empty seat lookups                                                               |
+| Public nearby/availability calls | Logged-in mobile requests perform token lookup and server-side verification                             | No token for `nearby_vendors`, `get_slot_availability`, or `get_purchase_options`; banners retain identity/location context                 |
+
+`20261127120000_query_efficiency_indexes` adds ten indexes: customer ID + history order on bookings/flex bookings/subscriptions; payment status + expiry; vendor + payment creation order; customer + open attendance; listing image selection order; published top-rated listings by category and rating (partial index); profile creation order; and the profile ID text expression used by legacy text-ID joins. Modeled indexes are also recorded in `prisma/schema.prisma`. Profile lookup/checkout validation now compares native UUID IDs where possible. Identity mirroring avoids rewriting unchanged email values. Single-row data requests read at most two rows, retaining multiple-result detection.
+
+The migration is additive and must be applied to the target database through the existing migration process. It has been verified on disposable PostgreSQL-compatible PGlite, not applied to a live Supabase project. Index creation uses regular `CREATE INDEX` and can block writes on each indexed table while it runs; schedule the production migration appropriately for table size and traffic.
+
+Audit limits: the legacy generic data endpoint still supports its existing 500-row ceiling for old clients. Directory/wishlist reads, membership cards, per-listing editors/catalogs, occupancy calculations and the Plans page's per-vendor plan/draft calls remain distinct workloads; they are not covered by a claim that every query is paginated. Full rows used for editing, revision snapshots or payment state transitions were retained where the operation needs them. The largest time-dependent availability functions still require production query-plan and timing evidence before rewriting their booking rules.
+
+Validate impact using the same traffic window before and after deployment: query duration and calls in Supabase Query Performance, active connections, actual memory/swap, and memory commitment relative to the commit limit. Use representative `EXPLAIN (ANALYZE, BUFFERS)` plans to confirm index selection. No live latency or memory reduction is claimed from local tests.

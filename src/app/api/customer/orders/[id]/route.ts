@@ -14,21 +14,34 @@ export async function GET(
   try {
     const customer = await requireCustomer(request);
     const { id } = await params;
-    let order = await prisma.paymentOrder.findUniqueOrThrow({
+    const initial = await prisma.paymentOrder.findUniqueOrThrow({
       where: { id, userId: customer.id },
+      select: { status: true, gatewayOrderId: true },
     });
-    if (order.status === "CREATED" && order.gatewayOrderId) {
+    if (initial.status === "CREATED" && initial.gatewayOrderId) {
       const payments = await razorpay<{ items: GatewayPayment[] }>(
-        `orders/${encodeURIComponent(order.gatewayOrderId)}/payments`,
+        `orders/${encodeURIComponent(initial.gatewayOrderId)}/payments`,
       );
       const captured = payments.items.find(
         (payment) => payment.status === "captured",
       );
       if (captured) await recordCapture(captured, `verify:${captured.id}`);
     }
-    await expireCheckouts();
-    order = await prisma.paymentOrder.findUniqueOrThrow({
+    // Polling one order must not process up to 100 unrelated expired holds.
+    await expireCheckouts(id);
+    const order = await prisma.paymentOrder.findUniqueOrThrow({
       where: { id, userId: customer.id },
+      select: {
+        id: true,
+        targetId: true,
+        targetType: true,
+        vendorId: true,
+        status: true,
+        paymentMethod: true,
+        expiresAt: true,
+        amountPaise: true,
+        startsAt: true,
+      },
     });
     const seat = await prisma.$queryRaw<
       { seatNumber: string | null; bookingCode: string | null }[]

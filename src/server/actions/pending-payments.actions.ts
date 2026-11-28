@@ -31,6 +31,15 @@ async function local_listPendingPayments(
       orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
       skip: window.skip,
       take: window.take,
+      select: {
+        id: true,
+        targetId: true,
+        targetType: true,
+        amountPaise: true,
+        paymentMethod: true,
+        expiresAt: true,
+        startsAt: true,
+      },
     }),
     prisma.paymentOrder.count({ where }),
   ]);

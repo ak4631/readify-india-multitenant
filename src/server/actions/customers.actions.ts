@@ -1,9 +1,10 @@
 "use server";
 
-import { pageWindow, slicePage, toPage, type Page } from "@/lib/pagination";
-import { prisma } from "@/lib/prisma";
+import { pageWindow, toPage, type Page } from "@/lib/pagination";
 import { getSessionPartnerId, requirePermission } from "@/lib/rbac";
-import { listCustomerProfiles, lookupCustomerProfiles } from "@/lib/profiles";
+import { listCustomerProfiles } from "@/lib/profiles";
+
+import { listPartnerCustomerPage } from "@/lib/partner-customers";
 
 // One row shape for both the platform-staff view (all app users, with their
 // account role/status) and the partner-scoped view (only customers who have
@@ -68,159 +69,16 @@ async function local_listCustomers(
     };
   }
 
-  const type = options.type ?? "all";
-  const rows = (await listPartnerCustomers(partnerId)).filter(
-    (customer) =>
-      type === "all" ||
-      (type === "permanent"
-        ? !!customer.activeSubscriptions
-        : type === "flexible"
-          ? !!customer.flexibleBookings
-          : type === "active"
-            ? !!customer.present
-            : customer.joinedAt.getTime() > asOf.getTime() - 7 * 86400000),
-  );
-  const page = slicePage(rows, window.page);
-  const profiles = await lookupCustomerProfiles(
-    page.items.map((row) => row.id),
-  );
   return {
     asOf,
     scope: "partner",
-    customers: {
-      ...page,
-      items: page.items.map((row) => ({
-        ...row,
-        fullName: profiles.get(row.id)?.fullName ?? null,
-        email: profiles.get(row.id)?.email ?? null,
-      })),
-    },
+    customers: await listPartnerCustomerPage(
+      partnerId,
+      options.type ?? "all",
+      asOf,
+      window,
+    ),
   };
-}
-
-async function listPartnerCustomers(partnerId: string): Promise<CustomerRow[]> {
-  const vendors = await prisma.vendor.findMany({
-    where: { partnerId },
-    select: { id: true },
-  });
-  const vendorIds = vendors.map((v) => v.id);
-  if (vendorIds.length === 0) return [];
-
-  const [bookingStats, subscriptions] = await Promise.all([
-    prisma.booking.groupBy({
-      by: ["userId"],
-      where: { vendorId: { in: vendorIds } },
-      _count: { _all: true },
-      _sum: { amount: true },
-      _min: { createdAt: true },
-      _max: { createdAt: true },
-    }),
-    prisma.subscription.findMany({
-      where: { vendorId: { in: vendorIds } },
-      select: {
-        userId: true,
-        status: true,
-        amountPaid: true,
-        createdAt: true,
-      },
-    }),
-  ]);
-
-  // Track first-seen/last-seen as nullable and only ever widen the range --
-  // simpler and less error-prone than trying to detect "is this the first
-  // event for this user" from the aggregate counters.
-  type PartnerAccumulator = Omit<CustomerRow, "joinedAt"> & {
-    joinedAt: Date | null;
-  };
-  const byUser = new Map<string, PartnerAccumulator>();
-  const rowFor = (userId: string) => {
-    let row = byUser.get(userId);
-    if (!row) {
-      row = {
-        id: userId,
-        fullName: null,
-        email: null,
-        role: null,
-        isActive: null,
-        totalBookings: 0,
-        activeSubscriptions: 0,
-        totalSpent: 0,
-        lastActivityAt: null,
-        joinedAt: null,
-      };
-      byUser.set(userId, row);
-    }
-    return row;
-  };
-  const widen = (row: PartnerAccumulator, at: Date) => {
-    if (!row.joinedAt || at < row.joinedAt) row.joinedAt = at;
-    if (!row.lastActivityAt || at > row.lastActivityAt) row.lastActivityAt = at;
-  };
-
-  for (const stat of bookingStats) {
-    const row = rowFor(stat.userId);
-    if (stat._min.createdAt) widen(row, stat._min.createdAt);
-    if (stat._max.createdAt) widen(row, stat._max.createdAt);
-    row.totalBookings = stat._count._all;
-  }
-  for (const sub of subscriptions) {
-    const row = rowFor(sub.userId);
-    widen(row, sub.createdAt);
-    if (sub.status === "ACTIVE") {
-      row.activeSubscriptions = (row.activeSubscriptions ?? 0) + 1;
-    }
-  }
-
-  const [flex, paid, present] = await Promise.all([
-    prisma.flexBooking.groupBy({
-      by: ["userId"],
-      where: { vendorId: { in: vendorIds } },
-      _count: { _all: true },
-      _min: { createdAt: true },
-      _max: { createdAt: true },
-    }),
-    prisma.paymentOrder.groupBy({
-      by: ["userId"],
-      where: {
-        vendorId: { in: vendorIds },
-        capturedAt: { not: null },
-        status: { in: ["CAPTURED", "CANCELLED"] },
-      },
-      _sum: { amountPaise: true },
-    }),
-    prisma.attendanceVisit.findMany({
-      where: { vendorId: { in: vendorIds }, checkedOutAt: null },
-      select: { userId: true },
-    }),
-  ]);
-  for (const entry of flex) {
-    const row = rowFor(entry.userId);
-    row.flexibleBookings = entry._count._all;
-    row.totalBookings = (row.totalBookings ?? 0) + entry._count._all;
-    if (entry._min.createdAt) widen(row, entry._min.createdAt);
-    if (entry._max.createdAt) widen(row, entry._max.createdAt);
-  }
-  for (const entry of paid) {
-    const row = byUser.get(entry.userId);
-    if (row) row.totalSpent = Number(entry._sum.amountPaise ?? 0) / 100;
-  }
-  for (const entry of present) {
-    const row = byUser.get(entry.userId);
-    if (row) row.present = true;
-  }
-
-  // Names/emails are filled in by the caller for the visible page only.
-  return (
-    [...byUser.values()]
-      .sort(
-        (a, b) =>
-          (b.lastActivityAt?.getTime() ?? 0) -
-          (a.lastActivityAt?.getTime() ?? 0),
-      )
-      // joinedAt is always set by this point -- every row was created by a
-      // booking or subscription event, and both branches above call widen().
-      .map((row) => ({ ...row, joinedAt: row.joinedAt as Date }))
-  );
 }
 
 export async function listCustomers(

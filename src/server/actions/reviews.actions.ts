@@ -39,28 +39,23 @@ async function local_listReviews(
     prisma.review.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: { vendor: true },
+      select: {
+        id: true,
+        vendorId: true,
+        userName: true,
+        rating: true,
+        reviewText: true,
+        ownerReply: true,
+        status: true,
+        vendor: { select: { name: true } },
+      },
       skip: window.skip,
       take: window.take,
     }),
     prisma.review.count({ where }),
   ]);
 
-  // Decimal (Vendor.averageRating) is a class instance, not a plain object --
-  // Next.js refuses to pass it from this Server Action to a Client Component
-  // (ReviewTable receives this array as a prop).
-  const items = reviews.map((review) => ({
-    ...review,
-    vendor: review.vendor
-      ? {
-          ...review.vendor,
-          averageRating: review.vendor.averageRating
-            ? Number(review.vendor.averageRating)
-            : null,
-        }
-      : review.vendor,
-  }));
-  return toPage(items, total, window);
+  return toPage(reviews, total, window);
 }
 
 export type ReviewRow = Awaited<

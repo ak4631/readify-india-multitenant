@@ -17,9 +17,12 @@ import type {
   VendorCategory,
 } from "@/generated/prisma/client";
 
-type VendorRow = Vendor & {
-  category: VendorCategory;
-  address: VendorAddress | null;
+type VendorRow = Pick<
+  Vendor,
+  "id" | "name" | "status" | "verificationStatus"
+> & {
+  category: Pick<VendorCategory, "name">;
+  address: Pick<VendorAddress, "city"> | null;
 };
 
 export function VendorTable({ vendors }: { vendors: VendorRow[] }) {

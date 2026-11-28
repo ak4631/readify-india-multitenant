@@ -150,7 +150,7 @@ export async function readCustomerData(
       ? Prisma.sql`ORDER BY ${Prisma.join(input.order.map((o) => Prisma.sql`${column(o.column)} ${Prisma.raw(o.ascending ? "ASC" : "DESC")} ${Prisma.raw(o.nullsFirst ? "NULLS FIRST" : "NULLS LAST")}`))}`
       : Prisma.empty;
     const rows = await tx.$queryRaw<unknown[]>(
-      Prisma.sql`SELECT ${names} FROM ${table} ${where} ${order} LIMIT ${input.limit}`,
+      Prisma.sql`SELECT ${names} FROM ${table} ${where} ${order} LIMIT ${input.single ? Math.min(input.limit, 2) : input.limit}`,
     );
     if (input.single) {
       if (rows.length > 1 || (input.single === "single" && rows.length !== 1))

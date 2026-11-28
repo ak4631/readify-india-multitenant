@@ -36,19 +36,29 @@ async function local_listSubscriptions(
     prisma.subscription.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: { vendor: true, plan: true, seat: { select: { label: true } } },
+      select: {
+        id: true,
+        vendorId: true,
+        customerName: true,
+        vendorName: true,
+        planName: true,
+        startDate: true,
+        endDate: true,
+        amountPaid: true,
+        status: true,
+        slotStartTime: true,
+        slotHours: true,
+        vendor: { select: { name: true } },
+        plan: { select: { name: true } },
+        seat: { select: { label: true } },
+      },
       skip: window.skip,
       take: window.take,
     }),
     prisma.subscription.count({ where }),
   ]);
 
-  // Decimal is a class instance, not a plain object -- Next.js refuses to
-  // pass it from this Server Action to a Client Component (SubscriptionTable
-  // receives this array as a prop, and also calls this action directly from
-  // the client for cancellation refreshes). Three fields here are Decimal:
-  // the subscription's own amountPaid, plus vendor.averageRating and
-  // plan.price pulled in by the includes above.
+  // Convert only the displayed amount; related rows expose names alone.
   const snapshots = await lookupBookingCustomerSnapshots(
     subscriptions.map((sub) => sub.id),
   );
@@ -56,15 +66,6 @@ async function local_listSubscriptions(
     ...sub,
     customerDetails: snapshots.get(sub.id),
     amountPaid: Number(sub.amountPaid),
-    vendor: sub.vendor
-      ? {
-          ...sub.vendor,
-          averageRating: sub.vendor.averageRating
-            ? Number(sub.vendor.averageRating)
-            : null,
-        }
-      : sub.vendor,
-    plan: sub.plan ? { ...sub.plan, price: Number(sub.plan.price) } : sub.plan,
   }));
   return toPage(items, total, window);
 }
