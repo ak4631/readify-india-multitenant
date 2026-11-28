@@ -23,13 +23,13 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "hidden min-h-svh shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[12px_0_32px_oklch(0.2_0.03_170_/_0.08)] transition-[width] duration-200 motion-reduce:transition-none md:flex md:flex-col",
+        "sticky top-0 hidden h-dvh shrink-0 self-start overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[12px_0_32px_oklch(0.2_0.03_170_/_0.08)] transition-[width] duration-200 motion-reduce:transition-none md:flex md:flex-col",
         collapsed ? "w-20" : "w-72",
       )}
     >
       <div
         className={cn(
-          "border-b border-sidebar-border py-4",
+          "shrink-0 border-b border-sidebar-border py-4",
           collapsed ? "px-2" : "px-5",
         )}
       >
@@ -80,7 +80,12 @@ export function Sidebar({
           </span>
         </Link>
       </div>
-      <div className={cn("flex-1 py-4", collapsed ? "px-2" : "px-4")}>
+      <div
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto overscroll-contain py-4",
+          collapsed ? "px-2" : "px-4",
+        )}
+      >
         <p
           className={cn(
             "mb-3 px-3 text-xs font-semibold tracking-[0.08em] text-sidebar-foreground/80 uppercase",
