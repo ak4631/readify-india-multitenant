@@ -55,6 +55,8 @@ export const dataRequestSchema = z
       .max(4)
       .default([]),
     limit: z.number().int().min(1).max(500).default(500),
+    offset: z.number().int().min(0).max(1_000_000).default(0),
+    search: z.string().trim().max(200).optional(),
     single: z.enum(["single", "maybeSingle"]).optional(),
     values: z.record(z.string(), z.unknown()).optional(),
   })
@@ -107,6 +109,13 @@ export async function readCustomerData(
         );
       }
     }
+    if (input.search) {
+      if (input.table !== "published_listings")
+        throw new Error("Unsupported search");
+      predicates.push(
+        Prisma.sql`strpos(lower(concat_ws(' ',name,slug,description,address_line_1,address_line_2,locality,city,state,postal_code)),lower(${input.search}))>0`,
+      );
+    }
     const table = Prisma.raw(`public."${input.table}"`);
     const where = predicates.length
       ? Prisma.sql`WHERE ${Prisma.join(predicates, " AND ")}`
@@ -150,7 +159,7 @@ export async function readCustomerData(
       ? Prisma.sql`ORDER BY ${Prisma.join(input.order.map((o) => Prisma.sql`${column(o.column)} ${Prisma.raw(o.ascending ? "ASC" : "DESC")} ${Prisma.raw(o.nullsFirst ? "NULLS FIRST" : "NULLS LAST")}`))}`
       : Prisma.empty;
     const rows = await tx.$queryRaw<unknown[]>(
-      Prisma.sql`SELECT ${names} FROM ${table} ${where} ${order} LIMIT ${input.single ? Math.min(input.limit, 2) : input.limit}`,
+      Prisma.sql`SELECT ${names} FROM ${table} ${where} ${order} LIMIT ${input.single ? Math.min(input.limit, 2) : input.limit} OFFSET ${input.offset}`,
     );
     if (input.single) {
       if (rows.length > 1 || (input.single === "single" && rows.length !== 1))

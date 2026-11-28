@@ -3,6 +3,11 @@ import { PGlite } from "@electric-sql/pglite";
 import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { migrationSql } from "../../backend/database/migration-sql.mjs";
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/imagekit", () => ({
+  getSignedDocumentUrl: async (path: string) => `signed:${path}`,
+}));
+import { customerMembershipCards } from "@/lib/membership-cards";
 const state = vi.hoisted(() => ({ db: null as PGlite | null }));
 vi.mock("@/lib/prisma", () => {
   const raw = async (
@@ -385,6 +390,51 @@ describe("fresh independent PostgreSQL backend", () => {
       expect.arrayContaining(["visit-1", "visit-2"]),
     );
     expect(upcoming).toHaveLength(61);
+  });
+  it("paginates public directory reads and applies search before taking the page", async () => {
+    const input = dataRequestSchema.parse({
+      table: "published_listings",
+      columns: "id,name",
+      limit: 1,
+      order: [
+        { column: "name", ascending: true },
+        { column: "id", ascending: true },
+      ],
+    });
+    expect(await readCustomerData(input, null)).toEqual([
+      { id: "vendor-a", name: "Library A" },
+    ]);
+    expect(await readCustomerData({ ...input, offset: 1 }, null)).toEqual([
+      { id: "vendor-b", name: "Library B" },
+    ]);
+    expect(
+      await readCustomerData({ ...input, search: "Library B" }, null),
+    ).toEqual([{ id: "vendor-b", name: "Library B" }]);
+    expect(
+      await readCustomerData({ ...input, search: "' OR true --" }, null),
+    ).toEqual([]);
+    expect(() => dataRequestSchema.parse({ ...input, offset: -1 })).toThrow();
+    await expect(
+      readCustomerData(
+        dataRequestSchema.parse({ table: "profiles", search: "Alice" }),
+        alice,
+      ),
+    ).rejects.toThrow("Unsupported search");
+  });
+  it("paginates membership cards before signing photos and keeps them customer-scoped", async () => {
+    await state.db!.exec(
+      `INSERT INTO admin.membership_cards(id,order_id,customer_name,photo_path,verified_by,activated_at) VALUES('card-new','paid','Alice','new-photo','staff','2030-01-02'),('card-old','other-paid','Alice','old-photo','staff','2030-01-01')`,
+    );
+    const page = await customerMembershipCards(alice, { limit: 1, offset: 1 });
+    expect(page).toHaveLength(1);
+    expect(page[0]).toMatchObject({
+      id: "card-old",
+      photo_url: "signed:old-photo",
+      payment_method: "ONLINE",
+    });
+    expect(await customerMembershipCards(bob, { limit: 1, offset: 0 })).toEqual(
+      [],
+    );
   });
   it("installs the history ordering and pending-payment indexes", async () => {
     const result = await state.db!.query<{ indexname: string }>(

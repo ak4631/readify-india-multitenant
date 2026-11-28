@@ -5,6 +5,7 @@ import { getSignedDocumentUrl } from "@/lib/imagekit";
 export type MembershipCardDetails = {
   id: string;
   order_id: string;
+  payment_method: string;
   user_id: string;
   vendor_id: string;
   target_id: string;
@@ -25,11 +26,14 @@ export type MembershipCardDetails = {
   time_zone: string;
   captured_at: Date;
 };
-export async function customerMembershipCards(userId: string) {
+export async function customerMembershipCards(
+  userId: string,
+  window?: { limit: number; offset: number },
+) {
   const rows = await prisma.$queryRaw<MembershipCardDetails[]>`
-    SELECT id,order_id,user_id,vendor_id,target_id,customer_name,vendor_name,category,
+    SELECT id,order_id,payment_method,user_id,vendor_id,target_id,customer_name,vendor_name,category,
       plan_name,valid_from,valid_until,slot_start,slot_hours,qr_value,status,photo_path,
-      verified_by,verified_at,activated_at,time_zone,captured_at FROM admin.membership_card_details WHERE user_id=${userId} ORDER BY activated_at DESC`;
+      verified_by,verified_at,activated_at,time_zone,captured_at FROM admin.membership_card_details WHERE user_id=${userId} ORDER BY activated_at DESC,id DESC LIMIT ${window?.limit ?? null} OFFSET ${window?.offset ?? 0}`;
   return Promise.all(
     rows.map(async ({ photo_path, ...row }) => ({
       ...row,
